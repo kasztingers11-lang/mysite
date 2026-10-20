@@ -86,7 +86,7 @@ local function fetch(url)
     return game:HttpGet(url)
 end
 
-local function loadAsset(name, prefix, expectedBytes)
+local function loadAsset(name, prefix, expectedBytes, sourceBase)
     if type(registerAsset) ~= 'function' or type(writefile) ~= 'function' then
         error('Local assets require getcustomasset and writefile')
     end
@@ -107,7 +107,7 @@ local function loadAsset(name, prefix, expectedBytes)
             and data:sub(1, #prefix) == prefix
     end
     if not valid then
-        local data = fetch(assetBase .. name)
+        local data = fetch((sourceBase or assetBase) .. name)
         if not alive() then return nil end
         if type(data) ~= 'string' or #data ~= expectedBytes or data:sub(1, #prefix) ~= prefix then
             error('Unexpected asset response: ' .. name)
@@ -133,13 +133,13 @@ local function run()
 
     local letterGroup = make('CanvasGroup', {
         Name = 'LetterGroup', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(440, 440),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(880, 880),
         BorderSizePixel = 0, BackgroundTransparency = 1, GroupTransparency = 1,
     }, screen)
 
     local logoContainer = make('Frame', {
         Name = 'Swirl', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(300, 300),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(600, 600),
         BackgroundTransparency = 1, Rotation = -225,
     }, letterGroup)
     local logoScale = make('UIScale', {Scale = 0.08}, logoContainer)
@@ -151,7 +151,7 @@ local function run()
     }, logoContainer)
 
     local fallback = make('TextLabel', {
-        Name = 'Fallback', Text = 'N', Font = Enum.Font.Antique, TextSize = 150,
+        Name = 'Fallback', Text = 'N', Font = Enum.Font.Antique, TextSize = 300,
         TextColor3 = Color3.fromRGB(248, 245, 235), BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromScale(1, 1),
@@ -178,7 +178,8 @@ local function run()
 
     worker(function()
         local ok, reason = pcall(function()
-            local id = loadAsset('neoperro-n.png', '\137PNG\r\n\26\n', 327349)
+            local id = loadAsset('neoperro-n-clean.png', '\137PNG\r\n\26\n', 328429,
+                'https://raw.githubusercontent.com/kasztingers11-lang/mysite/3707290a70ffdec3d2efb0c0c682864c5b6eddf9/neoperro-intro/assets/')
             if not alive() or not id then return end
             logo.Image = id
             ContentProvider:PreloadAsync({logo})

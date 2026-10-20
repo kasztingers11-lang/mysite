@@ -1,6 +1,6 @@
 # neoperro intro preview
 
-A standalone client intro showing only the gothic N. It starts at 8% scale and -225 degrees, swirls smoothly to full size, holds, then fades away with a slight outward rotation. There is no card, border, wordmark, line, or dim overlay. Scene blur stays in place until the letter disappears and then clears slowly. A low, layered bell with cathedral-style reverb accompanies the reveal.
+A standalone client intro showing only the approved cleaned gothic N, now displayed at twice the previous width and height (600 Ã— 600 image container). It starts at 8% scale and -225 degrees, swirls smoothly to full size, holds, then fades away with a slight outward rotation. There is no card, border, wordmark, line, or dim overlay. Scene blur stays in place until the letter disappears and then clears slowly. A low, layered bell with cathedral-style reverb accompanies the reveal.
 
 ## Preview
 
@@ -18,10 +18,10 @@ Duration controls the letter animation after asset loading and is clamped to 2â€
 
 ## First-run installation
 
-The preview downloads the PNG and Ogg from the immutable asset commit `c639f51026efe14a602368f0dc6865616ccc8a5a`. With the required filesystem functions, it stores them in the executor workspace under:
+The preview downloads the cleaned PNG from immutable asset commit `3707290a70ffdec3d2efb0c0c682864c5b6eddf9` and the Ogg from `c639f51026efe14a602368f0dc6865616ccc8a5a`. With the required filesystem functions, it stores them in the executor workspace under:
 
 ```text
-neoperro/intro-v1/neoperro-n.png
+neoperro/intro-v1/neoperro-n-clean.png
 neoperro/intro-v1/neoperro-chime.ogg
 ```
 
@@ -41,7 +41,7 @@ Required for the full preview: client-side Lua execution, HTTP access, `writefil
 
 ## Validation
 
-The earlier version passed mocked lifecycle checks for successful installation, cache reuse, replacement, stalled downloads, HTTP failures, and disabled audio. This letter-only revision was inspected structurally, but the execution environment was unavailable for rerunning those tests. An in-game visual/audio preview remains necessary.
+The earlier version passed mocked lifecycle checks for successful installation, cache reuse, replacement, stalled downloads, HTTP failures, and disabled audio. The letter-only and doubled-logo revisions were inspected structurally, but the execution environment was unavailable for rerunning those tests. An in-game visual/audio preview remains necessary.
 
 ## Sources and rationale
 
@@ -62,3 +62,5 @@ Roblox Developer Forum discussions are useful implementation references; officia
 `assets/neoperro-n.png` was created with the built-in image-generation tool. Prompt: a single original uppercase gothic blackletter N, ivory-white strokes, sharp chisel terminals, strong diagonal, balanced negative space, centered with generous padding, transparent background, no other letters, no border or shadow, legible at small intro size.
 
 `assets/neoperro-chime.ogg` is an original 0.9-second synthesized chime built from decaying 440/660/1320 Hz tones, a quiet 110 Hz undertone, and a soft transient, encoded as Ogg Vorbis. This revision reuses the same cached asset at lower playback pitches, with volumes 0.22 and 0.07, and applies reverberation through a dedicated sound group.
+
+The approved `assets/neoperro-n-clean.png` variant was edited with the built-in image tool using the original as a reference. Edit prompt: preserve the gothic N silhouette and ivory color, remove rough texture and stray marks, use smooth contours on a transparent background. It uses its own cache filename so existing installations fetch it automatically.
