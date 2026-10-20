@@ -13,11 +13,14 @@ end
 
 local options = environment.neoperroIntroPreview
 if type(options) ~= 'table' then options = {} end
-local duration = tonumber(options.Duration) or 2.2
+local duration = tonumber(options.Duration) or 3.2
 if duration ~= duration or duration == math.huge or duration == -math.huge then
-    duration = 2.2
+    duration = 3.2
 end
-duration = math.clamp(duration, 1.4, 10)
+duration = math.clamp(duration, 2, 10)
+local blurTail = tonumber(options.BlurTail) or 1.6
+if blurTail ~= blurTail or blurTail == math.huge or blurTail == -math.huge then blurTail = 1.6 end
+blurTail = math.clamp(blurTail, 0.5, 4)
 local withSound = options.Sound ~= false
 
 local state = {Alive = true, Objects = {}, Tweens = {}, Workers = {}}
@@ -128,29 +131,17 @@ local function run()
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     }, playerGui)
 
-    local dim = make('Frame', {
-        Name = 'Backdrop', Size = UDim2.fromScale(1, 1),
-        BorderSizePixel = 0, BackgroundColor3 = Color3.fromRGB(7, 8, 10),
-        BackgroundTransparency = 1, Active = false,
+    local letterGroup = make('CanvasGroup', {
+        Name = 'LetterGroup', AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(440, 440),
+        BorderSizePixel = 0, BackgroundTransparency = 1, GroupTransparency = 1,
     }, screen)
-
-    local card = make('CanvasGroup', {
-        Name = 'Card', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(340, 320),
-        BorderSizePixel = 0, BackgroundColor3 = Color3.fromRGB(17, 18, 21),
-        BackgroundTransparency = 0.12, GroupTransparency = 1,
-    }, screen)
-
-    local scale = make('UIScale', {Scale = 0.96}, card)
-    make('UIStroke', {
-        Color = Color3.fromRGB(110, 110, 115), Thickness = 1, Transparency = 0.65,
-    }, card)
 
     local logoContainer = make('Frame', {
         Name = 'Swirl', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.40), Size = UDim2.fromOffset(250, 250),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(300, 300),
         BackgroundTransparency = 1, Rotation = -225,
-    }, card)
+    }, letterGroup)
     local logoScale = make('UIScale', {Scale = 0.08}, logoContainer)
 
     local logo = make('ImageLabel', {
@@ -166,25 +157,22 @@ local function run()
         Size = UDim2.fromScale(1, 1),
     }, logoContainer)
 
-    make('TextLabel', {
-        Name = 'Wordmark', Text = 'n e o p e r r o', Font = Enum.Font.GothamMedium,
-        TextSize = 13, TextColor3 = Color3.fromRGB(225, 225, 229),
-        BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.77), Size = UDim2.fromOffset(280, 28),
-    }, card)
-
-    local track = make('Frame', {
-        Name = 'RevealTrack', BorderSizePixel = 0,
-        BackgroundColor3 = Color3.fromRGB(70, 70, 76), BackgroundTransparency = 0.55,
-        Position = UDim2.new(0, 28, 1, -29), Size = UDim2.new(1, -56, 0, 1),
-    }, card)
-    local fill = make('Frame', {
-        Name = 'RevealLine', BorderSizePixel = 0,
-        BackgroundColor3 = Color3.fromRGB(230, 230, 234), Size = UDim2.new(0, 0, 1, 0),
-    }, track)
-
     local blur = make('BlurEffect', {Name = 'NeoperroIntroBlur', Size = 0}, Lighting)
-    local sound = make('Sound', {Name = 'NeoperroIntroChime', Volume = 0.22}, SoundService)
+    local soundGroup = make('SoundGroup', {
+        Name = 'NeoperroIntroResonance', Volume = 1,
+    }, SoundService)
+    make('ReverbSoundEffect', {
+        Name = 'Cathedral', DecayTime = 2.8, Density = 0.9,
+        Diffusion = 0.95, DryLevel = -2, WetLevel = -5,
+    }, soundGroup)
+    local sound = make('Sound', {
+        Name = 'NeoperroIntroBell', Volume = 0.22,
+        PlaybackSpeed = 0.52, SoundGroup = soundGroup,
+    }, SoundService)
+    local undertone = make('Sound', {
+        Name = 'NeoperroIntroUndertone', Volume = 0.07,
+        PlaybackSpeed = 0.26, SoundGroup = soundGroup,
+    }, SoundService)
     local logoReady, soundReady = false, false
     local logoFinished, soundFinished = false, not withSound
 
@@ -223,31 +211,30 @@ local function run()
     logo.Visible = logoReady
     fallback.Visible = not logoReady
     if not logoReady then warn('[neoperro intro] Using text N; image was unavailable or timed out') end
-    if withSound and soundReady then sound:Play() end
+    if withSound and soundReady then
+        undertone.SoundId = sound.SoundId
+        sound:Play()
+        undertone:Play()
+    end
 
-    local enter = math.min(0.9, duration * 0.45)
-    local leave = math.min(0.45, duration * 0.25)
-    tween(dim, enter, {BackgroundTransparency = 0.48})
+    local enter = math.min(1.05, duration * 0.4)
+    local leave = math.min(0.6, duration * 0.25)
     tween(blur, enter, {Size = 22})
-    tween(card, math.min(0.25, enter), {GroupTransparency = 0})
-    tween(scale, enter, {Scale = 1})
+    tween(letterGroup, 0.3, {GroupTransparency = 0})
     tween(logoContainer, enter, {Rotation = 0})
     tween(logoScale, enter, {Scale = 1})
-    tween(fill, duration - leave, {Size = UDim2.new(1, 0, 1, 0)})
 
-    task.wait(enter)
+    task.wait(duration - leave)
     if not alive() then return end
-    tween(blur, 0.25, {Size = 16})
-    task.wait(math.max(0, duration - enter - leave))
-    if not alive() then return end
-    tween(dim, leave, {BackgroundTransparency = 1})
-    tween(blur, leave, {Size = 0})
-    tween(scale, leave, {Scale = 1.025})
     tween(logoContainer, leave, {Rotation = 12})
     tween(logoScale, leave, {Scale = 1.08})
-    tween(sound, leave, {Volume = 0})
-    local fade = tween(card, leave, {GroupTransparency = 1})
+    local fade = tween(letterGroup, leave, {GroupTransparency = 1})
     fade.Completed:Wait()
+    if not alive() then return end
+
+    tween(soundGroup, blurTail, {Volume = 0})
+    local clearBlur = tween(blur, blurTail, {Size = 0})
+    clearBlur.Completed:Wait()
 end
 
 worker(function()
