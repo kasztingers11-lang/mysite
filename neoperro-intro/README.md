@@ -1,20 +1,14 @@
 # neoperro intro preview
 
-A standalone client intro showing only the approved cleaned gothic N, now displayed at twice the previous width and height (600 × 600 image container). It starts at 8% scale and -225 degrees, swirls smoothly to full size, holds, then fades away with a slight outward rotation. There is no card, border, wordmark, line, or dim overlay. Scene blur stays in place until the letter disappears and then clears slowly. A low, layered bell with cathedral-style reverb accompanies the reveal.
+A standalone client intro showing only the approved cleaned gothic N, now displayed 200% larger than the 600 × 600 version (1800 × 1800 image container; three times the width and height). It starts at 8% scale and -225 degrees, swirls smoothly to full size, holds, then fades away with a slight outward rotation. There is no card, border, wordmark, line, or dim overlay. Scene blur stays in place until the letter disappears and then clears slowly. A low, layered bell with cathedral-style reverb accompanies the reveal.
 
 ## Preview
 
 ```lua
-getgenv().neoperroIntroPreview = {
-    Duration = 3.2;
-    BlurTail = 1.6;
-    Sound = true;
-}
-
 loadstring(game:HttpGet('https://raw.githubusercontent.com/kasztingers11-lang/mysite/main/neoperro-intro/preview.lua'))()
 ```
 
-Duration controls the letter animation after asset loading and is clamped to 2–10 seconds. BlurTail adds another 0.5–4 seconds after the letter disappears; its default is 1.6 seconds. The default total visible effect lasts about 4.8 seconds. TweenService uses time-based animation; speed does not depend on a fixed number of frames. The preview does not change the FPS cap and cannot guarantee the client sustains 120 FPS.
+Timing is internal to the preview: 3.2 seconds for the letter, followed by 1.6 seconds for the blur to clear. Total effect duration is about 4.8 seconds after asset loading. There is no user-facing intro settings table. The enlarged letter may extend beyond smaller viewports. The logo is faded directly, avoiding an oversized CanvasGroup rendering surface. TweenService uses time-based animation; speed does not depend on a fixed number of frames. The preview does not change the FPS cap and cannot guarantee the client sustains 120 FPS.
 
 ## First-run installation
 
@@ -41,7 +35,7 @@ Required for the full preview: client-side Lua execution, HTTP access, `writefil
 
 ## Validation
 
-The earlier version passed mocked lifecycle checks for successful installation, cache reuse, replacement, stalled downloads, HTTP failures, and disabled audio. The letter-only and doubled-logo revisions were inspected structurally, but the execution environment was unavailable for rerunning those tests. An in-game visual/audio preview remains necessary.
+The earlier version passed mocked lifecycle checks for successful installation, cache reuse, replacement, stalled downloads, HTTP failures, and disabled audio. Later visual revisions were inspected structurally. The current revision is syntax checked; it has not been rendered in Roblox here. An in-game visual/audio preview remains necessary.
 
 ## Sources and rationale
 
