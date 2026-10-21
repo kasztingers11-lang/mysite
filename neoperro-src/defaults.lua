@@ -1,6 +1,6 @@
 return {
 
-    -- Rewrites idle MOUSE updates to camera-forward; shot windows use real aim. No concealment guarantee.
+    -- Keep aim redirection inside firing windows; idle MOUSE updates pass through. No concealment guarantee.
     ['Anti-AimViewer'] = {
         ['Enabled'] = true;
     };
@@ -28,15 +28,25 @@ return {
     ['Silent Aim'] = {
         ['Enabled'] = true;
         ['Mode'] = 'Auto'; -- Auto = nearest eligible to cursor; Target = select with a keybind.
-        ['Ignore'] = false; -- Ignore FOV when true; other checks still apply.
+        ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
 
-        ['Part'] = 'UpperTorso'; -- UpperTorso / Head / HumanoidRootPart.
-        ['Method'] = 'Part'; -- Part = part center; Point = a point within reduced part bounds.
-        ['Axis'] = 'Center'; -- Center = Y-only assistance; All = XYZ.
-        ['PointReduction'] = 0.7; -- Point mode: 0 = full bounds, 1 = center.
+        ['Target'] = {
+            ['BasePart'] = 'UpperTorso'; -- Used when Closest is disabled; R6 falls back to Torso.
+            ['Closest'] = {
+                ['Enabled'] = true; -- Choose the body part nearest your crosshair.
+                ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
+                ['Method'] = 'Part'; -- Part = nearest part center; Point = nearest point in that part.
+                ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
+                ['Sharpness'] = 0.65; -- Point response: 1 = immediate, 0.01 = slow.
+                ['Reduce'] = {
+                    ['Center'] = 0.7; -- Keep this far from Y edges: 0 = edges, 1 = center.
+                    ['All'] = 0.7; -- Same reduction on all axes when Axis is All.
+                };
+            };
+        };
 
         ['Fov'] = {
-            ['Mode'] = '2d-Box'; -- 2d-Box / 2d-Circle; only the selected shape is used.
+            ['Mode'] = '2d-Box'; -- 2d-Box = box on each player; 2d-Circle = circle around crosshair.
 
             ['2d-Circle'] = {
                 ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
@@ -44,14 +54,6 @@ return {
                 ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
             };
 
-            ['2d-Box'] = {
-                ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
-                ['Size'] = {
-                    ['X'] = 100; -- Full box width in pixels.
-                    ['Y'] = 100; -- Full box height in pixels.
-                };
-                ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
-            };
         };
 
         -- Enable/disable this feature through its input.
@@ -68,17 +70,19 @@ return {
             ['Keybind'] = {'T', 'MouseButton2', 'Keyboard'};
         };
 
-        -- Limits prediction displacement; neither mode guarantees hits or cancels network lag.
+        -- Barrel alignment checks. An unsafe angle falls back to your manual aim.
         ['AntiCurve'] = {
             ['Enabled'] = false;
             ['Mode'] = '3d-angles'; -- 3d-angles / endmath; selects one filter.
 
             ['3d-angles'] = {
-                ['MaxAngle'] = 4; -- Maximum angle between direct and predicted aim, in degrees.
+                ['MaxAngle'] = 4; -- Maximum angle from camera direction to muzzle-to-target direction.
             };
 
             ['endmath'] = {
-                ['Radius'] = 120; -- Maximum final-point displacement from the body point, in studs.
+                ['Radius'] = 120; -- Maximum prediction displacement in studs.
+                ['MaxAngle'] = 4; -- Maximum camera/barrel parallax in degrees.
+                ['WallCheck'] = true; -- Recheck the ray from the actual muzzle to the final point.
             };
         };
     };
@@ -86,19 +90,29 @@ return {
     -- Moves the camera toward the chosen aim point.
     ['Aim Assist'] = {
         ['Enabled'] = true;
-        ['Mode'] = 'Target'; -- Target = keybind selection; Auto = automatic cursor-based selection.
-        ['Ignore'] = false; -- Ignore FOV when true; other checks still apply.
+        ['Mode'] = 'Auto'; -- Auto searches while its key is held; Target uses a selected player.
+        ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
 
         ['Follow'] = 'Camera'; -- Camera tracking.
         ['Smoothness'] = 0.0068; -- Strength referenced to 60 FPS; runtime will compensate for frame time.
 
-        ['Part'] = 'UpperTorso'; -- UpperTorso / Head / HumanoidRootPart.
-        ['Method'] = 'Part'; -- Part = part center; Point = a point within reduced part bounds.
-        ['Axis'] = 'Center'; -- Center = Y-only assistance; All = XYZ.
-        ['PointReduction'] = 0.45; -- Point mode: higher values keep the point nearer the center.
+        ['Target'] = {
+            ['BasePart'] = 'UpperTorso'; -- Used when Closest is disabled; R6 falls back to Torso.
+            ['Closest'] = {
+                ['Enabled'] = true; -- Choose the body part nearest your crosshair.
+                ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
+                ['Method'] = 'Part'; -- Part = nearest part center; Point = nearest point in that part.
+                ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
+                ['Sharpness'] = 0.65; -- Point response: 1 = immediate, 0.01 = slow.
+                ['Reduce'] = {
+                    ['Center'] = 0.45; -- Keep this far from Y edges: 0 = edges, 1 = center.
+                    ['All'] = 0.45; -- Same reduction on all axes when Axis is All.
+                };
+            };
+        };
 
         ['Fov'] = {
-            ['Mode'] = '2d-Box'; -- 2d-Box / 2d-Circle; only the selected shape is used.
+            ['Mode'] = '2d-Box'; -- 2d-Box = box on each player; 2d-Circle = circle around crosshair.
 
             ['2d-Circle'] = {
                 ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
@@ -106,14 +120,6 @@ return {
                 ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
             };
 
-            ['2d-Box'] = {
-                ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
-                ['Size'] = {
-                    ['X'] = 200; -- Full box width in pixels.
-                    ['Y'] = 200; -- Full box height in pixels.
-                };
-                ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
-            };
         };
 
         -- Enable/disable this feature through its input.
@@ -123,9 +129,9 @@ return {
             ['Keybind'] = {'M', 'MouseButton2', 'Keyboard'};
         };
 
-        -- Target selection controls, used when Mode is Target.
+        -- In Auto, Holding makes this the search input. In Target, this selects a player.
         ['Keybind Mode'] = {
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
+            ['Holding'] = true; -- Auto: hold to search continuously. Target: hold the selected target.
             ['Unlock Mode'] = 'Normal'; -- Normal = lock on one press, unlock on the next.
             ['Keybind'] = {'Q', 'MouseButton2', 'Keyboard'};
         };
@@ -155,16 +161,6 @@ return {
         ['AssignKey'] = {
             ['Keybind'] = {'R', 'MouseButton2', 'Keyboard'};
         };
-
-        -- Clear the assigned player list.
-        ['ClearKey'] = {
-            ['Keybind'] = {'F', 'MouseButton2', 'Keyboard'};
-        };
-
-        -- Switch between Friend and Target modes.
-        ['ToggleModeKey'] = {
-            ['Keybind'] = {'B', 'MouseButton2', 'Keyboard'};
-        };
     };
 
     -- Recheck the target before firing; do not stack pending shots.
@@ -177,19 +173,29 @@ return {
         ['SmartDelay'] = false; -- Distance-based timing; overrides DelayMode when enabled.
         ['DelayMode'] = 'Random'; -- Normal / Random. Delays are alternatives, not added together.
 
-        -- Enable/disable this feature through its input.
         ['Toggle'] = {
             ['Enabled'] = true;
-            ['Holding'] = true; -- Active only while the chosen input is held.
-            ['Keybind'] = {'V', 'MouseButton2', 'Keyboard'};
+            ['Holding'] = false;
+            ['Keybind'] = {'V', 'MouseButton2', 'Keyboard'}; -- Arm/disarm Triggerbot.
+        };
+        ['Activation'] = {
+            ['Enabled'] = true; -- Require this activation input in addition to Enabled.
+            ['Holding'] = true;
+            ['Keybind'] = {'Q', 'MouseButton2', 'Mouse'}; -- Hold RMB; change Mouse to Keyboard for Q.
+        };
+        ['Fov'] = {
+            ['Enabled'] = false; -- False = cursor must hit the actual character. True = use a selection shape.
+            ['Mode'] = '2d-Box'; -- Player-centered box or crosshair-centered circle.
+            ['2d-Circle'] = {['Visible'] = false; ['Size'] = 50; ['Color'] = {255, 255, 255}};
         };
     };
 
-    -- Player boxes and names. Colors use the script's built-in visual style.
+    -- Player boxes and names. Appearance is in the 2d-Box section below.
     ['ESP'] = {
         ['Enabled'] = true;
         ['VisibleCheck'] = false; -- Hide ESP for obstructed players.
-        ['Names'] = true; -- Display player names.
+        ['Names'] = true; -- Also respects each box's Name setting.
+        ['DeadCheck'] = true; -- Hide dead bodies; an enabled Silent Aim Dead check also hides them.
         ['MaxDistance'] = 5050; -- Maximum ESP distance in studs.
 
         -- Enable/disable this feature through its input.
@@ -199,10 +205,40 @@ return {
             ['Keybind'] = {'Z', 'MouseButton2', 'Keyboard'};
         };
 
-        ['2d-Box'] = {
-            ['Filled'] = false; -- Fill the box instead of using just an outline.
-            ['Transparency'] = 1; -- Drawing convention: 1 = opaque, 0 = invisible.
-            ['PredictedPos'] = false; -- Draw at the estimated future position.
+    };
+
+    -- Boxes follow each player's root without resizing for walking/limb animations.
+    -- Width/Height are studs; their screen size still changes with distance.
+    ['2d-Box'] = {
+        ['Silent Aim'] = {
+            ['Visible'] = true;
+            ['Predicted Position'] = false;
+            ['Name'] = {true, 'DisplayName'}; -- DisplayName / Name / UserId.
+            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}}; -- Foreground, outline.
+            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance'] = 5050;
+            ['Filled'] = false;
+            ['Transparency'] = 1; -- 1 = opaque, 0 = invisible.
+        };
+        ['Aim Assist'] = {
+            ['Visible'] = false;
+            ['Predicted Position'] = false;
+            ['Name'] = {false, 'DisplayName'};
+            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance'] = 5050;
+            ['Filled'] = false;
+            ['Transparency'] = 1;
+        };
+        ['Triggerbot'] = {
+            ['Visible'] = false;
+            ['Predicted Position'] = false;
+            ['Name'] = {false, 'DisplayName'};
+            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance'] = 5050;
+            ['Filled'] = false;
+            ['Transparency'] = 1;
         };
     };
 
@@ -264,11 +300,14 @@ return {
         -- One cycle at a time; cancellation releases only the script's simulated input.
         ['Macro Abuse'] = {
             ['Enabled'] = false;
-            ['Work With TB'] = false; -- Also run the sequence after triggerbot activations.
+            ['Work With TB'] = false; -- Also run after Triggerbot fires.
+            ['Check Ammo'] = true; -- Require an observed Ammo decrease before starting.
+            ['Macro Check'] = true; -- Require movement plus repeated I/O or alternating wheel inputs.
         };
 
         -- Unload the runtime, remove visuals, and release simulated inputs.
         ['Panic'] = {
+            ['Enabled'] = true;
             ['Keybind'] = {'E', 'MouseButton2', 'Keyboard'};
         };
 

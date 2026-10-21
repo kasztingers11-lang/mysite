@@ -1,91 +1,93 @@
-# neoperro 1.0.0
+# neoperro 1.1.0
 
-`neoperro.lua` is the complete editable script: configuration first, runtime and intro below it. Execute the whole file. Change the table and execute it again to replace the running copy. `neoperro-runtime.lua` is the same runtime without a public configuration assignment, ready for a separate loader later.
+Open `neoperro.lua`, edit the commented table, and execute the entire file. The last line downloads `neoperro-runtime.lua` from this repository. The runtime never replaces your table with its defaults. Execute it again after changing the table to replace the active instance.
 
-The three place IDs are internal: Da Strike `134196333708867`, Da Uphill `71324444457408`, and Da Downhill `139144803593140`. They use the same adapter, based on the user's confirmation that these are new IDs for the same games.
+`neoperro-full.lua` contains the same table, runtime and intro in one file. The logo and audio still use the existing local asset cache. The three supported place IDs stay inside the runtime.
 
 ## Controls
 
 | Input | Default action |
 | --- | --- |
-| P | Toggle Silent Aim |
-| T | Select/reselect Silent Aim target when its Mode is Target |
-| M | Toggle Aim Assist |
-| Q | Lock/unlock Aim Assist target |
-| Hold V | Triggerbot |
-| Z | Toggle ESP |
-| R | Add/remove the player nearest the cursor from the whitelist |
-| F | Clear whitelist |
-| B | Switch whitelist Friend/Target mode |
+| P | Enable/disable Silent Aim |
+| T | Select/reselect Silent Aim target in Target mode |
+| M | Enable/disable Aim Assist |
+| Hold Q | Aim Assist Auto: keep searching for the nearest eligible target |
+| V | Arm/disarm Triggerbot |
+| Hold right mouse | Triggerbot activation |
+| Z | Enable/disable ESP |
+| R | Add/remove the nearest player from the whitelist |
 | Hold C | Prefire, when enabled |
-| E | Panic: unload and release script-owned inputs |
+| E | Panic/unload, when Panic.Enabled is true |
 
-Shared keys dispatch every matching action. Panic wins when its key is shared. Typing and processed GUI input do not activate bindings. Losing focus releases hold actions and cancels pending shots and the macro.
+Each tuple has a keyboard key, mouse button, and the active device. For Triggerbot on Q, change its Activation.Keybind's third value from `Mouse` to `Keyboard`. Q can activate both Aim Assist and Triggerbot. All matching bindings dispatch; enabled Panic takes priority. Typing and GUI input suppress actions.
 
-## What each section does
+## Changes from 1.0
 
-| Section | Runtime behavior |
+- Player boxes replace the old cursor rectangle. A box stays centered on each character root with the configured Width/Height in studs. Limb animation does not resize it. Its screen size changes with distance. The same geometry is used for selection, drawing and weapon profiles.
+- Circles stay centered on the crosshair and use a radius in pixels.
+- Target.Closest chooses the nearest body part. Center/All now controls point movement inside that body part. It no longer preserves an incorrect manual X/Z coordinate in Silent Aim.
+- Firing follows Looten more closely: native mouse input is preferred for Triggerbot, with VirtualInputManager and Tool.Activate fallbacks. Fresh aiming coordinates are sent on click and Tool.Activated. Existing `MAINEVENT:FireServer('MOUSE', Vector3)` calls are scoped to the selected remote.
+- Macro Abuse requires its strict Enabled flag. It can wait for a confirmed Ammo decrease and require movement plus a recently detected zoom macro. Normal walking speed alone cannot activate it. Disabling the live config cancels an active cycle.
+- Assigned friends are green and assigned targets are red on ESP. These markers display even when whitelist targeting restrictions are disabled. AssignKey is the only whitelist key; set Mode in the table.
+- Panic has an Enabled switch. The intro plays once per client session, including across re-executions. Upgrading an active older runtime also recognizes that its intro already ran.
+
+## Settings
+
+| Section | Behavior |
 | --- | --- |
-| Anti-AimViewer | A scoped namecall hook replaces idle `MAINEVENT/MOUSE` coordinates with camera-forward coordinates. Clicks and tool activations open a 120 ms shot window; holding the left mouse button also permits shooting coordinates. This is a local timing approximation, not an exact server network tick or a concealment guarantee. |
-| Y-Axis | Custom scales positive vertical velocity by JumpOffset. Auto ignores JumpOffset, applies a gravity-based airborne adjustment with a body-size bound, and removes vertical lead when grounded. Separate switches choose Silent Aim or Aim Assist. |
-| Checks | Each row independently controls the three targeting features. Uses Humanoid health, `BodyEffects.K.O`, supported knocked attributes, ForceField, visibility rays, `DataFolder.Information.Crew`, and equipped weapon checks. |
-| Silent Aim | Auto chooses the nearest eligible projected target. Target mode uses the chosen key and retains the selected player while temporarily invalid targets are suppressed. Ignore bypasses the FOV/profile bounds, while the other checks remain active. |
-| Aim Assist | Rotates the camera after Roblox's camera update. Smoothness is interpreted as a 60 FPS reference and converted using `1 - (1 - strength)^(60 * dt)`. Camera position is preserved. |
-| Part / Point / Axis | Part uses the part center. Point projects the cursor ray to the part's depth and clamps it inside reduced oriented bounds. Center keeps the user's horizontal direction and changes vertical aim; All uses XYZ. R6 Torso is a fallback for UpperTorso. |
-| FOV | Box and circle use the same viewport coordinates as mouse targeting. Sizes are pixels; circle size is radius and box X/Y are full dimensions. Hiding an outline leaves its selection boundary active. |
-| AntiCurve | `3d-angles` limits the angular difference between direct and predicted aim. `endmath` caps final displacement from the original body point by Radius. These are bounded filters, not a desync resolver or a projectile-curve cancellation system. |
-| Prediction | The three values are lead times in seconds. Velocity is multiplied by the selected lead once; ping is not multiplied in again. |
-| EndMath | Fits velocity to a bounded timestamp history and resets the history after large discontinuities. WallCheck tests the final position from both camera and weapon origin. Visualizer shows final aim points. Replicated positions still contain latency. |
-| Whitelist | Friend excludes assigned UserIds; Target permits only those IDs. Holds at most four unique IDs. Assignment uses the closest on-screen player within 150 pixels, so a previously excluded player can be removed. |
-| Triggerbot | Requires an actual character under the cursor ray. Fixed/random/smart delay chooses one timing policy. Rechecks player, weapon, and eligibility at firing time. TargetOnly additionally requires the Silent Aim target. |
-| ESP | Reuses boxes and labels; no per-frame Instance creation. Computes body bounds without including tools/accessories. Supports names, distance limits, visibility, fill, opacity, and predicted position. Drawing API is used when available, with native GUI fallback. |
-| Gun Specifications | Normalizes bracketed weapon names and aliases internally. Selects Close/Medium/Far by distance. BoxSize sets an additional projected target box in studs; the ordinary cursor FOV must also pass. No weapon-specific prediction values. |
-| Client Bullets | During shooting, redirects local `Mouse.Hit` reads to the selected aim point when compatible hooks are available. Known remote updates retain normal mouse aim when only camera assistance is active. Also adjusts recognized nearby gun/bullet/tracer Beams for the latest local shot and restores their endpoints afterward. With no selected point, normal mouse behavior remains. Arbitrary custom projectile/Trail systems are not rewritten. |
-| AntiAfk | Uses the idle event and VirtualUser input where permitted by the executor. Unsupported calls produce a warning. |
-| AntiFling | Limits a severe local velocity jump only when accompanied by high angular velocity. This is mitigation, not collision immunity. |
-| Macro Abuse | After an eligible activation: wait briefly, unequip, hold Ctrl, equip, release. Only one cycle runs. Work With TB controls triggerbot activations. Cancellation restores the unequipped tool when appropriate and releases only Ctrl input the script owns. |
-| Prefire | While active, detects a replicated opponent Ammo decrease within range and schedules one checked activation after Delay. It does not predict unseen future peeks. Games that do not replicate Ammo need a different observation adapter. |
-| Intro | Bundles the approved 1800-pixel letter animation, lingering blur, and layered bell. Only assets download, using the existing local cache. No intro options are exposed in the configuration. |
+| Silent Aim | Auto acquires candidates without a target selection key. Target uses its selection input. Ignore bypasses circle/box boundaries; other checks still apply. The feature's Enabled flag and toggle still control it. |
+| Aim Assist | Auto searches continuously while the configured hold input is down. Setting Holding false makes Auto continuously active. Target retains explicit player selection. Camera smoothing is adjusted for elapsed time. |
+| Target | BasePart selects the part when Closest is off. Closest.Enabled chooses the body part nearest the crosshair. Method Part aims at its center; Point uses a reduced point inside it. |
+| Closest.Raycast | Uses the actual character surface under the cursor before prediction. It bypasses Reduce and Sharpness for that hit. Otherwise the chosen Part/Point method applies. |
+| Closest.Axis / Reduce | Center moves the local point along Y; All permits XYZ. The corresponding Reduce entry controls distance from the edges: 0 permits edges, 1 collapses to the part center. |
+| Closest.Sharpness | Smooths local point changes in Point mode: 1 responds immediately, 0.01 responds slowly. Part changes reset this local filter. |
+| 2d-Box | Separate Silent Aim, Aim Assist and Triggerbot styles. Size is world Width/Height; visibility, predicted position, distance, name type, foreground/outline colors, fill and opacity are configurable. Hiding a box does not disable its selection boundary. |
+| Checks | Independent Silent Aim / Aim Assist / Triggerbot columns for health, knocked state, walls, ForceField, crew and equipped weapon. ESP.DeadCheck or that feature's Dead check hides its dead-player box and label. |
+| Y-Axis | Auto ignores JumpOffset and uses a bounded airborne gravity adjustment. Custom scales positive vertical velocity by JumpOffset. Separate SilentAim/AimAssist flags select where it applies. |
+| Prediction / EndMath | Prediction values are lead times in seconds. Velocity history fits timestamped position samples and resets after discontinuities. Final WallCheck casts from camera and muzzle. Visualizer shows calculated points. |
+| AntiCurve: 3d-angles | Rejects redirection when the muzzle-to-target direction differs too much from the camera direction. It falls back to manual aim instead of bending a coordinate toward an arbitrary angle limit. |
+| AntiCurve: endmath | Caps prediction displacement with Radius, checks camera/muzzle parallax against MaxAngle, and optionally checks the final ray from the actual muzzle. These are this implementation's explicit settings; no verified standard Roblox algorithm named Endmath was found. |
+| Whitelist | Up to four unique UserIds. Friend excludes those IDs from targeting; Target allows only those IDs, when Enabled. AssignKey adds/removes the closest on-screen player within 150 pixels. Color markers reflect Mode regardless of Enabled. |
+| Triggerbot | Enabled plus the toggle arms it. Activation optionally requires a hold/toggle input. Fov.Enabled false requires an actual character under the cursor ray; true permits the selected circle or player-box boundary. Delays are revalidated before firing. TargetOnly requires the Silent Aim target. |
+| Gun Specifications | Normalizes Looten weapon names internally, selects the distance range, and replaces the corresponding player-box dimensions. No per-gun prediction fields. Unlisted weapons and targets beyond Far use the general box size. |
+| Client Bullets | During firing, compatible mouse hooks use the selected point. Recognized local gun/bullet/tracer Beams also receive temporary endpoint redirection. Without a selected point, ordinary mouse behavior applies. Custom Trail/projectile implementations are not universally covered. |
+| ESP | Reuses Drawing objects, with native GUI fallback. Boxes follow the character root rather than animated body bounds. Configurable visibility and distance checks still apply. Whitelist markers override the box/name foreground color. |
+| Macro Abuse | After an eligible shot: unequip, hold Ctrl, equip, release. Check Ammo waits for an observed decrease. Macro Check requires movement and repeated alternating I/O or wheel inputs within a recent window, based on Looten's macro inputs. External macros that do not expose those inputs cannot be reliably recognized. Work With TB controls Triggerbot shots. |
+| Misc | AntiAfk uses supported VirtualUser input. AntiFling mitigates a severe linear/angular velocity spike. Prefire reacts to replicated opponent Ammo decreases while held. Panic cancels pending work, releases owned input, restores an unequipped macro tool when appropriate, and removes visuals. |
 
-## Replacement and cleanup
+## Lifecycle and limitations
 
-Re-execution disconnects the old event subscriptions, removes its render binding and visuals, stops its intro, and cancels pending shots and macro input. It retains toggle states, selected player IDs, and whitelist changes when their original config values have not changed. Explicitly changed config values win. Hold states reset; release and press held bindings again after replacement.
+One event/render set belongs to the active runtime. Re-execution disconnects the old subscriptions and render binding, cancels shots/macros, releases owned mouse/Ctrl input, and removes old visuals. Valid target IDs, whitelist assignments and toggles persist unless their original config values changed. Held activation states reset. Hook dispatchers are reused and pass through after unload.
 
-The two hook dispatchers are installed once and switch to the current runtime. Panic makes them pass through; it does not blindly restore an old metamethod and overwrite another script's hook. There is no growing hook chain across neoperro replacements.
+The Anti-AimViewer option confines redirection to firing windows and leaves idle mouse updates alone. It does not guarantee concealment from spectators or administrators. AntiCurve filters also cannot change the server's projectile implementation or guarantee hit registration. The actual muzzle attachment is preferred when present, with Handle/root fallback.
 
-Target scans and velocity sampling run at 30 Hz. Camera smoothing and visual projection run at the render rate. Body bounds refresh four times per second, and ESP visibility checks are cached briefly. This does not set an FPS cap or guarantee 120 FPS on a particular machine.
+Target selection and velocity sampling run at 30 Hz. Camera interpolation and visual projection run at render rate. No FPS cap is imposed. Source size is determined by the implemented features; it is not padded to a target line count.
 
-## Integration and limits
+Live Roblox execution is unavailable here. Shot acceptance, native input permissions, and server/client timing still require an in-game test. The source reference establishes the remote layout, not that every current executor implements it successfully.
 
-Looten supplied the `ReplicatedStorage.MAINEVENT` remote, `MOUSE` argument, Vector3 payload, Tool.Activated integration, crew path, knocked path, and weapon names. Its AntiCurve and Anti-AimViewer flags were not implementations. Goodnight supplied configuration ideas; its remote loader was not executed.
-
-The new script sends aiming coordinates through the known remote and fires automation through `Tool:Activate()`. It does not invent a damage remote. Without namecall support it falls back to Looten's activation-time coordinate update; Anti-AimViewer cannot operate in that mode. Missing remote/hook/input capabilities generate warnings instead of being described as working.
-
-The implementation has not been executed against the live games or a real executor here. In particular, remote ordering, server acceptance, local tracer implementations, replicated Ammo, Ctrl crouch behavior, and executor permissions need in-game verification. No claim of perfect hit registration or undetectability is made.
-
-For a report, include the game, weapon name, affected feature, and the exact error or warning. Capabilities and one-time warnings can be inspected with:
+For troubleshooting:
 
 ```lua
 local runtime = getgenv().__neoperroRuntimeV1
 if runtime then
-    for name, value in pairs(runtime.Capabilities) do print(name, value) end
-    for name, message in pairs(runtime.Warnings) do warn(name, message) end
+    print('Version:', runtime.Version)
+    for key, value in pairs(runtime.Capabilities) do print(key, value) end
+    for key, value in pairs(runtime.Stats) do print(key, value) end
+    for key, message in pairs(runtime.Warnings) do warn(key, message) end
 end
 ```
 
-## Verification
+## Validation and sources
 
-`python build-neoperro.py` regenerates the bundled files. `python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua` syntax-checks them with Lua 5.4 and runs portable math tests plus a deterministic Roblox mock. These are not Roblox engine or Luau bytecode tests.
+Build with `python build-neoperro.py`. Run `python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua`. The runner syntax-checks the generated loader/full/runtime files and executes deterministic Lua math and Roblox mock checks. These are not live engine tests.
 
-Checks cover equivalent damping at 30/60/120/240 FPS, circle/box boundaries, input devices, weapon aliases and distance boundaries, whitelist rules, delay policies, velocity history and teleport resets, config preservation, startup/cleanup, shared keys, nonstacking hooks, packet pass-through, target checks, cancelled delayed shots, the Ctrl macro sequence, panic cleanup, native GUI fallback, Y-Axis modes, both AntiCurve bounds, ammo-based prefire, respawn, and player removal.
+Checks include player-box versus circle selection, weapon box overrides, exact cursor-surface targeting, stable ESP dimensions, friend/target colors, dead-player visibility, hold-to-search retargeting, native input firing when Tool.Activate is insufficient, delayed-shot cancellation, shared activation keys, disabled macro behavior, walking versus macro detection, ammo confirmation, disabling a running macro, optional Panic, one-time intro, filters, respawn, GUI fallback and cleanup.
 
-## Sources and method choices
-
-- [Looten source](https://github.com/kasztingers11-lang/mysite/blob/main/Looten): game integration reference. Its original implementation was read, not executed.
-- [Roblox camera documentation](https://create.roblox.com/docs/reference/engine/classes/Camera): consistent viewport projection; on-screen projection alone does not establish visibility.
-- [Roblox raycasting guide](https://create.roblox.com/docs/workspace/raycasting): explicit filtered rays for visibility and crosshair detection.
-- [Roblox Tool documentation](https://create.roblox.com/docs/reference/engine/classes/Tool): activation/deactivation through the tool interface.
-- [DevForum discussion of frame-rate-independent lerp](https://devforum.roblox.com/t/frame-rate-independent-lerp/352375/18) and [Rory Driscoll's derivation](https://www.rorydriscoll.com/2016/03/07/frame-rate-independent-damping-using-lerp/): exponential decay instead of a fixed per-frame interpolation factor.
-- [DevForum discussion of replicated prediction jitter](https://devforum.roblox.com/t/predicting-player-position-in-postsimulation-jittering-for-other-clients/3012082): replication jitter remains a limitation; timestamp fitting cannot reveal a hidden server position.
-- [Roblox BindToRenderStep documentation](https://create.roblox.com/docs/reference/engine/classes/RunService/BindToRenderStep): schedule camera adjustments after the default camera.
-- [sUNC hookmetamethod](https://docs.sunc.io/Closures/hookmetamethod/) and [getnamecallmethod](https://docs.sunc.io/Metatable/getnamecallmethod/): optional executor interface contracts, separate from standard Roblox APIs.
+- [Looten](https://github.com/kasztingers11-lang/mysite/blob/main/Looten): `MAINEVENT/MOUSE`, Vector3 payload, Tool.Activated, mouse1press/mouse1release, I/O macro inputs, knocked/crew paths, and weapon names. Its AntiCurve and Anti-AimViewer switches do not contain algorithms to copy. The source was read, not executed.
+- [Goodnight config](https://github.com/kasztingers11-lang/mysite/blob/main/gn): configuration structure; its remote loader was not executed.
+- [Roblox Tool documentation](https://create.roblox.com/docs/reference/engine/classes/Tool) and [activation input documentation](https://create.roblox.com/docs/reference/engine/classes/ContextActionService/BindActivate): input-driven activation and Tool.Activate are separate integration paths worth checking for a gun controller.
+- [DevForum gun aiming discussion](https://devforum.roblox.com/t/how-would-i-go-about-making-a-gun-system-like-this/1794916): camera-to-cursor ray followed by a muzzle-to-hit-point ray. This supports the origin/visibility checks, not a guaranteed anti-curve algorithm.
+- [DevForum third-person aiming discussion](https://devforum.roblox.com/t/ray-does-not-hit-where-the-mouse-is-in-third-person/2803154?page=2): camera/muzzle separation matters in third person.
+- [Roblox camera documentation](https://create.roblox.com/docs/reference/engine/classes/Camera) and [raycasting guide](https://create.roblox.com/docs/workspace/raycasting): viewport projection and filtered world queries.
+- [Frame-rate-independent damping derivation](https://www.rorydriscoll.com/2016/03/07/frame-rate-independent-damping-using-lerp/) and [DevForum discussion](https://devforum.roblox.com/t/frame-rate-independent-lerp/352375/18): exponential smoothing instead of fixed per-frame lerp strength.
+- [sUNC hooks](https://docs.sunc.io/Closures/hookmetamethod/) and [namecall method](https://docs.sunc.io/Metatable/getnamecallmethod/): executor contracts, separate from Roblox's supported game scripting APIs.

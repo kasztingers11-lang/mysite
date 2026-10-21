@@ -168,4 +168,22 @@ function Core.restoreToggle(incoming, oldInitial, oldValue)
     return incoming == true
 end
 
+-- A walking speed is not evidence of a macro. Require repeated alternating zoom inputs.
+function Core.observeMacro(events, direction, time)
+    local last = events[#events]
+    if not last or direction ~= last.direction then events[#events + 1] = {direction = direction, time = time} end
+    while #events > 8 or (#events > 0 and time - events[1].time > 0.65) do table.remove(events, 1) end
+end
+
+function Core.macroActive(events, time, moving)
+    return moving and #events >= 4 and time - events[#events].time <= 0.65
+end
+
+-- Integer-like viewport geometry in world units, independent of limb animation.
+function Core.projectedBox(x, y, depth, width, height, focal)
+    if depth <= 0.1 then return nil end
+    local w, h = width * focal / depth, height * focal / depth
+    return x - w / 2, y - h / 2, w, h
+end
+
 return Core

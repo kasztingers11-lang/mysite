@@ -15,7 +15,7 @@ lib.lua_tolstring.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
 lib.lua_tolstring.restype = ctypes.c_char_p
 lib.lua_close.argtypes = [ctypes.c_void_p]
 
-for file in ['neoperro.lua', 'neoperro-runtime.lua', 'neoperro-config.lua', *sys.argv[1:]]:
+for file in ['neoperro.lua', 'neoperro-full.lua', 'neoperro-runtime.lua', 'neoperro-config.lua', *sys.argv[1:]]:
     state = lib.luaL_newstate()
     lib.luaL_openlibs(state)
     code = lib.luaL_loadfilex(state, str(Path(file)).encode(), None)

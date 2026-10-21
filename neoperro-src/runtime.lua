@@ -21,22 +21,25 @@ local playerGui = localPlayer:WaitForChild('PlayerGui', 5)
 assert(playerGui, '[neoperro] PlayerGui unavailable.')
 local runtimeKey, hooksKey = '__neoperroRuntimeV1', '__neoperroHooksV1'
 local previous = environment[runtimeKey]
+if previous and previous.Intro then environment.__neoperroIntroSeenV1 = true end
 local saved = previous and previous.Alive and previous:Snapshot() or nil
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.0.0', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.1.0', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
     InitialWhitelist = Core.ids(config.Whitelist.Players), InitialWhiteMode = config.Whitelist.Mode,
-    Epoch = 0, Visuals = {}, Focused = true,
+    Epoch = 0, Visuals = {}, Focused = true, MacroInputs = {},
+    Stats = {AimPackets = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
 }
 environment[runtimeKey] = state
 local zero = Vector3.new(0, 0, 0)
 local now = os.clock
 local camera, cursor, cursorRay
-local localCharacter, localHumanoid, localRoot, equipped, weaponName
+local localCharacter, localHumanoid, localRoot, equipped, weaponName, muzzleAttachment
+local tryMacro, releaseShotInput
 local charConnections, toolConnections = {}, {}
 local pendingTrigger, pendingPrefire, macro, activation
 local renderName = 'neoperro.' .. tostring(now())
@@ -89,7 +92,7 @@ for _, name in ipairs(featureNames) do
 end
 if saved then
     if Core.equal(state.InitialWhitelist, saved.InitialWhitelist) then state.Whitelist = Core.ids(saved.Whitelist) end
-    if state.InitialWhiteMode == saved.InitialWhiteMode then state.WhiteMode = saved.WhiteMode end
+    if previous.Version == state.Version and state.InitialWhiteMode == saved.InitialWhiteMode then state.WhiteMode = saved.WhiteMode end
 end
 
 function state:Snapshot()
@@ -127,6 +130,7 @@ function state:Destroy(reason)
     disconnect(charConnections)
     disconnect(toolConnections)
     cancelMacro()
+    if releaseShotInput then releaseShotInput() end
     if self.AutomatedTool then pcall(function() self.AutomatedTool:Deactivate() end) end
     for _, record in pairs(self.Records) do disconnect(record.connections); disconnect(record.characterConnections) end
     if self.Intro and self.Intro.Destroy then self.Intro:Destroy() end
@@ -140,7 +144,11 @@ local function enabled(name)
     local feature = config[name]
     if not state.Toggles[name] then return false end
     local toggle = feature.Toggle
-    if toggle and toggle.Enabled and toggle.Holding then return state.Held['toggle:' .. name] == true end
+    if toggle and toggle.Enabled and toggle.Holding and not state.Held['toggle:' .. name] then return false end
+    if name == 'Triggerbot' then
+        local gate = feature.Activation
+        if gate.Enabled and not state.Held['activation:Triggerbot'] then return false end
+    end
     return true
 end
 
@@ -191,6 +199,7 @@ local function visible(point, character, origin, excludeTarget)
 end
 
 local function muzzle()
+    if muzzleAttachment and muzzleAttachment.Parent then return muzzleAttachment.WorldPosition end
     local handle = equipped and equipped:FindFirstChild('Handle')
     if handle and handle:IsA('BasePart') then return handle.Position end
     return localRoot and localRoot.Position or (camera and camera.CFrame.Position)
@@ -202,6 +211,32 @@ local function partFor(record, name)
     local part = character:FindFirstChild(name)
     if not part and name == 'UpperTorso' then part = character:FindFirstChild('Torso') end
     return part and part:IsA('BasePart') and part or record.root
+end
+
+local function targetSettings(feature)
+    return config[feature].Target or config['Silent Aim'].Target
+end
+
+local function cursorHit()
+    rayParams.FilterDescendantsInstances = localCharacter and {localCharacter, camera} or {camera}
+    return World:Raycast(cursorRay.Origin, cursorRay.Direction * 5000, rayParams)
+end
+
+local function targetPart(record, feature)
+    if not record.character then return nil end
+    local target = targetSettings(feature)
+    if not target.Closest.Enabled then return partFor(record, target.BasePart) end
+    local best, distance = nil, math.huge
+    for _, part in ipairs(record.character:GetChildren()) do
+        if part:IsA('BasePart') and part.Name ~= 'HumanoidRootPart' then
+            local p, onScreen = camera:WorldToViewportPoint(part.Position)
+            if onScreen and p.Z > 0 then
+                local d = (Vector2.new(p.X, p.Y) - cursor).Magnitude
+                if d < distance then best, distance = part, d end
+            end
+        end
+    end
+    return best or partFor(record, target.BasePart)
 end
 
 local function valid(record, feature, part, skipWall)
@@ -231,41 +266,52 @@ local function velocity(record)
     return Core.limit(raw, 180)
 end
 
+local function playerBox(record, feature)
+    if not record.root or not record.character then return nil end
+    local style = config['2d-Box'][feature]
+    local origin = record.root.Position
+    if style['Predicted Position'] then
+        origin = origin + velocity(record) * Core.number(config.Prediction[predictionKeys[feature]], 0.128, 0, 1)
+    end
+    local distance = (origin - (localRoot and localRoot.Position or camera.CFrame.Position)).Magnitude
+    if distance > Core.number(style['Max Distance'], 5050, 0, 100000) then return nil end
+    local projected = camera:WorldToViewportPoint(origin)
+    local width, height = Core.number(style.Size.Width, 5, 0.1, 100), Core.number(style.Size.Height, 4.3, 0.1, 100)
+    local profile = Core.profile(config['Gun Specifications'], weaponName, distance)
+    if profile and profile.BoxSize then
+        width = Core.number(profile.BoxSize[1], width, 0.1, 100)
+        height = Core.number(profile.BoxSize[2], height, 0.1, 100)
+    end
+    local focal = camera.ViewportSize.Y / (2 * math.tan(math.rad(camera.FieldOfView) / 2))
+    local x, y, w, h = Core.projectedBox(projected.X, projected.Y, projected.Z, width, height, focal)
+    if not x or x+w < 0 or y+h < 0 or x > camera.ViewportSize.X or y > camera.ViewportSize.Y then return nil end
+    return Vector2.new(x, y), Vector2.new(w, h)
+end
+
 local function inFov(record, feature, part)
     local settings = config[feature]
     if settings.Ignore then return true end
-    local projected, onScreen = camera:WorldToViewportPoint(part.Position)
-    if not onScreen or projected.Z <= 0 then return false end
-    local dx, dy = projected.X - cursor.X, projected.Y - cursor.Y
-    local fov = settings.Fov
-    local box, circle = fov['2d-Box'], fov['2d-Circle']
-    local inside = Core.fov(dx, dy, fov.Mode,
-        Core.number(box.Size.X, 100, 1, 10000), Core.number(box.Size.Y, 100, 1, 10000),
-        Core.number(circle.Size, 50, 1, 10000))
-    if not inside then return false end
-    local distance = (record.root.Position - (localRoot and localRoot.Position or camera.CFrame.Position)).Magnitude
-    local profile = Core.profile(config['Gun Specifications'], weaponName, distance)
-    if profile and type(profile.BoxSize) == 'table' then
-        local focal = camera.ViewportSize.Y / (2 * math.tan(math.rad(camera.FieldOfView) / 2))
-        local width = Core.number(profile.BoxSize[1], 5, 0.1, 100) * focal / projected.Z
-        local height = Core.number(profile.BoxSize[2], 6, 0.1, 100) * focal / projected.Z
-        return math.abs(dx) <= width / 2 and math.abs(dy) <= height / 2
+    if settings.Fov.Mode == '2d-Circle' then
+        local p, onScreen = camera:WorldToViewportPoint(part.Position)
+        if not onScreen or p.Z <= 0 then return false end
+        return Core.fov(p.X - cursor.X, p.Y - cursor.Y, '2d-Circle', 0, 0,
+            Core.number(settings.Fov['2d-Circle'].Size, 50, 1, 10000))
     end
-    return true
+    local position, size = playerBox(record, feature)
+    return position ~= nil and cursor.X >= position.X and cursor.X <= position.X+size.X
+        and cursor.Y >= position.Y and cursor.Y <= position.Y+size.Y
 end
 
 local function nearest(feature, assignment)
     if not captureView() then return nil end
     local choices = {}
     for _, record in pairs(state.Records) do
-        local part = partFor(record, assignment and 'HumanoidRootPart' or config[feature].Part)
+        local part = assignment and partFor(record, 'HumanoidRootPart') or targetPart(record, feature)
         if part and (assignment or (valid(record, feature, part, true) and inFov(record, feature, part))) then
             local projected, onScreen = camera:WorldToViewportPoint(part.Position)
             if projected.Z > 0 and (onScreen or (not assignment and config[feature].Ignore)) then
                 local distance = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
-                if not assignment or distance <= 150 then
-                    choices[#choices + 1] = {record = record, part = part, distance = distance}
-                end
+                if not assignment or distance <= 150 then choices[#choices + 1] = {record = record, part = part, distance = distance} end
             end
         end
     end
@@ -276,18 +322,33 @@ local function nearest(feature, assignment)
 end
 
 local function aimPoint(record, feature)
-    local settings = feature == 'Triggerbot' and config['Silent Aim'] or config[feature]
-    local part = partFor(record, settings.Part)
+    local settings = config[feature]
+    local target = targetSettings(feature)
+    local closest = target.Closest
+    local part = targetPart(record, feature)
     if not valid(record, feature, part) then return nil end
-    if feature ~= 'Triggerbot' and not inFov(record, feature, part) then return nil end
+    if (feature ~= 'Triggerbot' or settings.Fov.Enabled) and not inFov(record, feature, part) then return nil end
     local point = part.Position
-    if settings.Method == 'Point' then
+    local exact = closest.Enabled and closest.Raycast and state.CursorHit
+    if exact and exact.Instance:IsDescendantOf(record.character) and exact.Instance:IsA('BasePart') then
+        part, point = exact.Instance, exact.Position
+    elseif closest.Enabled and closest.Method == 'Point' then
         local depth = math.max(0, (point - cursorRay.Origin):Dot(cursorRay.Direction))
         local localPoint = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction * depth)
-        local half = part.Size * (0.5 * (1 - Core.number(settings.PointReduction, 0.7, 0, 1)))
-        point = part.CFrame:PointToWorldSpace(Vector3.new(
-            math.clamp(localPoint.X, -half.X, half.X), math.clamp(localPoint.Y, -half.Y, half.Y),
-            math.clamp(localPoint.Z, -half.Z, half.Z)))
+        local reduction = Core.number(closest.Reduce[closest.Axis == 'All' and 'All' or 'Center'], 0.7, 0, 1)
+        local half = part.Size * (0.5 * (1 - reduction))
+        localPoint = Vector3.new(
+            closest.Axis == 'All' and math.clamp(localPoint.X, -half.X, half.X) or 0,
+            math.clamp(localPoint.Y, -half.Y, half.Y),
+            closest.Axis == 'All' and math.clamp(localPoint.Z, -half.Z, half.Z) or 0)
+        record.pointState = record.pointState or {}
+        local last = record.pointState[feature]
+        if last and last.part == part then
+            local alpha = Core.alpha(Core.number(closest.Sharpness, 0.65, 0.01, 1), now() - last.time)
+            localPoint = last.point + (localPoint - last.point) * alpha
+        end
+        record.pointState[feature] = {part = part, point = localPoint, time = now()}
+        point = part.CFrame:PointToWorldSpace(localPoint)
     end
     local base = point
     local leadTime = Core.number(config.Prediction[predictionKeys[feature]], 0.128, 0, 1)
@@ -306,33 +367,23 @@ local function aimPoint(record, feature)
         lead = Vector3.new(lead.X, y, lead.Z)
     end
     point = point + lead
-    if feature ~= 'Triggerbot' and settings.Axis == 'Center' then
-        -- Preserve the user's horizontal ray; change pitch only.
-        local ray = feature == 'Aim Assist' and {Origin = camera.CFrame.Position, Direction = camera.CFrame.LookVector} or cursorRay
-        local horizontal = Vector3.new(ray.Direction.X, 0, ray.Direction.Z)
-        local distance = Vector3.new(point.X - ray.Origin.X, 0, point.Z - ray.Origin.Z).Magnitude
-        if horizontal.Magnitude > 1e-5 then
-            local manual = ray.Origin + horizontal.Unit * distance
-            point = Vector3.new(manual.X, point.Y, manual.Z)
-        end
-    end
     local anti = feature == 'Silent Aim' and settings.AntiCurve
     if anti and anti.Enabled then
+        local origin = muzzle()
+        local barrelRay = point - origin
+        if barrelRay.Magnitude < 0.01 then return nil end
         if anti.Mode == 'endmath' then
             point = base + Core.limit(point - base, Core.number(anti.endmath.Radius, 120, 0, 1000))
-        else
-            local origin = muzzle()
-            local a, b = base - origin, point - origin
-            if a.Magnitude > 0.01 and b.Magnitude > 0.01 then
-                local angle = math.acos(math.clamp(a.Unit:Dot(b.Unit), -1, 1))
-                local maximum = math.rad(Core.number(anti['3d-angles'].MaxAngle, 4, 0, 180))
-                if angle > maximum and angle > 1e-6 then
-                    local perpendicular = b.Unit - a.Unit * a.Unit:Dot(b.Unit)
-                    if perpendicular.Magnitude > 1e-6 then
-                        point = origin + (a.Unit * math.cos(maximum) + perpendicular.Unit * math.sin(maximum)) * b.Magnitude
-                    else point = base end
-                end
+            local cameraRay = point - camera.CFrame.Position
+            barrelRay = point - origin
+            if cameraRay.Magnitude > 0.01 and barrelRay.Magnitude > 0.01 then
+                local angle = math.deg(math.acos(math.clamp(cameraRay.Unit:Dot(barrelRay.Unit), -1, 1)))
+                if angle > Core.number(anti.endmath.MaxAngle, 4, 0, 180) then return nil end
             end
+            if anti.endmath.WallCheck and not visible(point, record.character, origin, true) then return nil end
+        else
+            local angle = math.deg(math.acos(math.clamp(camera.CFrame.LookVector:Dot(barrelRay.Unit), -1, 1)))
+            if angle > Core.number(anti['3d-angles'].MaxAngle, 4, 0, 180) then return nil end
         end
     end
     if not Core.finiteVector(point) then return nil end
@@ -343,7 +394,10 @@ end
 
 local function selectTarget(feature)
     if not enabled(feature) or typing() then return nil end
-    if config[feature].Mode == 'Auto' then return nearest(feature) end
+    if config[feature].Mode == 'Auto' then
+        if feature == 'Aim Assist' and config[feature]['Keybind Mode'].Holding and not state.Held['target:' .. feature] then return nil end
+        return nearest(feature)
+    end
     local mode = config[feature]['Keybind Mode']
     if mode.Holding and not state.Held['target:' .. feature] then return nil end
     local player = validPlayer(state.Locks[feature])
@@ -354,6 +408,7 @@ local function updateAim()
     if not captureView() or not localHumanoid or localHumanoid.Health <= 0 then
         state.Points, state.Targets = {}, {}; return
     end
+    state.CursorHit = cursorHit()
     for _, feature in ipairs({'Silent Aim', 'Aim Assist'}) do
         local record = selectTarget(feature)
         local point, part
@@ -415,7 +470,7 @@ local function refreshPacket()
     if state.ForcedPoint and now() < state.ForcedUntil then point = state.ForcedPoint end
     state.PacketPoint = nil
     if equipped and enabled('Silent Aim') and not typing() then
-        if config['Anti-AimViewer'].Enabled and not shooting then state.PacketPoint = state.ForwardPoint
+        if config['Anti-AimViewer'].Enabled and not shooting then state.PacketPoint = nil
         else state.PacketPoint = point end
     end
     if shooting and state.ForcedPoint and now() < state.ForcedUntil then state.PacketPoint = state.ForcedPoint end
@@ -427,22 +482,47 @@ end
 local function sendAim(point)
     if not point or not state.Remote then return end
     state.PacketPoint = point
+    state.Stats.AimPackets = state.Stats.AimPackets + 1
     local ok, reason = pcall(function() state.Remote:FireServer('MOUSE', point) end)
     if not ok then warnOnce('remote-send', tostring(reason)) end
 end
 
-local function beginMacro(source, tool)
+local function macroEnabled()
+    local supplied = environment.neoperro
+    local live = type(supplied) == 'table' and supplied.Misc and supplied.Misc['Macro Abuse']
+    return config.Misc['Macro Abuse'].Enabled == true and type(live) == 'table' and live.Enabled == true
+end
+
+local function detectedMacro()
+    local moving = localHumanoid and localHumanoid.MoveDirection.Magnitude > 0.05
+    return Core.macroActive(state.MacroInputs, now(), moving)
+end
+
+local function beginMacro(source, tool, confirmed)
     local settings = config.Misc['Macro Abuse']
-    if macro or not settings.Enabled or (source == 'Triggerbot' and not settings['Work With TB']) then return end
+    if not macroEnabled() or macro or (source ~= 'Manual' and source ~= 'Triggerbot') then return end
+    if source == 'Triggerbot' and not settings['Work With TB'] then return end
+    if settings['Macro Check'] and not detectedMacro() then return end
+    if settings['Check Ammo'] and not confirmed then
+        local ammo = childValue(tool, 'Ammo')
+        if type(ammo) ~= 'number' then warnOnce('macro-ammo', 'Macro Check Ammo is on, but this tool has no replicated Ammo value.'); return end
+        local drop = state.LastAmmoDrop
+        if not drop or drop.tool ~= tool or now() - drop.time > 0.2 then
+            state.PendingMacro = {source = source, tool = tool, expires = now() + 0.65}
+            return
+        end
+    end
+    state.PendingMacro = nil
     if not virtualInput then warnOnce('macro-input', 'Macro needs VirtualInputManager key events.'); return end
     if not localHumanoid or localHumanoid.Health <= 0 or typing() then return end
     macro = {stage = 'wait', due = now() + 0.04, tool = tool, character = localCharacter}
 end
+tryMacro = beginMacro
 
 local function macroStep(time)
     if not macro then return end
     local cycle = macro
-    if not config.Misc['Macro Abuse'].Enabled or typing() or localCharacter ~= cycle.character
+    if not macroEnabled() or (config.Misc['Macro Abuse']['Macro Check'] and not detectedMacro()) or typing() or localCharacter ~= cycle.character
         or not localHumanoid or localHumanoid.Health <= 0 or not cycle.tool.Parent then cancelMacro(); return end
     if time < cycle.due then return end
     if cycle.stage == 'wait' then
@@ -465,18 +545,48 @@ local function macroStep(time)
     else releaseControl(); macro = nil end
 end
 
+releaseShotInput = function()
+    if state.ShotRelease then
+        local release = state.ShotRelease
+        state.ShotRelease = nil
+        pcall(release)
+    end
+    state.MouseOwned = false
+    if state.AutomatedTool then pcall(function() state.AutomatedTool:Deactivate() end) end
+    state.AutomatedTool = nil
+end
+
 local function fire(source, record, point)
     if not equipped or not equipped.Enabled or macro or typing() or now() < state.NextFire then return false end
+    if Input:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and not state.MouseOwned then return false end
     if not localHumanoid or localHumanoid.Health <= 0 or isKnocked(localCharacter) then return false end
     local ammo = childValue(equipped, 'Ammo')
     if type(ammo) == 'number' and ammo <= 0 then return false end
     local time, tool = now(), equipped
-    state.NextFire, state.ShotUntil = time + 0.08, time + 0.12
-    state.ForcedPoint, state.ForcedUntil = point, time + 0.12
-    activation = {source = source, tool = tool, untilTime = time + 0.12, sent = true}
+    state.NextFire, state.ShotUntil = time + 0.08, time + 0.14
+    state.ForcedPoint, state.ForcedUntil = point, time + 0.14
+    activation = {source = source, tool = tool, untilTime = time + 0.14, sent = true}
+    state.Stats.TriggerAttempts = state.Stats.TriggerAttempts + 1
     sendAim(point)
-    state.AutomatedTool, state.DeactivateAt = tool, time + 0.035
+    state.DeactivateAt = time + 0.04
+    if type(mouse1press) == 'function' and type(mouse1release) == 'function' then
+        state.MouseOwned = true
+        state.ShotRelease = mouse1release
+        local ok = pcall(mouse1press)
+        if ok then state.Capabilities.FireInput = 'mouse1press'; return true end
+        releaseShotInput()
+    end
+    if virtualInput then
+        state.MouseOwned = true
+        local x, y = cursor.X, cursor.Y
+        state.ShotRelease = function() virtualInput:SendMouseButtonEvent(x, y, 0, false, game, 0) end
+        local ok = pcall(function() virtualInput:SendMouseButtonEvent(x, y, 0, true, game, 0) end)
+        if ok then state.Capabilities.FireInput = 'VirtualInputManager'; return true end
+        releaseShotInput()
+    end
+    state.AutomatedTool = tool
     local ok, reason = pcall(function() tool:Activate() end)
+    state.Capabilities.FireInput = 'Tool.Activate fallback'
     if not ok then warnOnce('activate', tostring(reason)); return false end
     return true
 end
@@ -486,7 +596,8 @@ local function activated(tool)
     local source = 'Manual'
     if activation and activation.tool == tool and now() <= activation.untilTime then source = activation.source end
     activation = nil
-    state.ShotUntil = now() + 0.12
+    state.Stats.Activations = state.Stats.Activations + 1
+    state.ShotUntil = now() + 0.14
     updateAim()
     refreshPacket()
     if source == 'Manual' then sendAim(state.Points['Silent Aim']) end
@@ -497,13 +608,33 @@ end
 local function bindTool(tool)
     if not tool:IsA('Tool') then return end
     local name = Core.weapon(tool.Name)
-    if not name and not tool:FindFirstChild('Ammo') then return end
+    local lower = tool.Name:lower()
+    if lower:find('wallet') or lower:find('phone') or lower:find('knife') or lower:find('katana') then return end
+    if not name and not tool:FindFirstChild('Ammo') and not tool:FindFirstChild('Handle') then return end
     disconnect(toolConnections)
-    equipped, weaponName = tool, name
+    equipped, weaponName, muzzleAttachment = tool, name, nil
+    for _, item in ipairs(tool:GetDescendants()) do
+        if item:IsA('Attachment') and (item.Name:lower():find('muzzle') or item.Name == 'GunAttachment') then muzzleAttachment = item; break end
+    end
+    local ammoValue = tool:FindFirstChild('Ammo')
+    if ammoValue and (ammoValue:IsA('IntValue') or ammoValue:IsA('NumberValue')) then
+        local previousAmmo = ammoValue.Value
+        connect(ammoValue:GetPropertyChangedSignal('Value'), function()
+            local value = ammoValue.Value
+            if value < previousAmmo then
+                state.Stats.AmmoDrops = state.Stats.AmmoDrops + 1
+                state.LastAmmoDrop = {tool = tool, time = now()}
+                local pending = state.PendingMacro
+                if pending and pending.tool == tool and now() <= pending.expires then tryMacro(pending.source, tool, true) end
+            end
+            previousAmmo = value
+        end, toolConnections)
+    end
     connect(tool.Activated, function() activated(tool) end, toolConnections)
     connect(tool.AncestryChanged, function()
         if tool.Parent ~= localCharacter and equipped == tool then
-            equipped, weaponName = nil, nil
+            equipped, weaponName, muzzleAttachment = nil, nil, nil
+            state.PendingMacro = nil
             state.PacketPoint, state.ClientPoint = nil, nil
             pendingTrigger, pendingPrefire = nil, nil
             disconnect(toolConnections)
@@ -518,6 +649,7 @@ local function bindCharacter(character)
     equipped, weaponName = nil, nil
     pendingTrigger, pendingPrefire, activation = nil, nil, nil
     state.LastLocalVelocity, state.LastShot = nil, nil
+    state.PendingMacro, state.MacroInputs, state.LastAmmoDrop = nil, {}, nil
     local function added(child)
         if child:IsA('Humanoid') then localHumanoid = child
         elseif child.Name == 'HumanoidRootPart' and child:IsA('BasePart') then localRoot = child
@@ -549,6 +681,7 @@ local function bindOpponent(record, character)
     disconnect(record.characterConnections)
     record.character, record.root, record.humanoid, record.history = character, nil, nil, {}
     record.bounds, record.boundsAt, record.visibilityAt = nil, nil, nil
+    record.pointState = {}
     record.lastAmmo, record.ammoTool = nil, nil
     local function added(item)
         if item.Name == 'HumanoidRootPart' and item:IsA('BasePart') then record.root = item end
@@ -588,17 +721,21 @@ end
 
 local function triggerCandidate()
     if not enabled('Triggerbot') or typing() or not equipped or not captureView() then return nil end
-    rayParams.FilterDescendantsInstances = localCharacter and {localCharacter, camera} or {camera}
-    local hit = World:Raycast(cursorRay.Origin, cursorRay.Direction * 5000, rayParams)
-    if not hit then return nil end
-    local object, player = hit.Instance, nil
-    while object and object ~= World do
-        if object:IsA('Model') then player = Players:GetPlayerFromCharacter(object); if player then break end end
-        object = object.Parent
+    state.CursorHit = cursorHit()
+    local record
+    if config.Triggerbot.Fov.Enabled then record = nearest('Triggerbot')
+    else
+        local hit = state.CursorHit
+        if not hit then return nil end
+        local object, player = hit.Instance, nil
+        while object and object ~= World do
+            if object:IsA('Model') then player = Players:GetPlayerFromCharacter(object); if player then break end end
+            object = object.Parent
+        end
+        record = player and state.Records[player]
     end
-    local record = player and state.Records[player]
     if not record then return nil end
-    if config.Triggerbot.TargetOnly and player ~= state.Targets['Silent Aim'] then return nil end
+    if config.Triggerbot.TargetOnly and record.player ~= state.Targets['Silent Aim'] then return nil end
     local point = aimPoint(record, 'Triggerbot')
     if point then return record, point end
 end
@@ -606,6 +743,8 @@ end
 local random = Random.new()
 local function automaticFire(time)
     local record, point = triggerCandidate()
+    state.Targets.Triggerbot = record and record.player or nil
+    state.Points.Triggerbot = point
     if not record then pendingTrigger = nil
     elseif not pendingTrigger or pendingTrigger.record ~= record or pendingTrigger.tool ~= equipped then
         local distance = (record.root.Position - muzzle()).Magnitude
@@ -684,7 +823,7 @@ local function visual(kind)
 end
 
 local fovVisuals, debugVisuals = {}, {}
-for _, name in ipairs({'Silent Aim', 'Aim Assist'}) do
+for _, name in ipairs({'Silent Aim', 'Aim Assist', 'Triggerbot'}) do
     fovVisuals[name] = {box = visual('Square'), circle = visual('Circle')}
     debugVisuals[name] = visual('Circle')
 end
@@ -696,11 +835,9 @@ end
 local function drawFov()
     for name, shapes in pairs(fovVisuals) do
         local fov = config[name].Fov
-        local box, circle = fov['2d-Box'], fov['2d-Circle']
-        local size = Vector2.new(Core.number(box.Size.X, 100, 1, 10000), Core.number(box.Size.Y, 100, 1, 10000))
-        shapes.box:Set({Visible = enabled(name) and fov.Mode == '2d-Box' and box.Visible == true,
-            Position = cursor - size / 2, Size = size, Color = color(box.Color), Transparency = 1})
-        shapes.circle:Set({Visible = enabled(name) and fov.Mode == '2d-Circle' and circle.Visible == true,
+        local circle = fov['2d-Circle']
+        shapes.box:Set({Visible = false})
+        shapes.circle:Set({Visible = enabled(name) and (name ~= 'Triggerbot' or fov.Enabled) and fov.Mode == '2d-Circle' and circle.Visible == true,
             Position = cursor, Radius = Core.number(circle.Size, 50, 1, 10000), Color = color(circle.Color), Transparency = 1})
         local point = state.Points[name]
         local projected, onScreen
@@ -711,59 +848,45 @@ local function drawFov()
     end
 end
 
-local function bounds(record, time)
-    if not record.bounds or time >= (record.boundsAt or 0) then
-        local low, high = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
-        for _, part in ipairs(record.character:GetChildren()) do
-            if part:IsA('BasePart') then
-                for x = -1, 1, 2 do for y = -1, 1, 2 do for z = -1, 1, 2 do
-                    local corner = record.root.CFrame:PointToObjectSpace(part.CFrame:PointToWorldSpace(part.Size * Vector3.new(x, y, z) / 2))
-                    low = Vector3.new(math.min(low.X, corner.X), math.min(low.Y, corner.Y), math.min(low.Z, corner.Z))
-                    high = Vector3.new(math.max(high.X, corner.X), math.max(high.Y, corner.Y), math.max(high.Z, corner.Z))
-                end end end
-            end
-        end
-        record.bounds, record.boundsAt = {low, high}, time + 0.25
+local function assignedColor(id, fallback)
+    for _, assigned in ipairs(state.Whitelist) do
+        if assigned == id then return state.WhiteMode == 'Target' and Color3.fromRGB(255, 75, 75) or Color3.fromRGB(80, 230, 110) end
     end
-    local low, high = record.bounds[1], record.bounds[2]
-    if not Core.finiteVector(low) or not Core.finiteVector(high) then return nil end
-    local prediction = config.ESP['2d-Box'].PredictedPos and velocity(record) * Core.number(config.Prediction.SilentAim, 0.128, 0, 1) or zero
-    local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-    for _, x in ipairs({low.X, high.X}) do for _, y in ipairs({low.Y, high.Y}) do for _, z in ipairs({low.Z, high.Z}) do
-        local p = camera:WorldToViewportPoint(record.root.CFrame:PointToWorldSpace(Vector3.new(x, y, z)) + prediction)
-        if p.Z < 0.1 then return nil end
-        minX, minY, maxX, maxY = math.min(minX, p.X), math.min(minY, p.Y), math.max(maxX, p.X), math.max(maxY, p.Y)
-    end end end
-    if maxX < 0 or maxY < 0 or minX > camera.ViewportSize.X or minY > camera.ViewportSize.Y then return nil end
-    return Vector2.new(minX, minY), Vector2.new(maxX - minX, maxY - minY)
+    return fallback
 end
 
 local function drawPlayers(time)
     for _, record in pairs(state.Records) do
-        local show = enabled('ESP') and record.root and record.humanoid and record.humanoid.Health > 0 and record.character.Parent
-        if show then show = (record.root.Position - camera.CFrame.Position).Magnitude <= Core.number(config.ESP.MaxDistance, 5050, 0, 100000) end
-        if show and config.ESP.VisibleCheck then
-            if time >= (record.visibilityAt or 0) then
-                record.espVisible = visible(record.root.Position, record.character)
-                record.visibilityAt = time + 0.08
+        local exists = record.root and record.humanoid and record.character and record.character.Parent
+        local dead = exists and (record.humanoid.Health <= 0 or record.character:GetAttribute('Dead') == true)
+        for _, feature in ipairs({'Silent Aim', 'Aim Assist', 'Triggerbot'}) do
+            local style = config['2d-Box'][feature]
+            local show = exists and enabled('ESP') and style.Visible
+            if dead and (config.ESP.DeadCheck or config.Checks.Dead[checkIndices[feature]]) then show = false end
+            if show then show = (record.root.Position - camera.CFrame.Position).Magnitude <= Core.number(config.ESP.MaxDistance, 5050, 0, 100000) end
+            if show and config.ESP.VisibleCheck then
+                if time >= (record.visibilityAt or 0) then
+                    record.espVisible, record.visibilityAt = visible(record.root.Position, record.character), time + 0.08
+                end
+                show = record.espVisible
             end
-            show = record.espVisible
-        end
-        local position, size
-        if show then position, size = bounds(record, time) end
-        if position then
-            if not record.visuals then record.visuals = {outline = visual('Square'), box = visual('Square'), name = visual('Text')} end
-            local v, style = record.visuals, config.ESP['2d-Box']
-            local opacity = Core.number(style.Transparency, 1, 0, 1)
-            v.outline:Set({Visible = true, Position = position, Size = size, Thickness = 3, Filled = false,
-                Color = Color3.new(0, 0, 0), Transparency = opacity})
-            v.box:Set({Visible = true, Position = position, Size = size, Filled = style.Filled == true,
-                Color = Color3.fromRGB(242, 240, 235), Transparency = opacity})
-            v.name:Set({Visible = config.ESP.Names == true, Text = record.player.DisplayName,
-                Position = Vector2.new(position.X + size.X / 2, position.Y - 17),
-                Color = Color3.fromRGB(242, 240, 235), Transparency = opacity})
-        elseif record.visuals then
-            for _, v in pairs(record.visuals) do v:Set({Visible = false}) end
+            local position, size
+            if show then position, size = playerBox(record, feature) end
+            record.visuals = record.visuals or {}
+            local v = record.visuals[feature]
+            if position then
+                if not v then v = {outline = visual('Square'), box = visual('Square'), name = visual('Text')}; record.visuals[feature] = v end
+                local opacity = Core.number(style.Transparency, 1, 0, 1)
+                local foreground = assignedColor(record.player.UserId, color(style.Color.Box[1]))
+                v.outline:Set({Visible = true, Position = position, Size = size, Thickness = 3, Filled = false,
+                    Color = color(style.Color.Box[2]), Transparency = opacity})
+                v.box:Set({Visible = true, Position = position, Size = size, Filled = style.Filled == true,
+                    Color = foreground, Transparency = opacity})
+                local name = style.Name[2] == 'Name' and record.player.Name
+                    or (style.Name[2] == 'UserId' and tostring(record.player.UserId) or record.player.DisplayName)
+                v.name:Set({Visible = config.ESP.Names and style.Name[1], Text = name,
+                    Position = Vector2.new(position.X + size.X / 2, position.Y - 17), Color = foreground, Transparency = opacity})
+            elseif v then for _, object in pairs(v) do object:Set({Visible = false}) end end
         end
     end
 end
@@ -773,10 +896,14 @@ local function inputMatches(input, action)
 end
 
 local function inputChanged(input, began, processed)
+    if state.MouseOwned and input.UserInputType == Enum.UserInputType.MouseButton1 then return end
+    if began and not typing() and (input.KeyCode.Name == 'I' or input.KeyCode.Name == 'O') then
+        Core.observeMacro(state.MacroInputs, input.KeyCode.Name == 'I' and 1 or -1, now())
+    end
     if began and (processed or typing()) then return end
-    if began and inputMatches(input, config.Misc.Panic) then state:Destroy('panic'); return end
+    if began and config.Misc.Panic.Enabled and inputMatches(input, config.Misc.Panic) then state:Destroy('panic'); return end
     if began and input.UserInputType == Enum.UserInputType.MouseButton1 and equipped then
-        state.ShotUntil = now() + 0.12; updateAim(); refreshPacket()
+        state.ShotUntil = now() + 0.14; updateAim(); refreshPacket(); sendAim(state.Points['Silent Aim'])
     end
     for _, name in ipairs(featureNames) do
         local toggle = config[name].Toggle
@@ -787,6 +914,9 @@ local function inputChanged(input, began, processed)
     end
     for _, name in ipairs({'Silent Aim', 'Aim Assist'}) do
         local mode = config[name]['Keybind Mode']
+        if inputMatches(input, mode) then
+            state.Held['target:' .. name] = began
+        end
         if config[name].Mode == 'Target' and inputMatches(input, mode) then
             if mode.Holding then
                 state.Held['target:' .. name] = began
@@ -797,6 +927,11 @@ local function inputChanged(input, began, processed)
                 else local record = nearest(name); state.Locks[name] = record and record.player.UserId or nil end
             end
         end
+    end
+    local activationKey = config.Triggerbot.Activation
+    if activationKey.Enabled and inputMatches(input, activationKey) then
+        if activationKey.Holding then state.Held['activation:Triggerbot'] = began
+        elseif began then state.Held['activation:Triggerbot'] = not state.Held['activation:Triggerbot'] end
     end
     if inputMatches(input, config.Misc.Prefire) then
         if config.Misc.Prefire.Holding then state.Held.prefire = began
@@ -812,8 +947,6 @@ local function inputChanged(input, began, processed)
                 elseif #state.Whitelist < 4 then state.Whitelist[#state.Whitelist + 1] = id end
             end
         end
-        if inputMatches(input, config.Whitelist.ClearKey) then state.Whitelist = {} end
-        if inputMatches(input, config.Whitelist.ToggleModeKey) then state.WhiteMode = state.WhiteMode == 'Friend' and 'Target' or 'Friend' end
     end
     refreshPacket()
 end
@@ -864,7 +997,7 @@ function state:Destroy(reason)
 end
 
 local function findRemote()
-    local remote = ReplicatedStorage:FindFirstChild('MAINEVENT')
+    local remote = ReplicatedStorage:FindFirstChild('MAINEVENT') or ReplicatedStorage:FindFirstChild('MainEvent')
     state.Remote = remote and remote:IsA('RemoteEvent') and remote or nil
     state.Capabilities.Remote = state.Remote ~= nil
 end
@@ -875,7 +1008,7 @@ local function start()
     if not state.Remote then warnOnce('missing-remote', 'MAINEVENT is missing; firing redirection waits for it to appear.') end
     if not hooks.Namecall then warnOnce('no-hook', 'Namecall hooks unavailable: using Looten-style activation updates; Anti-AimViewer is unavailable.') end
     if not hooks.Index then warnOnce('no-index', 'Mouse hooks unavailable: local bullet redirection is limited to recognized Beams.') end
-    connect(ReplicatedStorage.ChildAdded, function(child) if child.Name == 'MAINEVENT' then findRemote() end end)
+    connect(ReplicatedStorage.ChildAdded, function(child) if child.Name == 'MAINEVENT' or child.Name == 'MainEvent' then findRemote() end end)
     connect(ReplicatedStorage.ChildRemoved, function(child) if child == state.Remote then findRemote() end end)
     connect(localPlayer.CharacterAdded, bindCharacter)
     connect(localPlayer.CharacterRemoving, function()
@@ -891,18 +1024,24 @@ local function start()
         local record = state.Records[player]
         if record then
             disconnect(record.connections); disconnect(record.characterConnections)
-            if record.visuals then for _, v in pairs(record.visuals) do v:Destroy(); state.Visuals[v] = nil end end
+            if record.visuals then for _, group in pairs(record.visuals) do for _, v in pairs(group) do v:Destroy(); state.Visuals[v] = nil end end end
             state.Records[player] = nil
         end
         for name, id in pairs(state.Locks) do if id == player.UserId then state.Locks[name] = nil end end
     end)
     connect(Input.InputBegan, function(input, processed) inputChanged(input, true, processed) end)
     connect(Input.InputEnded, function(input) inputChanged(input, false, false) end)
+    connect(Input.InputChanged, function(input)
+        if not typing() and input.UserInputType == Enum.UserInputType.MouseWheel and input.Position.Z ~= 0 then
+            Core.observeMacro(state.MacroInputs, input.Position.Z > 0 and 1 or -1, now())
+        end
+    end)
     local function suspend()
         state.Held = {}; state.Points = {}; state.Targets = {}
         state.PacketPoint, state.ClientPoint = nil, nil
         pendingTrigger, pendingPrefire = nil, nil
-        cancelMacro()
+        state.PendingMacro, state.MacroInputs = nil, {}
+        cancelMacro(); releaseShotInput()
         if state.AutomatedTool then pcall(function() state.AutomatedTool:Deactivate() end); state.AutomatedTool = nil end
     end
     connect(Input.WindowFocusReleased, function() state.Focused = false; suspend() end)
@@ -937,9 +1076,8 @@ local function start()
             if not typing() then automaticFire(time) end
             refreshPacket()
         end
-        if state.AutomatedTool and time >= state.DeactivateAt then
-            pcall(function() state.AutomatedTool:Deactivate() end); state.AutomatedTool = nil
-        end
+        if (state.ShotRelease or state.AutomatedTool) and time >= state.DeactivateAt then releaseShotInput() end
+        if state.PendingMacro and (not macroEnabled() or time > state.PendingMacro.expires) then state.PendingMacro = nil end
         macroStep(time); antiFling(); restoreBeams(false)
     end)
     RunService:BindToRenderStep(renderName, Enum.RenderPriority.Camera.Value + 1, function(dt)
@@ -954,10 +1092,13 @@ local function start()
         drawFov(); drawPlayers(now())
     end)
     -- Intro is bundled locally; no second downloaded script and no exposed intro options.
-    state.Intro = playIntro()
+    if not environment.__neoperroIntroSeenV1 then
+        environment.__neoperroIntroSeenV1 = true
+        state.Intro = playIntro()
+    end
     local panic = config.Misc.Panic.Keybind
     print('[neoperro] v' .. state.Version .. ' loaded for ' .. supported[game.PlaceId]
-        .. '. ' .. tostring(panic[panic[3] == 'Mouse' and 2 or 1]) .. ' = panic/unload.')
+        .. '. ' .. (config.Misc.Panic.Enabled and (tostring(panic[panic[3] == 'Mouse' and 2 or 1]) .. ' = panic/unload.') or 'Panic key disabled.'))
 end
 
 local ok, reason = xpcall(start, debug.traceback)
