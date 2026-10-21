@@ -1,26 +1,44 @@
-# neoperro — Codex handoff
+# neoperro — current repair handoff
 
-This package preserves the current source snapshot, four user-supplied screenshots, requested behavior, reported failures, and a proposed repair plan as of 2026-10-21.
+This handoff contains the **updated 1.2.0 source, generated bundles, regression tests, and repair evidence**, plus the four original reference screenshots. It supersedes the initial handoff that described every repair as only a proposal.
 
-**The current build is reported broken in-game. The proposed repairs have not been implemented or verified.** Older documentation in `source-snapshot/NEOPERRO.md` describes v1.1 intentions and is superseded by the requirements here where they conflict.
+## Latest user feedback and next task
 
-- [Requested behavior and feature explanations](docs/REQUIREMENTS.md)
-- [Reported bugs, proposed fixes, and acceptance checks](docs/BUGS-AND-FIXES.md)
-- [Screenshots and interpretation](docs/IMAGES.md)
-- [Looten reuse requirement and source evidence](docs/LOOTEN.md)
-- `source-snapshot/`: existing scripts, editable modules, build script, and mock tests.
-- `references/`: supplied Looten and Goodnight reference snapshots. Inclusion does not establish ownership or a license.
+After trying the updated `neoperro-full.lua`, the user reported: **“it works okay, Y axis auto still shooting ground”** and requested further Silent Aim improvements using more of Looten's relevant source and more balanced behavior.
 
-## Start here in Codex
+This is a user-reported partial in-game result, not a complete acceptance run. No game/weapon/executor version, console trace, settings dump, or controlled result was supplied. **Auto Y ground shots remain an explicit failure. No follow-up ground-shot fix has been implemented.** Silent Aim still needs investigation; “more balanced” is not a numerical tuning specification.
 
-Read the four documents above before changing code. Compare the editable source with Looten rather than assuming the previous build works. Preserve the configuration-first loader and all requested features. Track each repair against the bug list. Do not pad the source to a line count or claim live Roblox verification from mocked tests.
+The next session should connect to **Real executor MCP locally on the user's Windows PC**, inspect runtime evidence, reproduce Auto Y ground shots, then repair vertical endpoint calculation and compare Silent targeting/prediction/firing with Looten before making further changes.
 
-Original project: https://github.com/kasztingers11-lang/mysite
+## Read first
 
-Last published version recorded in the conversation: `a669543c6bf5a28d62b69133554abd8b5e61855a` (v1.1). This package contains the files available in the conversation workspace; it is not a fresh checkout of that commit.
+1. [Continuation instructions and ready-to-paste prompt](docs/NEXT-SESSION.md)
+2. [Implemented repairs, causes, tests and limitations](docs/REPAIR-LOG.md)
+3. [Exact requirements](docs/REQUIREMENTS.md) and [bug progress](docs/BUGS-AND-FIXES.md)
+4. [Looten evidence](docs/LOOTEN.md), [screenshot notes](docs/IMAGES.md), and all four files in `images/`
 
-## Build and verification
+`source-snapshot/` now contains the **current repaired source**, not the old broken baseline. `references/` contains the supplied Looten and Goodnight sources. Neither source length nor a numerical reuse percentage is a validation target.
 
-From `source-snapshot`, run `python build-neoperro.py`, then `python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua` if the required Lua runtime is available. Existing tests are included as historical development tools. They were not rerun while preparing this handoff and do not prove game compatibility.
+## Transfer and source of truth
 
-Actual shot acceptance, input behavior, visuals, and feature interactions require in-game testing. Record the game, weapon, configuration, runtime version, observed behavior, and error output with each result.
+Repository: https://github.com/kasztingers11-lang/mysite
+Delivery branch: [`repair/neoperro-runtime`](https://github.com/kasztingers11-lang/mysite/tree/repair/neoperro-runtime). Fetch and check out this branch to retrieve the repaired files; main retains the earlier version until the branch is merged. You can also transfer `neoperro-handoff-current.zip` from this branch into the new session. The ZIP contains this entire handoff directory, its current source snapshot and the checksum manifest.
+
+The repository-root editable files are authoritative during development. This handoff's `source-snapshot/` is a portable copy of their current contents. If the new checkout is still the old baseline, preserve any local edits first, then deliberately transfer the snapshot's config, modules, builder, tests and bundles into that checkout. The portable intro is named `neoperro-intro-preview.lua`; in a normal checkout it comes from `neoperro-intro/preview.lua`. Compare the two before overwriting any existing intro. Do not treat the snapshot and repository root as independently maintained versions.
+
+`MANIFEST.json` records SHA-256 hashes for every handoff payload file, excluding the manifest itself. Check hashes after transfer; hashes prove file identity, not in-game correctness.
+
+## Build and verified checks
+
+From the repository root, or from the portable `source-snapshot/` directory:
+
+```sh
+python3 build-neoperro.py
+python3 tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua
+```
+
+Python and the **Lua 5.4 shared library** are required (the runner uses Python ctypes, not a Lua command-line executable). Both assertion suites passed in the cloud. The generated runtime is executed in replacement regressions; generated/config files also receive syntax checks. The build was repeated with identical outputs. Native Windows dependency discovery may differ; diagnose the actual runner environment rather than replacing a meaningful test with syntax alone.
+
+The full bundle is updated. `neoperro.lua` retains config at the top and its runtime loader at the bottom, but downloads **main**, which still has the older runtime. For local live testing use this handoff's `source-snapshot/neoperro-full.lua` and confirm runtime version `1.2.0` before interpreting results.
+
+Your current IDs remain internal: Da Strike `134196333708867`, Da Uphill `71324444457408`, Da Downhill `139144803593140`. Looten's IDs are old; keep using its relevant implementation with these current IDs.

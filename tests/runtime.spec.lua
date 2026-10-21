@@ -111,8 +111,9 @@ function camera:WorldToViewportPoint(p)
     return V.new(960+p.X*1000/math.max(z,0.01),540-p.Y*1000/math.max(z,0.01),z),z>0
 end
 World.CurrentCamera=camera
-local rayHit
+local rayHit, muzzleBlocked
 function World:Raycast(origin,direction,params)
+    if muzzleBlocked and origin.X==5 then return {Instance=World,Position=V.new()} end
     if rayHit then
         for _,excluded in ipairs(params.FilterDescendantsInstances or {})do
             if rayHit.Instance==excluded or rayHit.Instance:IsDescendantOf(excluded)then return nil end
@@ -156,6 +157,8 @@ function Input:GetFocusedTextBox()return self.textbox end
 function Input:IsMouseButtonPressed(item)return self.keys[item.Name] or false end
 function Input:IsKeyDown(item)return self.keys[item.Name] or false end
 services.UserInputService=Input
+-- A top-bar inset must not be subtracted from raw mouse/viewport coordinates.
+services.GuiService={GetGuiInset=function()return V.new(0,36)end}
 local Run={Heartbeat=signal()}
 function Run:BindToRenderStep(name,priority,callback)renders[name]=callback end
 function Run:UnbindFromRenderStep(name)renders[name]=nil end
@@ -190,9 +193,9 @@ local drawingObjects={}
 env.Drawing={new=function(kind)
     local d={Kind=kind,Remove=function(self)self.removed=true end};drawingObjects[#drawingObjects+1]=d;return d
 end}
-local function loadRuntime(config)
+local function loadRuntime(config, file)
     env.neoperro=Core.copy(config or Defaults)
-    return assert(loadfile('neoperro-src/runtime.lua','t',env))()
+    return assert(loadfile(file or 'neoperro-src/runtime.lua','t',env))()
 end
 local function key(name,down,processed)
     local isMouse=name:match('MouseButton')~=nil
@@ -242,7 +245,7 @@ env.__neoperroIntroSeenV1=nil -- Simulate upgrading an old runtime without the n
 local second=loadRuntime(cfg)
 assert(not first.Alive and first.Intro.destroyed and second.Intro==nil and introPlays==1,'Intro runs once per session')
 assert(not second.Toggles['Silent Aim'] and not second.Toggles.ESP,'Toggle preservation')
-assert(second.Whitelist[1]==2 and second.Locks['Aim Assist']==2,'Assignment preservation')
+assert(#second.Whitelist==0 and second.Locks['Aim Assist']==2,'Disabled whitelist clears assignments; valid target lock survives')
 assert(hooks.__namecall==hookBefore and activeConnections()==baseline and renderCount()==1,'Replacement cleanup')
 key('P',true);key('P',false);step(0.04)
 remote:FireServer('OTHER',V.new(1,2,3),'tail')
@@ -272,7 +275,8 @@ rayHit=nil;second.Config['Silent Aim'].Target.Closest.Raycast=false
 second.Config['Silent Aim'].Target.Closest.Method='Part'
 moveEnemy(0,0,-50)
 
--- Stable ESP and assigned whitelist colors, including when target filtering is disabled.
+-- Stable standalone ESP; colors apply only while whitelist is enabled.
+second.Config.Whitelist.Enabled=true;second.Whitelist={2}
 step(0.04);assert(anyBoxVisible())
 local stableSize
 for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then stableSize=d.Size;assert(d.Color[2]==230,'Assigned friend is green') end end
@@ -281,6 +285,19 @@ enemyTorso.Size=V.new(30,50,40);step(0.04)
 for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then assert(d.Size==stableSize,'Limb bounds must not change the box')end end
 second.WhiteMode='Target';step(0.04)
 for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then assert(d.Color[1]==255 and d.Color[2]==75,'Assigned target is red')end end
+-- Silent box hidden: independent 6x6 ESP ignores weapon overrides and Silent max distance.
+second.Config['2d-Box']['Silent Aim'].Visible=false
+second.Config['2d-Box']['Silent Aim']['Max Distance']=1
+second.Config['Gun Specifications'].Enabled=true;step(0.04)
+local standaloneSize
+for _,d in ipairs(drawingObjects)do
+    if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then standaloneSize=d.Size end
+end
+assert(standaloneSize and math.abs(standaloneSize.X-6*1080/(2*math.tan(math.rad(70)/2))/50)<1e-6,'Standalone ESP uses fixed six-stud width')
+second.Config.Whitelist.Enabled=false;step(0.04)
+assert(#second.Whitelist==0)
+key('R',true);key('R',false);assert(#second.Whitelist==0,'Assignment disabled with whitelist')
+for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then assert(d.Color[2]==255,'Disabled whitelist removes marker colors')end end
 enemyHum.Health=0;step(0.04);assert(not anyBoxVisible(),'Dead check hides boxes and labels')
 enemyHum.Health=100;enemyTorso.Size=V.new(2,2,1);second:Destroy('test');clearInput()
 
@@ -293,30 +310,79 @@ Players.PlayerAdded:Fire(other)
 moveEnemy(1,0,-50);step(0.04)
 assert(aim.Targets['Aim Assist']==other,'Holding Auto must choose the current nearest player')
 key('Q',false);step(0.04);assert(aim.Targets['Aim Assist']==nil)
+-- A broken Drawing for one player cannot prevent the other player's rendering.
+local damaged=aim.Records[enemy].visuals['Silent Aim'].box
+local originalSet=damaged.Set
+damaged.Set=function()error('injected drawing failure')end
+step(0.04)
+assert(aim.Warnings['draw-player:2'] and aim.Records[other].visuals['Silent Aim'],'Per-player rendering failures stay isolated')
+damaged.Set=originalSet
 Players.PlayerRemoving:Fire(other);other.Parent=nil
 moveEnemy(0,0,-50);camera.CFrame=CF.new()
 aim:Destroy('test');clearInput()
 
--- Native trigger input, cancelled reaction delays, release, and optional player-box FOV.
+-- Camera assistance remains available with Silent Aim entirely disabled.
+local cameraOnly=Core.copy(Defaults);cameraOnly['Silent Aim'].Enabled=false
+local cameraRuntime=loadRuntime(cameraOnly);key('Q',true);step(0.04)
+assert(cameraRuntime.Points['Silent Aim']==nil and cameraRuntime.Points['Aim Assist']~=nil)
+cameraRuntime:Destroy('test');clearInput();camera.CFrame=CF.new()
+
+-- Native trigger input: immediate press, configured hold, cancellation, optional FOV.
 ammo.Value=20
 local trigger=loadRuntime(Defaults)
 rayHit={Instance=enemyTorso,Position=enemyTorso.Position}
 local before=shots
-key('MouseButton2',true);step(0.04);rayHit=nil;step(0.2)
-assert(shots==before,'Losing the actual crosshair target cancels the delayed shot')
-rayHit={Instance=enemyTorso,Position=enemyTorso.Position};step(0.04);step(0.12)
-assert(shots==before+1 and nativePresses>0 and trigger.Capabilities.FireInput=='mouse1press','Use native input, not only Tool.Activate')
-key('MouseButton2',false);step(0.2)
-assert(shots==before+1 and not trigger.MouseOwned and not Input.keys.MouseButton1,'Release stops automation')
+key('MouseButton2',true);step(0.04)
+assert(shots==before+1 and trigger.MouseOwned,'Press immediately; Delay controls hold, not reaction')
+step(0.04);assert(shots==before+1 and trigger.MouseOwned,'Never overlap held firing cycles')
+rayHit=nil;step(0.04)
+assert(shots==before+1 and not trigger.MouseOwned,'Losing actual crosshair target releases owned input')
+rayHit={Instance=enemyTorso,Position=enemyTorso.Position};step(0.04)
+assert(shots==before+2 and nativePresses>0 and trigger.Capabilities.FireInput=='mouse1press','Use native input, not only Tool.Activate')
+key('MouseButton2',false)
+assert(not trigger.MouseOwned and not Input.keys.MouseButton1,'Release input immediately stops automation')
+step(0.2);before=shots
 rayHit=nil;key('MouseButton2',true);step(0.04);step(0.2)
-assert(shots==before+1,'Fov false requires an actual character hit')
-trigger.Config.Triggerbot.Fov.Enabled=true;step(0.04);step(0.12)
-assert(shots==before+2,'Fov true permits a player-box candidate without a body hit')
+assert(shots==before,'Fov false requires an actual character hit')
+trigger.Config.Triggerbot.Fov.Enabled=true;step(0.04)
+assert(shots==before+1,'Fov true permits a player-box candidate without a body hit')
 key('MouseButton2',false);step(0.1)
 trigger.Config.Triggerbot.Activation.Keybind={'Q','MouseButton2','Keyboard'}
-key('Q',true);step(0.04);step(0.12)
-assert(shots==before+3 and trigger.Targets['Aim Assist']==enemy,'Shared Q can activate Aim Assist and Triggerbot')
+key('Q',true);step(0.04)
+assert(shots==before+2 and trigger.Targets['Aim Assist']==enemy,'Shared Q can activate Aim Assist and Triggerbot')
 key('Q',false);step(0.1);trigger:Destroy('test');clearInput();camera.CFrame=CF.new()
+
+-- Silent final muzzle wall check cannot suppress camera assist or independent Triggerbot.
+local independent=Core.copy(Defaults);independent.Triggerbot.Fov.Enabled=true
+handle.Position=V.new(5,0,0);muzzleBlocked=true
+local isolated=loadRuntime(independent);key('Q',true);step(0.04)
+assert(isolated.Points['Silent Aim']==nil and isolated.Points['Aim Assist']~=nil,'Silent final wall filter is feature-local')
+key('MouseButton2',true);before=shots;step(0.04)
+assert(shots==before+1,'Independent Triggerbot bypasses Silent-only final filters')
+isolated:Destroy('test');clearInput();muzzleBlocked=false;handle.Position=V.new();camera.CFrame=CF.new()
+
+-- Replacements during owned input release it and retain exactly one callback set.
+local rc=Core.copy(Defaults);rc.Triggerbot.Fov.Enabled=true
+local replacement=loadRuntime(rc);local replacementConnections=activeConnections()
+for i=1,20 do
+    key('MouseButton2',true);step(0.12)
+    local old=replacement
+    replacement=loadRuntime(rc, i%2==0 and 'neoperro-runtime.lua' or nil)
+    assert(not old.Alive and not Input.keys.MouseButton1,'Replacement releases held mouse')
+    assert(activeConnections()==replacementConnections and renderCount()==1 and hooks.__namecall==hookBefore,'Repeated replacement stays bounded')
+    local aliveDrawings=0
+    for _,d in ipairs(drawingObjects)do if not d.removed then aliveDrawings=aliveDrawings+1 end end
+    assert(aliveDrawings==9,'No drawings left by replaced instances before first render')
+end
+replacement:Destroy('test');clearInput()
+
+-- A denied native press and denied virtual press may fall back without losing shot context.
+local savedPress,savedRelease=env.mouse1press,env.mouse1release
+env.mouse1press=function()error('native denied')end
+ammo.Value=20
+local fallback=loadRuntime(rc);key('MouseButton2',true);step(0.12)
+assert(fallback.Capabilities.FireInput=='Tool.Activate fallback' and fallback.FiringSource=='Triggerbot' and fallback.ForcedPoint,'Fallback retains owned cycle and target')
+fallback:Destroy('test');clearInput();env.mouse1press,env.mouse1release=savedPress,savedRelease
 
 -- Disabled means no macro operation even while a zoom macro is detected.
 local disabled=loadRuntime(Defaults);zoomMacro()
@@ -336,10 +402,18 @@ ammo.Value=ammo.Value-1;step(0.05);assert(tool.Parent==backpack)
 step(0.07);assert(Input.keys.LeftControl)
 step(0.08);assert(tool.Parent==myChar)
 step(0.08);assert(not Input.keys.LeftControl)
+zoomMacro();tool.Activated:Fire();step(0.05)
+assert(tool.Parent==myChar,'A previous confirmed ammo drop cannot authorize another shot cycle')
+macroRuntime.PendingMacro=nil
 step(0.3);zoomMacro();tool.Activated:Fire();ammo.Value=ammo.Value-1;step(0.05);step(0.07)
 assert(Input.keys.LeftControl)
 env.neoperro.Misc['Macro Abuse'].Enabled=false;step(0.01)
 assert(not Input.keys.LeftControl and tool.Parent==myChar,'Live disable cancels an in-progress cycle')
+-- Cancelling cannot reuse an already consumed ammo confirmation within its freshness window.
+env.neoperro.Misc['Macro Abuse'].Enabled=true
+tool.Activated:Fire();step(0.05)
+assert(tool.Parent==myChar,'A consumed ammo drop must not authorize the next activation')
+macroRuntime.PendingMacro=nil
 macroRuntime.Config.Misc.Panic.Enabled=false
 key('E',true);key('E',false);assert(macroRuntime.Alive,'Panic false honors its switch')
 macroRuntime.Config.Misc.Panic.Enabled=true;key('E',true);key('E',false)
@@ -347,7 +421,7 @@ assert(not macroRuntime.Alive and activeConnections()==0 and renderCount()==0)
 clearInput()
 
 -- Prediction and the barrel-alignment filters.
-local modes=Core.copy(Defaults);modes.EndMath.VelocityHistory=false
+local modes=Core.copy(Defaults);modes['Silent Aim'].EndMath.VelocityHistory=false
 modes['Silent Aim'].Target.Closest.Enabled=false
 modes['Y-Axis'].Enabled=true;modes['Y-Axis'].Mode='Custom';modes['Y-Axis'].JumpOffset=2
 enemyRoot.AssemblyLinearVelocity=V.new(0,10,0)
@@ -359,14 +433,26 @@ filtered.Config['Silent Aim'].AntiCurve.Enabled=true
 filtered.Config['Silent Aim'].AntiCurve.Mode='endmath'
 filtered.Config['Silent Aim'].AntiCurve.endmath.Radius=1
 enemyRoot.AssemblyLinearVelocity=V.new(100,0,0);step(0.04)
-assert(math.abs((filtered.Points['Silent Aim']-enemyTorso.Position).Magnitude-1)<1e-6)
+assert(filtered.Points['Silent Aim']==nil,'Endmath rejects outside pixel radius instead of clamping prediction')
+filtered.Config['Silent Aim'].AntiCurve.endmath.Radius=300;step(0.04)
+assert(math.abs(filtered.Points['Silent Aim'].X-12.8)<1e-6,'Accepted lead is not clamped')
 filtered.Config['Silent Aim'].AntiCurve.Mode='3d-angles';step(0.04)
-assert(filtered.Points['Silent Aim']==nil,'Reject excessive muzzle-to-target angle')
+assert(filtered.Points['Silent Aim']==nil,'Reject world-space mouse-to-target distance')
 filtered.Config['Silent Aim'].AntiCurve.Enabled=false
 filtered.Config.Whitelist.Enabled=true;filtered.WhiteMode='Friend';filtered.Whitelist={2};step(0.04)
 assert(filtered.Targets['Silent Aim']==nil)
 filtered.WhiteMode='Target';step(0.04);assert(filtered.Targets['Silent Aim']==enemy)
 filtered:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
+
+-- User-supplied current place IDs all start the same Looten-derived remote path.
+for _,id in ipairs({134196333708867,71324444457408,139144803593140}) do
+    game.PlaceId=id
+    local current=loadRuntime(Defaults)
+    step(0.04)
+    assert(current.Capabilities.Remote and current.Targets['Silent Aim']==enemy,'Current place uses MAINEVENT/MOUSE workflow')
+    current:Destroy('test')
+end
+game.PlaceId=134196333708867
 
 -- Native GUI fallback, processed input, focus, replicated-shot prefire and respawn cleanup.
 env.Drawing=nil
@@ -390,4 +476,5 @@ game.PlaceId=999;assert(not pcall(loadRuntime,Defaults) and final.Alive);game.Pl
 Players.PlayerRemoving:Fire(enemy);enemy.Parent=nil;step(0.04);assert(final.Targets['Silent Aim']==nil)
 final:Destroy('test')
 assert(activeConnections()==0 and renderCount()==0 and introPlays==1)
-print('Runtime v1.1: player boxes, closest targeting, hold search, native trigger input, macro/ammo guards, colors, panic, one-time intro and cleanup passed')
+for _,d in ipairs(drawingObjects)do assert(d.removed,'Final teardown removes every owned Drawing')end
+print('Runtime v1.2: player boxes, closest targeting, hold search, native trigger input, macro/ammo guards, colors, panic, one-time intro and cleanup passed')

@@ -1,6 +1,6 @@
 # Bugs and proposed fixes
 
-All rows are OPEN. Reports come from the user; causes and fixes below are investigation proposals, not completed work.
+The table below preserves the original reports and proposed investigations. Local repair work is recorded in [REPAIR-LOG.md](REPAIR-LOG.md), with concrete changes and regression evidence for B01–B11. Full live Roblox acceptance remains OPEN. Latest user feedback: the updated full bundle “works okay,” but Auto Y still shoots the ground and Silent Aim needs more work. See NEXT-SESSION.md for the next task; no follow-up Auto Y fix has been implemented.
 
 | ID | Report / requirement | Proposed investigation or repair | Acceptance check |
 | --- | --- | --- | --- |

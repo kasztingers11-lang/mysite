@@ -1,5 +1,9 @@
 # Requested behavior
 
+## Latest follow-up after testing the repaired full bundle
+
+The user reported it “works okay,” but Y-Axis Auto still shoots the ground. Auto must prevent ground-directed shots; diagnose and test the actual failure before selecting a correction. Silent Aim needs further improvement using relevant Looten logic and balanced tuning supported by observations. These follow-up repairs are outstanding; see NEXT-SESSION.md. The current IDs replace Looten's old IDs and must remain internal.
+
 These are the user's requested outcomes, not claims about the current implementation.
 
 ## Delivery and lifecycle

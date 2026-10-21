@@ -240,4 +240,3 @@ worker(function()
 end)
 
 return state
-

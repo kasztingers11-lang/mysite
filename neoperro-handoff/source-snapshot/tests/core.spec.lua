@@ -58,6 +58,9 @@ assert(not Core.finiteVector(V.new(0/0, 0, 0)))
 assert(not Core.finiteVector(V.new(math.huge, 0, 0)))
 local defaults = dofile('neoperro-src/defaults.lua')
 Core.validate(defaults, defaults)
+assert(defaults.EndMath==nil and defaults['Silent Aim'].EndMath~=nil)
+assert(defaults.Prediction.Triggerbot==0.121)
+assert(defaults['Silent Aim'].AntiCurve['3d-angles'].MaxAngle==nil and defaults['Silent Aim'].AntiCurve.endmath.MaxAngle==nil)
 assert(defaults.Misc.Intro == nil and defaults['Client Bullets'].RequireTarget == nil)
 for name, value in pairs(defaults['Gun Specifications']) do
     if name ~= 'Ranges' and type(value) == 'table' then

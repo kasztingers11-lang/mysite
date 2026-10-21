@@ -70,19 +70,21 @@ return {
             ['Keybind'] = {'T', 'MouseButton2', 'Keyboard'};
         };
 
-        -- Barrel alignment checks. An unsafe angle falls back to your manual aim.
+        -- Distance filters; disabled by default. Units are explicit interpretations of the screenshots.
+        ['EndMath'] = {
+            ['VelocityHistory'] = true; -- Fit recent positions; teleport jumps reset history.
+            ['WallCheck'] = true; -- Silent-only final camera/muzzle visibility checks.
+            ['Visualizer'] = false; -- Display the final Silent Aim point.
+        };
         ['AntiCurve'] = {
             ['Enabled'] = false;
-            ['Mode'] = '3d-angles'; -- 3d-angles / endmath; selects one filter.
-
+            ['Mode'] = '3d-angles'; -- Select one distance filter, not a degree limit.
             ['3d-angles'] = {
-                ['MaxAngle'] = 4; -- Maximum angle from camera direction to muzzle-to-target direction.
+                ['Max'] = 2.2; -- Studs between ordinary Mouse.Hit and final target point.
             };
-
             ['endmath'] = {
-                ['Radius'] = 120; -- Maximum prediction displacement in studs.
-                ['MaxAngle'] = 4; -- Maximum camera/barrel parallax in degrees.
-                ['WallCheck'] = true; -- Recheck the ray from the actual muzzle to the final point.
+                ['Radius'] = 120; -- Pixels from cursor to projected final point; reject, never clamp lead.
+                ['WallCheck'] = true; -- Final visibility from the actual muzzle.
             };
         };
     };
@@ -141,14 +143,7 @@ return {
     ['Prediction'] = {
         ['SilentAim'] = 0.128;
         ['AimAssist'] = 0.121;
-        ['Triggerbot'] = 0.132;
-    };
-
-    -- Shared final-point calculations and optional debug display.
-    ['EndMath'] = {
-        ['VelocityHistory'] = true; -- Fit velocity to recent position samples; teleport jumps reset the history.
-        ['WallCheck'] = true; -- Check visibility of the final calculated point.
-        ['Visualizer'] = false; -- Display the final aim point for tuning.
+        ['Triggerbot'] = 0.121;
     };
 
     -- Up to four assigned players. Store UserIds, not display names.
@@ -163,12 +158,12 @@ return {
         };
     };
 
-    -- Recheck the target before firing; do not stack pending shots.
+    -- Recheck before pressing; one owned press/hold/release cycle, cancelled on target loss.
     ['Triggerbot'] = {
         ['Enabled'] = true;
         ['TargetOnly'] = false; -- When true, require the Silent Aim target.
 
-        ['Delay'] = 0.1; -- Fixed delay in seconds when DelayMode is Normal.
+        ['Delay'] = 0.1; -- Button hold duration in seconds, as in Looten; not a pre-shot wait.
         ['RandomDelay'] = {0.1, 0.12}; -- Minimum and maximum delay in seconds.
         ['SmartDelay'] = false; -- Distance-based timing; overrides DelayMode when enabled.
         ['DelayMode'] = 'Random'; -- Normal / Random. Delays are alternatives, not added together.
@@ -288,7 +283,7 @@ return {
     -- Local tracer visuals. Weapon handling stays inside the script.
     -- Uses the selected aim point when available, otherwise your normal mouse aim.
     ['Client Bullets'] = {
-        ['Enabled'] = true; -- Always active by default; no separate keybind or target requirement.
+        ['Enabled'] = true; -- Requires a valid selected target internally; no separate keybind.
     };
 
     -- Extra controls. No intro settings are exposed here.
