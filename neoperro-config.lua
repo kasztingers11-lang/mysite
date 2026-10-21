@@ -9,7 +9,6 @@
 
 getgenv()['neoperro'] = {
 
-
     -- Requested spectator-facing aim handling; this does not guarantee concealment.
     ['Anti-AimViewer'] = {
         ['Enabled'] = true;
@@ -216,7 +215,7 @@ getgenv()['neoperro'] = {
         };
     };
 
-    -- Weapon profiles override the general prediction when enabled.
+    -- Weapon profiles change box dimensions only; prediction uses the main Prediction section.
     -- BoxSize = projected target-box width/height in studs, not cursor FOV pixels.
     -- Unlisted weapons and targets beyond Far use the general settings.
     ['Gun Specifications'] = {
@@ -229,33 +228,33 @@ getgenv()['neoperro'] = {
         };
 
         ['Revolver'] = {
-            ['Close'] = {['BoxSize'] = {5, 6}; ['Prediction'] = 0.128};
-            ['Medium'] = {['BoxSize'] = {5, 6}; ['Prediction'] = 0.130};
-            ['Far'] = {['BoxSize'] = {4, 5}; ['Prediction'] = 0.135};
+            ['Close'] = {['BoxSize'] = {5, 6}};
+            ['Medium'] = {['BoxSize'] = {5, 6}};
+            ['Far'] = {['BoxSize'] = {4, 5}};
         };
 
         ['Double-Barrel SG'] = {
-            ['Close'] = {['BoxSize'] = {7, 6}; ['Prediction'] = 0.132};
-            ['Medium'] = {['BoxSize'] = {6, 5}; ['Prediction'] = 0.138};
-            ['Far'] = {['BoxSize'] = {5, 5}; ['Prediction'] = 0.145};
+            ['Close'] = {['BoxSize'] = {7, 6}};
+            ['Medium'] = {['BoxSize'] = {6, 5}};
+            ['Far'] = {['BoxSize'] = {5, 5}};
         };
 
         ['TacticalShotgun'] = {
-            ['Close'] = {['BoxSize'] = {7, 7}; ['Prediction'] = 0.128};
-            ['Medium'] = {['BoxSize'] = {6, 6}; ['Prediction'] = 0.133};
-            ['Far'] = {['BoxSize'] = {5, 5}; ['Prediction'] = 0.140};
+            ['Close'] = {['BoxSize'] = {7, 7}};
+            ['Medium'] = {['BoxSize'] = {6, 6}};
+            ['Far'] = {['BoxSize'] = {5, 5}};
         };
 
         ['Shotgun'] = {
-            ['Close'] = {['BoxSize'] = {7, 7}; ['Prediction'] = 0.128};
-            ['Medium'] = {['BoxSize'] = {6, 6}; ['Prediction'] = 0.133};
-            ['Far'] = {['BoxSize'] = {5, 5}; ['Prediction'] = 0.140};
+            ['Close'] = {['BoxSize'] = {7, 7}};
+            ['Medium'] = {['BoxSize'] = {6, 6}};
+            ['Far'] = {['BoxSize'] = {5, 5}};
         };
 
         ['Usp'] = {
-            ['Close'] = {['BoxSize'] = {5, 6}; ['Prediction'] = 0.122};
-            ['Medium'] = {['BoxSize'] = {5, 6}; ['Prediction'] = 0.125};
-            ['Far'] = {['BoxSize'] = {4, 5}; ['Prediction'] = 0.130};
+            ['Close'] = {['BoxSize'] = {5, 6}};
+            ['Medium'] = {['BoxSize'] = {5, 6}};
+            ['Far'] = {['BoxSize'] = {4, 5}};
         };
     };
 
