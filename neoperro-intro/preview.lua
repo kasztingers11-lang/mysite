@@ -11,17 +11,9 @@ if type(previous) == 'table' and type(previous.Destroy) == 'function' then
     previous:Destroy()
 end
 
-local options = environment.neoperroIntroPreview
-if type(options) ~= 'table' then options = {} end
-local duration = tonumber(options.Duration) or 3.2
-if duration ~= duration or duration == math.huge or duration == -math.huge then
-    duration = 3.2
-end
-duration = math.clamp(duration, 2, 10)
-local blurTail = tonumber(options.BlurTail) or 1.6
-if blurTail ~= blurTail or blurTail == math.huge or blurTail == -math.huge then blurTail = 1.6 end
-blurTail = math.clamp(blurTail, 0.5, 4)
-local withSound = options.Sound ~= false
+local duration = 3.2
+local blurTail = 1.6
+local withSound = true
 
 local state = {Alive = true, Objects = {}, Tweens = {}, Workers = {}}
 environment[stateKey] = state
@@ -131,15 +123,15 @@ local function run()
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     }, playerGui)
 
-    local letterGroup = make('CanvasGroup', {
+    local letterGroup = make('Frame', {
         Name = 'LetterGroup', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(880, 880),
-        BorderSizePixel = 0, BackgroundTransparency = 1, GroupTransparency = 1,
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
+        BorderSizePixel = 0, BackgroundTransparency = 1,
     }, screen)
 
     local logoContainer = make('Frame', {
         Name = 'Swirl', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(600, 600),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(1800, 1800),
         BackgroundTransparency = 1, Rotation = -225,
     }, letterGroup)
     local logoScale = make('UIScale', {Scale = 0.08}, logoContainer)
@@ -147,11 +139,12 @@ local function run()
     local logo = make('ImageLabel', {
         Name = 'Monogram', AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Visible = false,
+        BackgroundTransparency = 1, ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Fit, Visible = false,
     }, logoContainer)
 
     local fallback = make('TextLabel', {
-        Name = 'Fallback', Text = 'N', Font = Enum.Font.Antique, TextSize = 300,
+        Name = 'Fallback', Text = 'N', Font = Enum.Font.Antique, TextScaled = true, TextTransparency = 1,
         TextColor3 = Color3.fromRGB(248, 245, 235), BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromScale(1, 1),
@@ -221,7 +214,8 @@ local function run()
     local enter = math.min(1.05, duration * 0.4)
     local leave = math.min(0.6, duration * 0.25)
     tween(blur, enter, {Size = 22})
-    tween(letterGroup, 0.3, {GroupTransparency = 0})
+    tween(logo, 0.3, {ImageTransparency = 0})
+    tween(fallback, 0.3, {TextTransparency = 0})
     tween(logoContainer, enter, {Rotation = 0})
     tween(logoScale, enter, {Scale = 1})
 
@@ -229,7 +223,8 @@ local function run()
     if not alive() then return end
     tween(logoContainer, leave, {Rotation = 12})
     tween(logoScale, leave, {Scale = 1.08})
-    local fade = tween(letterGroup, leave, {GroupTransparency = 1})
+    tween(fallback, leave, {TextTransparency = 1})
+    local fade = tween(logo, leave, {ImageTransparency = 1})
     fade.Completed:Wait()
     if not alive() then return end
 
