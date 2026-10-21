@@ -1,5 +1,5 @@
 -- neoperro
--- Configuration only; the main runtime is still to be implemented.
+-- Edit this table and execute neoperro.lua again to apply it.
 -- Keybind format: {keyboard key, mouse button, active device}.
 -- Use 'Keyboard' or 'Mouse' as the third value. Only that device is active.
 -- Shared keybinds are allowed. The runtime will dispatch each enabled matching action.
@@ -9,7 +9,7 @@
 
 getgenv()['neoperro'] = {
 
-    -- Requested spectator-facing aim handling; this does not guarantee concealment.
+    -- Rewrites idle MOUSE updates to camera-forward; shot windows use real aim. No concealment guarantee.
     ['Anti-AimViewer'] = {
         ['Enabled'] = true;
     };
@@ -77,17 +77,17 @@ getgenv()['neoperro'] = {
             ['Keybind'] = {'T', 'MouseButton2', 'Keyboard'};
         };
 
-        -- Intended filters; neither mode guarantees hits or cancels network lag.
+        -- Limits prediction displacement; neither mode guarantees hits or cancels network lag.
         ['AntiCurve'] = {
             ['Enabled'] = false;
             ['Mode'] = '3d-angles'; -- 3d-angles / endmath; selects one filter.
 
             ['3d-angles'] = {
-                ['MaxAngle'] = 4; -- Angular threshold in degrees.
+                ['MaxAngle'] = 4; -- Maximum angle between direct and predicted aim, in degrees.
             };
 
             ['endmath'] = {
-                ['Radius'] = 120; -- Radius in studs for the planned final-point adjustment.
+                ['Radius'] = 120; -- Maximum final-point displacement from the body point, in studs.
             };
         };
     };
@@ -149,7 +149,7 @@ getgenv()['neoperro'] = {
 
     -- Shared final-point calculations and optional debug display.
     ['EndMath'] = {
-        ['VelocityHistory'] = true; -- Estimate velocity from timestamped position samples.
+        ['VelocityHistory'] = true; -- Fit velocity to recent position samples; teleport jumps reset the history.
         ['WallCheck'] = true; -- Check visibility of the final calculated point.
         ['Visualizer'] = false; -- Display the final aim point for tuning.
     };
@@ -291,3 +291,4 @@ getgenv()['neoperro'] = {
         };
     };
 };
+
