@@ -29,7 +29,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.0', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.1', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
@@ -515,7 +515,9 @@ local function aimPoint(record, feature, hitPart, hitPoint)
             if vel.Y > 0 then y = y * Core.number(ySettings.JumpOffset, 1, 0, 5) end
         else
             local grounded = supportedGround or (not evidence.Airborne and math.abs(record.root.AssemblyLinearVelocity.Y) < 3)
-            y = Core.autoY(vel.Y, leadTime, part.Size.Y, grounded)
+            local vertical, source = Core.autoVertical(vel.Y, record.root.AssemblyLinearVelocity.Y)
+            evidence.AutoVerticalVelocity, evidence.AutoVerticalSource = vertical, source
+            y = Core.autoY(vertical, leadTime, part.Size.Y, grounded)
         end
         lead = Vector3.new(lead.X, y, lead.Z)
     end

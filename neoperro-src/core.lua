@@ -159,6 +159,15 @@ end
 
 -- A conservative vertical lead, without inventing gravity from FloorMaterial.
 -- FloorMaterial is not replicated reliably for remote humanoids.
+function Core.autoVertical(sampled, raw)
+    -- A position-history fit describes the recent interval, so it can still rise
+    -- after the replicated velocity turns downward at the jump apex (and vice versa).
+    -- Use the current direction only when it is finite and outside resting noise.
+    if type(raw) == 'number' and raw == raw and math.abs(raw) > 3 and math.abs(raw) <= 180
+        and sampled * raw < 0 then return raw, 'raw-direction-change' end
+    return sampled, 'resolved'
+end
+
 function Core.autoY(vertical, seconds, height, grounded)
     if grounded then return 0 end
     return Core.number(vertical * seconds, 0, -height, height * 2)

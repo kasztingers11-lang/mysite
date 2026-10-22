@@ -75,6 +75,11 @@ near(Core.autoY(0,.128,1.6,false),0) -- Live Air + zero vertical motion must not
 near(Core.autoY(-30,.128,1.6,true),0)
 near(Core.autoY(-30,.128,1.6,false),-1.6)
 near(Core.autoY(30,.128,1.6,false),3.2)
+near(Core.autoVertical(9.3091507,-3.8926463),-3.8926463) -- Captured jump-apex disagreement.
+near(Core.autoVertical(-12,20),20) -- New upward motion does not retain falling history.
+near(Core.autoVertical(9,-1),9) -- Ignore resting noise.
+near(Core.autoVertical(9,-1000),9) -- Do not trust an implausible raw spike.
+near(Core.autoVertical(9,12),9) -- Preserve history when direction agrees.
 local reversed={{p=zero,t=2},{p=zero,t=3}}
 Core.sample(reversed,zero,1); assert(#reversed==1 and reversed[1].t==1)
 assert(defaults['Silent Aim'].AntiCurve['3d-angles'].MaxAngle==nil and defaults['Silent Aim'].AntiCurve.endmath.MaxAngle==nil)
