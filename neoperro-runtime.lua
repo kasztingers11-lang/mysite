@@ -1208,7 +1208,7 @@ local function inFov(record, feature, part)
         and cursor.Y >= position.Y and cursor.Y <= position.Y+size.Y
 end
 
-local function nearest(feature, assignment)
+local function nearest(feature, assignment, resolve)
     if not captureView() then return nil end
     local choices = {}
     for _, record in pairs(state.Records) do
@@ -1223,7 +1223,14 @@ local function nearest(feature, assignment)
     end
     table.sort(choices, function(a, b) return a.distance < b.distance end)
     for _, choice in ipairs(choices) do
-        if assignment or valid(choice.record, feature, choice.part) then return choice.record end
+        if assignment or valid(choice.record, feature, choice.part) then
+            if resolve then
+                local point, part = resolve(choice.record, feature)
+                if point then return choice.record, point, part end
+            else
+                return choice.record
+            end
+        end
     end
 end
 
@@ -1339,7 +1346,8 @@ local function selectTarget(feature)
     if not enabled(feature) or typing() then return nil end
     if config[feature].Mode == 'Auto' then
         if feature == 'Aim Assist' and config[feature]['Keybind Mode'].Holding and not state.Held['target:' .. feature] then return nil end
-        return nearest(feature)
+        -- A rejected final prediction must not starve another eligible candidate.
+        return nearest(feature, false, aimPoint)
     end
     local mode = config[feature]['Keybind Mode']
     if mode.Holding and not state.Held['target:' .. feature] then return nil end
@@ -1354,9 +1362,8 @@ local function updateAim()
     end
     state.CursorHit = cursorHit()
     for _, feature in ipairs({'Silent Aim', 'Aim Assist'}) do
-        local record = selectTarget(feature)
-        local point, part
-        if record then point, part = aimPoint(record, feature) end
+        local record, point, part = selectTarget(feature)
+        if record and not point then point, part = aimPoint(record, feature) end
         state.Targets[feature] = point and record.player or nil
         state.Points[feature] = point
         if feature == 'Silent Aim' then state.AimPart = part end

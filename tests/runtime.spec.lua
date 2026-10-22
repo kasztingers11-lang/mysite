@@ -450,6 +450,27 @@ assert(filtered.Targets['Silent Aim']==nil)
 filtered.WhiteMode='Target';step(0.04);assert(filtered.Targets['Silent Aim']==enemy)
 filtered:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
 
+-- Auto continues to the next candidate after final prediction/filter rejection.
+do
+    local second=obj('Player','SecondCandidate',Players);second.UserId=77;second.DisplayName='Second'
+    local secondChar,secondRoot,secondHum,secondTorso=character(second,-50)
+    secondRoot.Position=V.new(1,0,-50);secondRoot.CFrame=CF.new(secondRoot.Position)
+    secondTorso.Position=secondRoot.Position;secondTorso.CFrame=CF.new(secondRoot.Position)
+    local cfg=Core.copy(Defaults)
+    cfg['Silent Aim'].Target.Closest.Enabled=false
+    cfg['Silent Aim'].Prediction.Auto=false
+    cfg['Silent Aim'].EndMath.VelocityHistory=false
+    cfg['Silent Aim'].AntiCurve.Enabled=true
+    cfg['Silent Aim'].AntiCurve.Mode='endmath'
+    cfg['Silent Aim'].AntiCurve.endmath.Radius=50
+    enemyRoot.AssemblyLinearVelocity=V.new(100,0,0)
+    local rt=loadRuntime(cfg);step(.04)
+    assert(rt.Targets['Silent Aim']==second,'Auto must try the next candidate after a final filter rejects the nearest')
+    rt.Config['Silent Aim'].Mode='Target';rt.Locks['Silent Aim']=enemy.UserId;step(.04)
+    assert(rt.Targets['Silent Aim']==nil,'Explicit target lock must not silently switch players')
+    rt:Destroy('test');secondChar:Destroy();second:Destroy();enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
 -- Live-observed adapter names, fresh cursor precedence, and per-feature prediction.
 do
     ammo.Name='AMMO';ammo.Value=6
@@ -538,4 +559,4 @@ Players.PlayerRemoving:Fire(enemy);enemy.Parent=nil;step(0.04);assert(final.Targ
 final:Destroy('test')
 assert(activeConnections()==0 and renderCount()==0 and introPlays==1)
 for _,d in ipairs(drawingObjects)do assert(d.removed,'Final teardown removes every owned Drawing')end
-print('Runtime v1.2: player boxes, closest targeting, hold search, native trigger input, macro/ammo guards, colors, panic, one-time intro and cleanup passed')
+print('Runtime v1.3: selection fallback, prediction, player boxes, native trigger input, macro/ammo guards, one-time intro and cleanup passed')
