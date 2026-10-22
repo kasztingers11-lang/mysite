@@ -5,13 +5,12 @@ return {
         ['Enabled'] = true;
     };
 
-    -- Vertical compensation. Auto chooses the adjustment; Custom uses JumpOffset.
+    -- Silent Aim vertical compensation. Aim Assist has no Y-Axis modifier.
     ['Y-Axis'] = {
         ['Enabled'] = false; -- Enable vertical compensation.
         ['Mode'] = 'Auto'; -- Auto ignores JumpOffset; Custom uses it without automatic adjustment.
         ['JumpOffset'] = 1.0; -- Custom only: 1 = unchanged, below 1 = less upward lead, above 1 = more.
         ['SilentAim'] = true; -- Apply the Y-Axis section to Silent Aim.
-        ['AimAssist'] = false; -- Apply the Y-Axis section to Aim Assist.
     };
 
     -- Order for every row: {Silent Aim, Aim Assist, Triggerbot}.
@@ -27,6 +26,12 @@ return {
     -- Calculates the aim point used by the firing integration.
     ['Silent Aim'] = {
         ['Enabled'] = true;
+        ['Prediction'] = {
+            ['Enabled'] = true;
+            ['Auto'] = true; -- Measured latency estimate; ignores Value. Not a hit guarantee.
+            ['Value'] = 0.128; -- Manual lead in seconds, used only when Auto = false.
+        };
+        ['GroundShotCheck'] = true; -- Bound downward prediction using actual ground/rig geometry.
         ['Mode'] = 'Auto'; -- Auto = nearest eligible to cursor; Target = select with a keybind.
         ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
 
@@ -92,10 +97,15 @@ return {
     -- Moves the camera toward the chosen aim point.
     ['Aim Assist'] = {
         ['Enabled'] = true;
+        ['Prediction'] = {
+            ['Enabled'] = true;
+            ['Auto'] = true; -- Same measured latency model, independently enabled.
+            ['Value'] = 0.121; -- Manual seconds; ignored in Auto.
+        };
         ['Mode'] = 'Auto'; -- Auto searches while its key is held; Target uses a selected player.
         ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
 
-        ['Follow'] = 'Camera'; -- Camera tracking.
+        ['Follow'] = 'Camera'; -- Camera / Mouse; Mouse requires mousemoverel and a focused game.
         ['Smoothness'] = 0.0068; -- Strength referenced to 60 FPS; runtime will compensate for frame time.
 
         ['Target'] = {
@@ -139,13 +149,6 @@ return {
         };
     };
 
-    -- Velocity lead in seconds: 0.128 = 128 ms. Do not multiply it by ping again.
-    ['Prediction'] = {
-        ['SilentAim'] = 0.128;
-        ['AimAssist'] = 0.121;
-        ['Triggerbot'] = 0.121;
-    };
-
     -- Up to four assigned players. Store UserIds, not display names.
     ['Whitelist'] = {
         ['Enabled'] = false;
@@ -161,6 +164,11 @@ return {
     -- Recheck before pressing; one owned press/hold/release cycle, cancelled on target loss.
     ['Triggerbot'] = {
         ['Enabled'] = true;
+        ['Prediction'] = {
+            ['Enabled'] = true;
+            ['Auto'] = true; -- Independent from Silent Aim and Aim Assist.
+            ['Value'] = 0.121; -- Manual seconds; ignored in Auto.
+        };
         ['TargetOnly'] = false; -- When true, require the Silent Aim target.
 
         ['Delay'] = 0.1; -- Button hold duration in seconds, as in Looten; not a pre-shot wait.
@@ -237,7 +245,7 @@ return {
         };
     };
 
-    -- Weapon profiles change box dimensions only; prediction uses the main Prediction section.
+    -- Weapon profiles change box dimensions only; each feature owns its Prediction settings.
     -- BoxSize = projected target-box width/height in studs, not cursor FOV pixels.
     -- Unlisted weapons and targets beyond Far use the general settings.
     ['Gun Specifications'] = {
@@ -296,7 +304,7 @@ return {
         ['Macro Abuse'] = {
             ['Enabled'] = false;
             ['Work With TB'] = false; -- Also run after Triggerbot fires.
-            ['Check Ammo'] = true; -- Require an observed Ammo decrease before starting.
+            ['Check Ammo'] = true; -- Require a fresh Ammo/AMMO decrease before starting.
             ['Macro Check'] = true; -- Require movement plus repeated I/O or alternating wheel inputs.
         };
 

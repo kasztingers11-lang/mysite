@@ -293,7 +293,7 @@ local standaloneSize
 for _,d in ipairs(drawingObjects)do
     if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then standaloneSize=d.Size end
 end
-assert(standaloneSize and math.abs(standaloneSize.X-6*1080/(2*math.tan(math.rad(70)/2))/50)<1e-6,'Standalone ESP uses fixed six-stud width')
+assert(standaloneSize and math.abs(standaloneSize.X-6*1080/(2*math.tan(math.rad(70)/2))/50)<=0.5,'Standalone ESP uses fixed six-stud width rounded to a pixel')
 second.Config.Whitelist.Enabled=false;step(0.04)
 assert(#second.Whitelist==0)
 key('R',true);key('R',false);assert(#second.Whitelist==0,'Assignment disabled with whitelist')
@@ -422,12 +422,15 @@ clearInput()
 
 -- Prediction and the barrel-alignment filters.
 local modes=Core.copy(Defaults);modes['Silent Aim'].EndMath.VelocityHistory=false
+modes['Silent Aim'].Prediction.Auto=false
 modes['Silent Aim'].Target.Closest.Enabled=false
 modes['Y-Axis'].Enabled=true;modes['Y-Axis'].Mode='Custom';modes['Y-Axis'].JumpOffset=2
 enemyRoot.AssemblyLinearVelocity=V.new(0,10,0)
 local filtered=loadRuntime(modes);step(0.04)
 assert(math.abs(filtered.Points['Silent Aim'].Y-2.56)<1e-6)
-filtered.Config['Y-Axis'].Mode='Auto';step(0.04);assert(filtered.Points['Silent Aim'].Y==0)
+filtered.Config['Y-Axis'].Mode='Auto';step(0.04)
+assert(math.abs(filtered.Points['Silent Aim'].Y-1.28)<1e-6,'Rising motion is not erased by a stale floor material')
+enemyRoot.AssemblyLinearVelocity=V.new();step(0.04);assert(filtered.Points['Silent Aim'].Y==0)
 filtered.Config['Y-Axis'].Enabled=false
 filtered.Config['Silent Aim'].AntiCurve.Enabled=true
 filtered.Config['Silent Aim'].AntiCurve.Mode='endmath'

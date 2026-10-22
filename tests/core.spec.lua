@@ -59,7 +59,24 @@ assert(not Core.finiteVector(V.new(math.huge, 0, 0)))
 local defaults = dofile('neoperro-src/defaults.lua')
 Core.validate(defaults, defaults)
 assert(defaults.EndMath==nil and defaults['Silent Aim'].EndMath~=nil)
-assert(defaults.Prediction.Triggerbot==0.121)
+assert(defaults.Prediction==nil and defaults.Triggerbot.Prediction.Value==0.121)
+for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do
+    assert(defaults[feature].Prediction.Enabled and defaults[feature].Prediction.Auto)
+end
+assert(defaults['Y-Axis'].AimAssist==nil)
+near(Core.predictionTime({Enabled=false,Auto=true,Value=1},.2,.25,0),0)
+near(Core.predictionTime({Enabled=true,Auto=false,Value=.121},.2,.25,0),.121)
+near(Core.predictionTime({Enabled=true,Auto=true,Value=1},.15,.2,.01),.21)
+near(Core.predictionTime({Enabled=true,Auto=true,Value=0},.15,.2,.01),.21)
+near(Core.predictionTime({Enabled=true,Auto=true,Value=1},nil,nil,0),.1)
+near(Core.predictionTime({Enabled=true,Auto=true,Value=0},.2,.2,0,100,1000),.3)
+near(Core.predictionTime({Enabled=true,Auto=true,Value=0},1,1,.1),.35)
+near(Core.autoY(0,.128,1.6,false),0) -- Live Air + zero vertical motion must not invent -1.6 studs.
+near(Core.autoY(-30,.128,1.6,true),0)
+near(Core.autoY(-30,.128,1.6,false),-1.6)
+near(Core.autoY(30,.128,1.6,false),3.2)
+local reversed={{p=zero,t=2},{p=zero,t=3}}
+Core.sample(reversed,zero,1); assert(#reversed==1 and reversed[1].t==1)
 assert(defaults['Silent Aim'].AntiCurve['3d-angles'].MaxAngle==nil and defaults['Silent Aim'].AntiCurve.endmath.MaxAngle==nil)
 assert(defaults.Misc.Intro == nil and defaults['Client Bullets'].RequireTarget == nil)
 for name, value in pairs(defaults['Gun Specifications']) do

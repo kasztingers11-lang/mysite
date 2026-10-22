@@ -132,7 +132,7 @@ end
 -- Bounded timestamp history; teleport spikes reset the fit instead of poisoning it.
 function Core.sample(history, position, now)
     local last = history[#history]
-    if last and now - last.t < 1 / 90 then return false end
+    if last and now >= last.t and now - last.t < 1 / 90 then return false end
     if last then
         local dt = now - last.t
         if dt <= 0 or dt > 0.4 or (position - last.p).Magnitude > math.max(12, dt * 180) then
@@ -142,6 +142,26 @@ function Core.sample(history, position, now)
     history[#history + 1] = {p = position, t = now}
     while #history > 8 or (#history > 2 and now - history[1].t > 0.18) do table.remove(history, 1) end
     return true
+end
+
+-- RTT sources overlap: use the larger estimate, never add them together.
+-- No assumed projectile speed: travel is included only when supplied by a
+-- verified weapon adapter. Auto deliberately does not read the manual Value.
+function Core.predictionTime(settings, networkRTT, dataRTT, age, distance, speed)
+    if not settings.Enabled then return 0, 'disabled' end
+    if not settings.Auto then return Core.number(settings.Value, 0.121, 0, 1), 'manual' end
+    local latency = math.max(Core.number(networkRTT, 0, 0, 1), Core.number(dataRTT, 0, 0, 1))
+    local source = latency > 0 and 'latency-estimate' or 'fallback-estimate'
+    if latency == 0 then latency = 0.1 end
+    local travel = type(speed) == 'number' and speed > 0 and math.max(0, distance or 0) / speed or 0
+    return Core.number(latency + Core.number(age, 0, 0, 0.05) + travel, 0.1, 0, 0.35), source
+end
+
+-- A conservative vertical lead, without inventing gravity from FloorMaterial.
+-- FloorMaterial is not replicated reliably for remote humanoids.
+function Core.autoY(vertical, seconds, height, grounded)
+    if grounded then return 0 end
+    return Core.number(vertical * seconds, 0, -height, height * 2)
 end
 
 function Core.velocity(history, fallback, zero)
