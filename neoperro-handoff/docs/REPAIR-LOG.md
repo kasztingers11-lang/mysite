@@ -1,3 +1,16 @@
+# Current status: 1.3.1 (2026-10-22)
+
+See [session evidence](SESSION-2026-10-22.md) for the subsequent local REAL work and
+[NEXT-SESSION](NEXT-SESSION.md) for current outstanding work. The older 1.2.0 log
+below is historical: its branch, loader and no-local-MCP statements are superseded.
+Current delivery branch is repair/neoperro-evidence; its loader uses that branch.
+
+Final verification pass rebuilt identical outputs; both Lua 5.4 mock suites and
+four syntax checks passed. No new code regression was revealed, so no speculative
+runtime edit was made. No new live testing occurred during this pass.
+
+---
+
 # Repair evidence — 1.2.0
 
 Branch: `repair/neoperro-runtime`. The repaired code and handoff are delivered on this branch; main retains the earlier build until merged. Complete live Roblox acceptance remains OPEN. After trying the full bundle, the user reported “it works okay,” but Auto Y still shoots the ground and Silent Aim needs further work. This is partial user feedback, not a controlled acceptance result. Passing Lua mocks does not establish shot acceptance, executor permissions, visuals, audio, or current game compatibility.
