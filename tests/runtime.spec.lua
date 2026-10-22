@@ -330,6 +330,40 @@ local cameraRuntime=loadRuntime(cameraOnly);key('Q',true);step(0.04)
 assert(cameraRuntime.Points['Silent Aim']==nil and cameraRuntime.Points['Aim Assist']~=nil)
 cameraRuntime:Destroy('test');clearInput();camera.CFrame=CF.new()
 
+-- Live Enabled is a hard gate even when a previous key toggle is still armed.
+do
+    local rt=loadRuntime(Defaults);key('Q',true);step(.04)
+    assert(rt.Points['Silent Aim'] and rt.Points['Aim Assist'])
+    rt.Config['Silent Aim'].Enabled=false;rt.Config['Aim Assist'].Enabled=false
+    rt.Config.Triggerbot.Enabled=false;rayHit={Instance=enemyTorso,Position=enemyTorso.Position}
+    local count=shots;key('MouseButton2',true);step(.04)
+    assert(not rt.Points['Silent Aim'] and not rt.Points['Aim Assist'] and shots==count,'Live disable overrides armed toggles')
+    rt.Config.Triggerbot.Enabled=true;step(.04)
+    assert(shots==count+1,'An independently re-enabled Triggerbot still works')
+    rt.Config.Triggerbot.Enabled=false;step(.01)
+    assert(not rt.MouseOwned,'Live disable releases an owned press')
+    rt:Destroy('test');clearInput();rayHit=nil;camera.CFrame=CF.new()
+end
+
+-- Recover a stale remote reference and record failures without duplicate retries.
+do
+    local rt=loadRuntime(Defaults);step(.04)
+    local stale=obj('RemoteEvent','MAINEVENT')
+    rt.Remote=stale;tool.Activated:Fire()
+    assert(rt.Remote==remote and rt.LastSend.Returned,'Reacquire a stale remote before sending')
+    local prior=rt.Stats.AimPackets
+    local oldFire=methods.FireServer
+    methods.FireServer=function()error('test transport failure')end
+    tool.Activated:Fire()
+    assert(rt.Stats.AimPackets==prior+1 and rt.Stats.AimSendErrors==1 and not rt.PacketPoint,'Failed send clears stale point and is not retried')
+    methods.FireServer=oldFire
+    remote.Parent=nil;prior=rt.Stats.AimPackets;tool.Activated:Fire()
+    assert(rt.Stats.AimPackets==prior and rt.Stats.AimSendSkipped>0,'Missing remote is skipped')
+    remote.Parent=storage;tool.Activated:Fire()
+    assert(rt.LastSend.Returned,'Remote reappearance restores sends')
+    rt:Destroy('test');stale:Destroy();clearInput()
+end
+
 -- Native trigger input: immediate press, configured hold, cancellation, optional FOV.
 ammo.Value=20
 local trigger=loadRuntime(Defaults)

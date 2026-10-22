@@ -897,7 +897,7 @@ local duration = 3.2
 local blurTail = 1.6
 local withSound = true
 
-local state = {Alive = true, Objects = {}, Tweens = {}, Workers = {}}
+local state = {Alive = true, Objects = {}, Tweens = {}, Workers = {}, Assets = {}}
 environment[stateKey] = state
 
 function state:Destroy()
@@ -1005,6 +1005,12 @@ local function run()
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     }, playerGui)
 
+    local backdrop = make('Frame', {
+        Name = 'NightBackdrop', Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(9, 4, 12), BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    }, screen)
+
     local letterGroup = make('Frame', {
         Name = 'LetterGroup', AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
@@ -1013,10 +1019,10 @@ local function run()
 
     local logoContainer = make('Frame', {
         Name = 'Swirl', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.5, 0.5),
         BackgroundTransparency = 1, Rotation = 0,
     }, letterGroup)
-    local logoScale = make('UIScale', {Scale = 0.9}, logoContainer)
+    local logoScale = make('UIScale', {Scale = 0.86}, logoContainer)
 
     local logo = make('ImageLabel', {
         Name = 'Monogram', AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1044,10 +1050,6 @@ local function run()
         Name = 'NeoperroIntroMeow', Volume = 0.3,
         PlaybackSpeed = 1, SoundGroup = soundGroup,
     }, SoundService)
-    local undertone = make('Sound', {
-        Name = 'NeoperroIntroUndertone', Volume = 0,
-        PlaybackSpeed = 0.26, SoundGroup = soundGroup,
-    }, SoundService)
     local logoReady, soundReady = false, false
     local logoFinished, soundFinished = false, not withSound
 
@@ -1056,8 +1058,15 @@ local function run()
             local id = loadAsset('neoperro-cat.png', '\137PNG\r\n\26\n', 220436)
             if not alive() or not id then return end
             logo.Image = id
-            -- Poll normal content readiness instead of blocking this worker in PreloadAsync.
-            if alive() then logoReady = logo.IsLoaded end
+            -- Fully transparent images can remain IsLoaded=false even after a
+            -- successful fetch. Explicit preload supplies readiness before reveal.
+            ContentProvider:PreloadAsync({logo}, function(_, status)
+                if alive() then
+                    state.Assets.ImageStatus = status.Name
+                    logoReady = status == Enum.AssetFetchStatus.Success
+                end
+            end)
+            if alive() then logoReady = logoReady or logo.IsLoaded end
         end)
         logoFinished = true
         if not ok and alive() then warn('[neoperro intro] Image fallback: ' .. tostring(reason)) end
@@ -1069,6 +1078,9 @@ local function run()
                 local id = loadAsset('neoperro-dark-meow.ogg', 'OggS', 13158)
                 if not alive() or not id then return end
                 sound.SoundId = id
+                ContentProvider:PreloadAsync({sound}, function(_, status)
+                    if alive() then state.Assets.SoundStatus = status.Name end
+                end)
                 if alive() then soundReady = sound.IsLoaded end
             end)
             soundFinished = true
@@ -1078,12 +1090,12 @@ local function run()
 
     local deadline = os.clock() + 8
     while alive() and not (logoFinished and soundFinished) and os.clock() < deadline do
-        logoReady = logo.Image ~= '' and logo.IsLoaded
+        logoReady = logoReady or (logo.Image ~= '' and logo.IsLoaded)
         soundReady = sound.SoundId ~= '' and sound.IsLoaded
         task.wait(0.03)
     end
     while alive() and not (logoReady and (not withSound or soundReady)) and os.clock() < deadline do
-        logoReady = logo.Image ~= '' and logo.IsLoaded
+        logoReady = logoReady or (logo.Image ~= '' and logo.IsLoaded)
         soundReady = sound.SoundId ~= '' and sound.IsLoaded
         task.wait(0.03)
     end
@@ -1091,29 +1103,33 @@ local function run()
 
     logo.Visible = logoReady
     fallback.Visible = not logoReady
+    state.Assets.ImageShown, state.Assets.SoundReady = logoReady, soundReady
     if not logoReady then warn('[neoperro intro] Using text N; image was unavailable or timed out') end
     if withSound and soundReady then
-        undertone.SoundId = sound.SoundId
+        state.Assets.SoundLength = sound.TimeLength
         sound:Play()
+        state.Assets.SoundPlaying = sound.IsPlaying
     end
 
     local enter = math.min(1.05, duration * 0.4)
     local leave = math.min(0.6, duration * 0.25)
-    tween(blur, enter, {Size = 22})
-    tween(logo, 0.3, {ImageTransparency = 0})
+    tween(backdrop, enter, {BackgroundTransparency = 0.4})
+    tween(blur, enter, {Size = 18})
+    tween(logo, 0.55, {ImageTransparency = 0})
     tween(fallback, 0.3, {TextTransparency = 0})
     tween(logoContainer, enter, {Rotation = 0})
     tween(logoScale, enter, {Scale = 1})
 
     task.wait(duration - leave)
     if not alive() then return end
-    tween(logoScale, leave, {Scale = 1.08})
+    tween(logoScale, leave, {Scale = 1.04})
     tween(fallback, leave, {TextTransparency = 1})
     local fade = tween(logo, leave, {ImageTransparency = 1})
     fade.Completed:Wait()
     if not alive() then return end
 
     tween(soundGroup, blurTail, {Volume = 0})
+    tween(backdrop, blurTail, {BackgroundTransparency = 1})
     local clearBlur = tween(blur, blurTail, {Size = 0})
     clearBlur.Completed:Wait()
 end
@@ -1164,7 +1180,7 @@ local state = {
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
     InitialWhitelist = Core.ids(config.Whitelist.Players), InitialWhiteMode = config.Whitelist.Mode,
     Epoch = 0, Visuals = {}, Focused = true, MacroInputs = {},
-    Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
+    Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, AimSendSkipped = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
     AimTrace = {}, Trace = {Events = {}, Sequence = 0, Until = 0, Limit = 128},
     Network = {NextSample = 0}, Performance = {Updates = 0, TotalMs = 0, MaxMs = 0},
 }
@@ -1316,7 +1332,7 @@ end
 
 local function enabled(name)
     local feature = config[name]
-    if not state.Toggles[name] then return false end
+    if feature.Enabled ~= true or not state.Toggles[name] then return false end
     local toggle = feature.Toggle
     if toggle and toggle.Enabled and toggle.Holding and not state.Held['toggle:' .. name] then return false end
     if name == 'Triggerbot' then
@@ -1782,8 +1798,27 @@ local function refreshPacket()
     if shooting and state.ClientPoint and not state.PacketPoint then state.PacketPoint = state.RawMousePoint end
 end
 
+local function findRemote()
+    state.Remote = nil
+    for _, name in ipairs({'MAINEVENT', 'MainEvent'}) do
+        local candidate = ReplicatedStorage:FindFirstChild(name)
+        if candidate and candidate:IsA('RemoteEvent') then state.Remote = candidate; break end
+    end
+    state.Capabilities.Remote = state.Remote ~= nil
+end
+
 local function sendAim(point)
-    if not point or not state.Remote then return end
+    local function skip(reason)
+        state.PacketPoint = nil
+        state.Stats.AimSendSkipped = state.Stats.AimSendSkipped + 1
+        traceEvent('send-skipped', {Reason = reason})
+        return false
+    end
+    if typeof(point) ~= 'Vector3' or not Core.finiteVector(point) then return skip('invalid-point') end
+    -- Reacquire after replacement or a stale cache; never retry a failed send and
+    -- risk submitting an old point in a later firing window.
+    if not state.Remote or state.Remote.Parent ~= ReplicatedStorage or not state.Remote:IsA('RemoteEvent') then findRemote() end
+    if not state.Remote then return skip('missing-remote') end
     state.PacketPoint = point
     state.Stats.AimPackets = state.Stats.AimPackets + 1
     local ok, reason = pcall(function() state.Remote:FireServer('MOUSE', point) end)
@@ -1792,7 +1827,8 @@ local function sendAim(point)
         Result = 'client call only; server acceptance and damage unverified'}
     state.Stats[ok and 'AimSendReturns' or 'AimSendErrors'] = state.Stats[ok and 'AimSendReturns' or 'AimSendErrors'] + 1
     traceEvent('send', state.LastSend)
-    if not ok then warnOnce('remote-send', tostring(reason)) end
+    if not ok then state.PacketPoint = nil; warnOnce('remote-send', tostring(reason)) end
+    return ok
 end
 
 local function macroEnabled()
@@ -2335,12 +2371,6 @@ function state:Destroy(reason)
     originalDestroy(self, reason)
 end
 
-local function findRemote()
-    local remote = ReplicatedStorage:FindFirstChild('MAINEVENT') or ReplicatedStorage:FindFirstChild('MainEvent')
-    state.Remote = remote and remote:IsA('RemoteEvent') and remote or nil
-    state.Capabilities.Remote = state.Remote ~= nil
-end
-
 local function start()
     findRemote()
     installHooks()
@@ -2455,6 +2485,10 @@ local function start()
         local drawTime = now()
         if drawTime < (state.NextDraw or 0) then return end
         state.NextDraw = drawTime + 1 / 60
+        if state.Intro and state.Intro.Alive then
+            for visual in pairs(state.Visuals) do visual:Set({Visible = false}) end
+            return
+        end
         local ok, reason = pcall(drawFov)
         if not ok then warnOnce('draw-fov', tostring(reason)) end
         drawPlayers(now())

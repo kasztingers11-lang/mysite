@@ -35,7 +35,7 @@ local state = {
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
     InitialWhitelist = Core.ids(config.Whitelist.Players), InitialWhiteMode = config.Whitelist.Mode,
     Epoch = 0, Visuals = {}, Focused = true, MacroInputs = {},
-    Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
+    Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, AimSendSkipped = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
     AimTrace = {}, Trace = {Events = {}, Sequence = 0, Until = 0, Limit = 128},
     Network = {NextSample = 0}, Performance = {Updates = 0, TotalMs = 0, MaxMs = 0},
 }
@@ -187,7 +187,7 @@ end
 
 local function enabled(name)
     local feature = config[name]
-    if not state.Toggles[name] then return false end
+    if feature.Enabled ~= true or not state.Toggles[name] then return false end
     local toggle = feature.Toggle
     if toggle and toggle.Enabled and toggle.Holding and not state.Held['toggle:' .. name] then return false end
     if name == 'Triggerbot' then
@@ -653,8 +653,27 @@ local function refreshPacket()
     if shooting and state.ClientPoint and not state.PacketPoint then state.PacketPoint = state.RawMousePoint end
 end
 
+local function findRemote()
+    state.Remote = nil
+    for _, name in ipairs({'MAINEVENT', 'MainEvent'}) do
+        local candidate = ReplicatedStorage:FindFirstChild(name)
+        if candidate and candidate:IsA('RemoteEvent') then state.Remote = candidate; break end
+    end
+    state.Capabilities.Remote = state.Remote ~= nil
+end
+
 local function sendAim(point)
-    if not point or not state.Remote then return end
+    local function skip(reason)
+        state.PacketPoint = nil
+        state.Stats.AimSendSkipped = state.Stats.AimSendSkipped + 1
+        traceEvent('send-skipped', {Reason = reason})
+        return false
+    end
+    if typeof(point) ~= 'Vector3' or not Core.finiteVector(point) then return skip('invalid-point') end
+    -- Reacquire after replacement or a stale cache; never retry a failed send and
+    -- risk submitting an old point in a later firing window.
+    if not state.Remote or state.Remote.Parent ~= ReplicatedStorage or not state.Remote:IsA('RemoteEvent') then findRemote() end
+    if not state.Remote then return skip('missing-remote') end
     state.PacketPoint = point
     state.Stats.AimPackets = state.Stats.AimPackets + 1
     local ok, reason = pcall(function() state.Remote:FireServer('MOUSE', point) end)
@@ -663,7 +682,8 @@ local function sendAim(point)
         Result = 'client call only; server acceptance and damage unverified'}
     state.Stats[ok and 'AimSendReturns' or 'AimSendErrors'] = state.Stats[ok and 'AimSendReturns' or 'AimSendErrors'] + 1
     traceEvent('send', state.LastSend)
-    if not ok then warnOnce('remote-send', tostring(reason)) end
+    if not ok then state.PacketPoint = nil; warnOnce('remote-send', tostring(reason)) end
+    return ok
 end
 
 local function macroEnabled()
@@ -1206,12 +1226,6 @@ function state:Destroy(reason)
     originalDestroy(self, reason)
 end
 
-local function findRemote()
-    local remote = ReplicatedStorage:FindFirstChild('MAINEVENT') or ReplicatedStorage:FindFirstChild('MainEvent')
-    state.Remote = remote and remote:IsA('RemoteEvent') and remote or nil
-    state.Capabilities.Remote = state.Remote ~= nil
-end
-
 local function start()
     findRemote()
     installHooks()
@@ -1326,6 +1340,10 @@ local function start()
         local drawTime = now()
         if drawTime < (state.NextDraw or 0) then return end
         state.NextDraw = drawTime + 1 / 60
+        if state.Intro and state.Intro.Alive then
+            for visual in pairs(state.Visuals) do visual:Set({Visible = false}) end
+            return
+        end
         local ok, reason = pcall(drawFov)
         if not ok then warnOnce('draw-fov', tostring(reason)) end
         drawPlayers(now())

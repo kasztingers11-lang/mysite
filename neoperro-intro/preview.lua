@@ -15,7 +15,7 @@ local duration = 3.2
 local blurTail = 1.6
 local withSound = true
 
-local state = {Alive = true, Objects = {}, Tweens = {}, Workers = {}}
+local state = {Alive = true, Objects = {}, Tweens = {}, Workers = {}, Assets = {}}
 environment[stateKey] = state
 
 function state:Destroy()
@@ -123,6 +123,12 @@ local function run()
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     }, playerGui)
 
+    local backdrop = make('Frame', {
+        Name = 'NightBackdrop', Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(9, 4, 12), BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    }, screen)
+
     local letterGroup = make('Frame', {
         Name = 'LetterGroup', AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
@@ -131,10 +137,10 @@ local function run()
 
     local logoContainer = make('Frame', {
         Name = 'Swirl', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.5, 0.5),
         BackgroundTransparency = 1, Rotation = 0,
     }, letterGroup)
-    local logoScale = make('UIScale', {Scale = 0.9}, logoContainer)
+    local logoScale = make('UIScale', {Scale = 0.86}, logoContainer)
 
     local logo = make('ImageLabel', {
         Name = 'Monogram', AnchorPoint = Vector2.new(0.5, 0.5),
@@ -162,10 +168,6 @@ local function run()
         Name = 'NeoperroIntroMeow', Volume = 0.3,
         PlaybackSpeed = 1, SoundGroup = soundGroup,
     }, SoundService)
-    local undertone = make('Sound', {
-        Name = 'NeoperroIntroUndertone', Volume = 0,
-        PlaybackSpeed = 0.26, SoundGroup = soundGroup,
-    }, SoundService)
     local logoReady, soundReady = false, false
     local logoFinished, soundFinished = false, not withSound
 
@@ -174,8 +176,15 @@ local function run()
             local id = loadAsset('neoperro-cat.png', '\137PNG\r\n\26\n', 220436)
             if not alive() or not id then return end
             logo.Image = id
-            -- Poll normal content readiness instead of blocking this worker in PreloadAsync.
-            if alive() then logoReady = logo.IsLoaded end
+            -- Fully transparent images can remain IsLoaded=false even after a
+            -- successful fetch. Explicit preload supplies readiness before reveal.
+            ContentProvider:PreloadAsync({logo}, function(_, status)
+                if alive() then
+                    state.Assets.ImageStatus = status.Name
+                    logoReady = status == Enum.AssetFetchStatus.Success
+                end
+            end)
+            if alive() then logoReady = logoReady or logo.IsLoaded end
         end)
         logoFinished = true
         if not ok and alive() then warn('[neoperro intro] Image fallback: ' .. tostring(reason)) end
@@ -187,6 +196,9 @@ local function run()
                 local id = loadAsset('neoperro-dark-meow.ogg', 'OggS', 13158)
                 if not alive() or not id then return end
                 sound.SoundId = id
+                ContentProvider:PreloadAsync({sound}, function(_, status)
+                    if alive() then state.Assets.SoundStatus = status.Name end
+                end)
                 if alive() then soundReady = sound.IsLoaded end
             end)
             soundFinished = true
@@ -196,12 +208,12 @@ local function run()
 
     local deadline = os.clock() + 8
     while alive() and not (logoFinished and soundFinished) and os.clock() < deadline do
-        logoReady = logo.Image ~= '' and logo.IsLoaded
+        logoReady = logoReady or (logo.Image ~= '' and logo.IsLoaded)
         soundReady = sound.SoundId ~= '' and sound.IsLoaded
         task.wait(0.03)
     end
     while alive() and not (logoReady and (not withSound or soundReady)) and os.clock() < deadline do
-        logoReady = logo.Image ~= '' and logo.IsLoaded
+        logoReady = logoReady or (logo.Image ~= '' and logo.IsLoaded)
         soundReady = sound.SoundId ~= '' and sound.IsLoaded
         task.wait(0.03)
     end
@@ -209,29 +221,33 @@ local function run()
 
     logo.Visible = logoReady
     fallback.Visible = not logoReady
+    state.Assets.ImageShown, state.Assets.SoundReady = logoReady, soundReady
     if not logoReady then warn('[neoperro intro] Using text N; image was unavailable or timed out') end
     if withSound and soundReady then
-        undertone.SoundId = sound.SoundId
+        state.Assets.SoundLength = sound.TimeLength
         sound:Play()
+        state.Assets.SoundPlaying = sound.IsPlaying
     end
 
     local enter = math.min(1.05, duration * 0.4)
     local leave = math.min(0.6, duration * 0.25)
-    tween(blur, enter, {Size = 22})
-    tween(logo, 0.3, {ImageTransparency = 0})
+    tween(backdrop, enter, {BackgroundTransparency = 0.4})
+    tween(blur, enter, {Size = 18})
+    tween(logo, 0.55, {ImageTransparency = 0})
     tween(fallback, 0.3, {TextTransparency = 0})
     tween(logoContainer, enter, {Rotation = 0})
     tween(logoScale, enter, {Scale = 1})
 
     task.wait(duration - leave)
     if not alive() then return end
-    tween(logoScale, leave, {Scale = 1.08})
+    tween(logoScale, leave, {Scale = 1.04})
     tween(fallback, leave, {TextTransparency = 1})
     local fade = tween(logo, leave, {ImageTransparency = 1})
     fade.Completed:Wait()
     if not alive() then return end
 
     tween(soundGroup, blurTail, {Volume = 0})
+    tween(backdrop, blurTail, {BackgroundTransparency = 1})
     local clearBlur = tween(blur, blurTail, {Size = 0})
     clearBlur.Completed:Wait()
 end
