@@ -269,7 +269,9 @@ local function visible(point, character, origin, excludeTarget)
 end
 
 local function muzzle()
-    if muzzleAttachment and muzzleAttachment.Parent then return muzzleAttachment.WorldPosition end
+    if equipped and muzzleAttachment and muzzleAttachment.Parent and muzzleAttachment:IsDescendantOf(equipped) then
+        return muzzleAttachment.WorldPosition
+    end
     local handle = equipped and equipped:FindFirstChild('Handle')
     if handle and handle:IsA('BasePart') then return handle.Position end
     return localRoot and localRoot.Position or (camera and camera.CFrame.Position)
@@ -512,9 +514,10 @@ local function aimPoint(record, feature, hitPart, hitPoint)
     end
     point = point + lead
     -- Independent guard; Custom still only applies its own JumpOffset above.
-    if feature == 'Silent Aim' and settings.GroundShotCheck and minY and point.Y < minY then
+    if feature == 'Silent Aim' and settings.GroundShotCheck and lead.Y < 0 and minY and point.Y < minY then
         evidence.GroundCorrected = true
-        point = Vector3.new(point.X, minY, point.Z)
+        -- Never invent an upward move to compensate for a crouched/animated rig.
+        point = Vector3.new(point.X, math.min(evidence.BasePoint.Y, minY), point.Z)
         lead = point - Vector3.new(evidence.BasePoint.X, evidence.BasePoint.Y, evidence.BasePoint.Z)
     end
     evidence.GroundMinimumY, evidence.GroundedByGeometry = minY, supportedGround
@@ -833,7 +836,7 @@ local function bindCharacter(character)
     cancelMacro()
     disconnect(charConnections); disconnect(toolConnections)
     localCharacter, localHumanoid, localRoot = character, nil, nil
-    equipped, weaponName = nil, nil
+    equipped, weaponName, muzzleAttachment = nil, nil, nil
     pendingTrigger, pendingPrefire, activation = nil, nil, nil
     state.LastLocalVelocity, state.LastShot = nil, nil
     state.PendingMacro, state.MacroInputs, state.LastAmmoDrop = nil, {}, nil
@@ -1213,7 +1216,7 @@ local function start()
     connect(localPlayer.CharacterAdded, bindCharacter)
     connect(localPlayer.CharacterRemoving, function()
         releaseShotInput(); cancelMacro(); disconnect(charConnections); disconnect(toolConnections)
-        localCharacter, localHumanoid, localRoot, equipped, weaponName = nil, nil, nil, nil, nil
+        localCharacter, localHumanoid, localRoot, equipped, weaponName, muzzleAttachment = nil, nil, nil, nil, nil, nil
         state.PacketPoint, state.ClientPoint, state.Points, state.Targets = nil, nil, {}, {}
         pendingTrigger, pendingPrefire = nil, nil
     end)

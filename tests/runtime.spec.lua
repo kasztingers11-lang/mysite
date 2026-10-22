@@ -111,8 +111,11 @@ function camera:WorldToViewportPoint(p)
     return V.new(960+p.X*1000/math.max(z,0.01),540-p.Y*1000/math.max(z,0.01),z),z>0
 end
 World.CurrentCamera=camera
-local rayHit, muzzleBlocked
+local rayHit, muzzleBlocked, groundY
 function World:Raycast(origin,direction,params)
+    if params.RespectCanCollide and groundY and direction.Y < 0 and origin.Y >= groundY and origin.Y+direction.Y <= groundY then
+        return {Instance=World,Position=V.new(origin.X,groundY,origin.Z),Normal=V.new(0,1,0)}
+    end
     if muzzleBlocked and origin.X==5 then return {Instance=World,Position=V.new()} end
     if rayHit then
         for _,excluded in ipairs(params.FilterDescendantsInstances or {})do
@@ -446,6 +449,61 @@ filtered.Config.Whitelist.Enabled=true;filtered.WhiteMode='Friend';filtered.Whit
 assert(filtered.Targets['Silent Aim']==nil)
 filtered.WhiteMode='Target';step(0.04);assert(filtered.Targets['Silent Aim']==enemy)
 filtered:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
+
+-- Live-observed adapter names, fresh cursor precedence, and per-feature prediction.
+do
+    ammo.Name='AMMO';ammo.Value=6
+    local flare=obj('Attachment','Flare',handle);flare.WorldPosition=V.new(4,2,1)
+    local checkCfg=Core.copy(Defaults)
+    checkCfg['Silent Aim'].Target.Closest.Enabled=false
+    checkCfg['Silent Aim'].Ignore=true
+    checkCfg['Silent Aim'].EndMath.VelocityHistory=false
+    checkCfg['Silent Aim'].EndMath.WallCheck=false
+    checkCfg['Y-Axis'].Enabled=true
+    checkCfg['Silent Aim'].Prediction.Auto=false
+    local rt=loadRuntime(checkCfg)
+    moveEnemy(0,3,-50);groundY=0;enemyHum.FloorMaterial=Enum.Material.Air
+    enemyRoot.AssemblyLinearVelocity=V.new();step(.04)
+    assert(rt.Points['Silent Aim'].Y==3,'Air with zero vertical velocity gets no artificial gravity')
+    assert(rt.AimTrace['Silent Aim'].MuzzleOrigin.X==4,'Use observed Flare attachment')
+    tool.Parent=backpack;step(.04)
+    assert(rt.AimTrace['Silent Aim'].MuzzleOrigin.X~=4,'Unequipped muzzle cannot remain the final wall-check origin')
+    tool.Parent=myChar;step(.04)
+    enemyRoot.AssemblyLinearVelocity=V.new(0,-30,0);step(.04)
+    assert(rt.Points['Silent Aim'].Y==3 and rt.AimTrace['Silent Aim'].GroundCorrected,'Falling point stops at rig-derived landing height')
+    enemyRoot.AssemblyLinearVelocity=V.new(0,1,0);step(.04)
+    assert(rt.Points['Silent Aim'].Y==3,'Grounded Auto does not invent upward movement')
+    enemyRoot.AssemblyLinearVelocity=V.new(0,-30,0)
+    rt.Config['Y-Axis'].JumpOffset=5;step(.04)
+    assert(rt.Points['Silent Aim'].Y==3,'Auto ignores JumpOffset')
+    groundY=nil;rt.Config['Silent Aim'].GroundShotCheck=false
+    rt.Config['Y-Axis'].Enabled=false;enemyRoot.AssemblyLinearVelocity=V.new(10,0,0)
+    rt.Config['Silent Aim'].Prediction.Enabled=false;step(.04)
+    assert(rt.Points['Silent Aim'].X==0,'Disabled prediction adds no lead')
+    rt.Config['Silent Aim'].Prediction.Enabled=true;rt.Config['Silent Aim'].Prediction.Auto=true
+    rt.Config['Silent Aim'].Prediction.Value=1
+    rt.Network.RTT=.15;rt.Network.DataRTT=.2;rt.Network.NextSample=clock+10;step(.04)
+    assert(math.abs(rt.Points['Silent Aim'].X-2)<1e-6,'Auto uses measured RTT, not manual Value or summed ping')
+    rt.Config['Silent Aim'].Prediction.Value=0;step(.04)
+    assert(math.abs(rt.Points['Silent Aim'].X-2)<1e-6)
+    rt:StartTrace(1,8);tool.Activated:Fire();ammo.Value=5;step(.04)
+    assert(rt.Stats.AmmoDrops==1 and rt.LastSend.Returned and rt.Stats.AimSendReturns>0,'AMMO is observed and send return is separately counted')
+    assert(rt.LastSend.Result:find('unverified'))
+    for i=1,20 do step(.02) end
+    assert(#rt:ReadTrace().Events<=8,'Trace is bounded')
+    rt:StopTrace();local n=#rt:ReadTrace().Events;step(.04);assert(#rt:ReadTrace().Events==n)
+    enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50)
+    rt.Config.Triggerbot.Prediction.Enabled=false
+    mouse.Target=World;rayHit={Instance=enemyTorso,Position=V.new(.2,.3,-49.5)}
+    key('MouseButton2',true);before=shots;step(.12)
+    assert(shots==before+1 and rt.AimTrace.Triggerbot.Part=='UpperTorso','Fresh character ray wins over stale native Mouse.Target')
+    assert(rt.ForcedPoint==rayHit.Position,'FOV-off trigger uses actual cursor hit, independent of Silent closest')
+    key('MouseButton2',false);step(.2);ammo.Value=0;before=shots
+    key('MouseButton2',true);step(.12);assert(shots==before,'Uppercase AMMO empty prevents trigger attempts')
+    key('MouseButton2',false);ammo.Value=6
+    rt:Destroy('test');flare:Destroy();ammo.Name='Ammo';mouse.Target=nil;rayHit=nil;groundY=nil
+    enemyHum.FloorMaterial=Enum.Material.Plastic;clearInput()
+end
 
 -- User-supplied current place IDs all start the same Looten-derived remote path.
 for _,id in ipairs({134196333708867,71324444457408,139144803593140}) do

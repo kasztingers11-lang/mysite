@@ -61,9 +61,9 @@ local function worker(callback)
     task.spawn(thread)
 end
 
-local assetBase = 'https://raw.githubusercontent.com/kasztingers11-lang/mysite/c639f51026efe14a602368f0dc6865616ccc8a5a/neoperro-intro/assets/'
+local assetBase = 'https://raw.githubusercontent.com/kasztingers11-lang/mysite/b2d6c13c7ee8030d8a1ff09da60386b9229ad61e/neoperro-intro/assets/'
 local registerAsset = getcustomasset or getsynasset
-local httpRequest = request or http_request or (syn and syn.request)
+local httpRequest = request or http_request or (environment.syn and environment.syn.request)
 
 local function fetch(url)
     if type(httpRequest) == 'function' then
@@ -131,10 +131,10 @@ local function run()
 
     local logoContainer = make('Frame', {
         Name = 'Swirl', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(1800, 1800),
-        BackgroundTransparency = 1, Rotation = -225,
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1, Rotation = 0,
     }, letterGroup)
-    local logoScale = make('UIScale', {Scale = 0.08}, logoContainer)
+    local logoScale = make('UIScale', {Scale = 0.9}, logoContainer)
 
     local logo = make('ImageLabel', {
         Name = 'Monogram', AnchorPoint = Vector2.new(0.5, 0.5),
@@ -159,11 +159,11 @@ local function run()
         Diffusion = 0.95, DryLevel = -2, WetLevel = -5,
     }, soundGroup)
     local sound = make('Sound', {
-        Name = 'NeoperroIntroBell', Volume = 0.22,
-        PlaybackSpeed = 0.52, SoundGroup = soundGroup,
+        Name = 'NeoperroIntroMeow', Volume = 0.3,
+        PlaybackSpeed = 1, SoundGroup = soundGroup,
     }, SoundService)
     local undertone = make('Sound', {
-        Name = 'NeoperroIntroUndertone', Volume = 0.07,
+        Name = 'NeoperroIntroUndertone', Volume = 0,
         PlaybackSpeed = 0.26, SoundGroup = soundGroup,
     }, SoundService)
     local logoReady, soundReady = false, false
@@ -171,11 +171,10 @@ local function run()
 
     worker(function()
         local ok, reason = pcall(function()
-            local id = loadAsset('neoperro-n-clean.png', '\137PNG\r\n\26\n', 328429,
-                'https://raw.githubusercontent.com/kasztingers11-lang/mysite/3707290a70ffdec3d2efb0c0c682864c5b6eddf9/neoperro-intro/assets/')
+            local id = loadAsset('neoperro-cat.png', '\137PNG\r\n\26\n', 220436)
             if not alive() or not id then return end
             logo.Image = id
-            ContentProvider:PreloadAsync({logo})
+            -- Poll normal content readiness instead of blocking this worker in PreloadAsync.
             if alive() then logoReady = logo.IsLoaded end
         end)
         logoFinished = true
@@ -185,10 +184,9 @@ local function run()
     if withSound then
         worker(function()
             local ok, reason = pcall(function()
-                local id = loadAsset('neoperro-chime.ogg', 'OggS', 7825)
+                local id = loadAsset('neoperro-dark-meow.ogg', 'OggS', 13158)
                 if not alive() or not id then return end
                 sound.SoundId = id
-                ContentProvider:PreloadAsync({sound})
                 if alive() then soundReady = sound.IsLoaded end
             end)
             soundFinished = true
@@ -198,6 +196,13 @@ local function run()
 
     local deadline = os.clock() + 8
     while alive() and not (logoFinished and soundFinished) and os.clock() < deadline do
+        logoReady = logo.Image ~= '' and logo.IsLoaded
+        soundReady = sound.SoundId ~= '' and sound.IsLoaded
+        task.wait(0.03)
+    end
+    while alive() and not (logoReady and (not withSound or soundReady)) and os.clock() < deadline do
+        logoReady = logo.Image ~= '' and logo.IsLoaded
+        soundReady = sound.SoundId ~= '' and sound.IsLoaded
         task.wait(0.03)
     end
     if not alive() then return end
@@ -208,7 +213,6 @@ local function run()
     if withSound and soundReady then
         undertone.SoundId = sound.SoundId
         sound:Play()
-        undertone:Play()
     end
 
     local enter = math.min(1.05, duration * 0.4)
@@ -221,7 +225,6 @@ local function run()
 
     task.wait(duration - leave)
     if not alive() then return end
-    tween(logoContainer, leave, {Rotation = 12})
     tween(logoScale, leave, {Scale = 1.08})
     tween(fallback, leave, {TextTransparency = 1})
     local fade = tween(logo, leave, {ImageTransparency = 1})
