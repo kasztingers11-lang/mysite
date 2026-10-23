@@ -1,3 +1,14 @@
+# Latest priority delivery: 1.3.4
+
+User is testing shot-time aim-view restoration first. See SESSION-2026-10-23's
+1.3.4 section for the observed native manual hit with zero observer snaps and the
+uncompleted automated check. Start from a clean client to remove temporary MCP
+probe state. Wait for the user's result before Character-scale fixes, preserving
+confirmed client tracer/Macro Abuse behavior; airborne Auto Y and AntiCurve follow.
+Older status below is historical where superseded by the latest delivery.
+
+---
+
 # Latest delivery: 1.3.3
 
 Read the 1.3.3 section in SESSION-2026-10-23 first. Pellet redirection now retains

@@ -258,8 +258,10 @@ remote:FireServer('MOUSE',V.new(1,2,3),'tail')
 assert(packets[#packets][3]==V.new(1,2,3),'Anti-AimViewer leaves idle updates alone')
 assert(second.LastMousePayload==V.new(1,2,3),'Original dispatcher refreshes current runtime payload tracking')
 key('MouseButton1',true);remote:FireServer('MOUSE',V.new(1,2,3));key('MouseButton1',false)
-assert(packets[#packets][3]==second.Points['Silent Aim'],'Shot packets use the fresh point')
+assert(packets[#packets][3]==V.new(1,2,3),'Continuous updates stay ordinary even while firing')
 tool.Activated:Fire()
+assert(second.Stats.AimRestores>0 and not second.PacketPoint and second.LastAimRestore.Returned,'Shot sends restore ordinary aim instead of holding a target override')
+assert(second.LastShot.serverPoint==second.Points['Silent Aim'],'Local tracer keeps the actual shot point independently of restoration')
 assert(second.ClientPoint==nil and second.LastShot.point==mouse.Hit.Position,'Local visual uses raw mouse without an index spoof')
 assert(not hooks.__index,'Local visuals do not install a Mouse.Target/Hit hook')
 local ownA=obj('Attachment','Start');ownA.WorldPosition=second.LastShot.origin
@@ -380,6 +382,30 @@ do
     remote.Parent=storage;tool.Activated:Fire()
     assert(rt.LastSend.Returned,'Remote reappearance restores sends')
     rt:Destroy('test');stale:Destroy();clearInput()
+end
+
+-- Deferred restoration coalesces, keeps the shot point and cancels after unload.
+do
+    local deferred={};local originalDefer=env.task.defer
+    env.task.defer=function(f)deferred[#deferred+1]=f end
+    local cfg=Core.copy(Defaults);cfg['Silent Aim'].Ignore=true
+    local rt=loadRuntime(cfg);step(.04)
+    local oldHit=mouse.Hit;mouse.Hit=CF.new(25,2,-50)
+    tool.Activated:Fire();tool.Activated:Fire()
+    assert(#deferred==2 and packets[#packets][3]==rt.Points['Silent Aim'])
+    local count=#packets;deferred[1]()
+    assert(#packets==count,'Superseded restore does not write stale aim')
+    deferred[2]();assert(#packets==count+1 and packets[#packets][3]==mouse.Hit.Position)
+    assert(rt.LastShot.serverPoint==rt.Points['Silent Aim'])
+    tool.Activated:Fire();local pending=deferred[#deferred];rt:Destroy('test');count=#packets
+    pending();assert(#packets==count,'Unload cancels pending restoration')
+    env.task.defer=originalDefer;mouse.Hit=oldHit
+    cfg['Anti-AimViewer'].Enabled=false
+    rt=loadRuntime(cfg);step(.04);count=rt.Stats.AimRestores
+    remote:FireServer('MOUSE',V.new(25,2,-50))
+    assert(packets[#packets][3]==rt.Points['Silent Aim'],'Disabled setting retains continuous redirection mode')
+    tool.Activated:Fire();assert(rt.Stats.AimRestores==count)
+    rt:Destroy('test')
 end
 
 -- Expanded body tolerance does not resize the target and stops outside its margin.

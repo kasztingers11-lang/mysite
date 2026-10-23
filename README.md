@@ -1,4 +1,4 @@
-# neoperro 1.3.3 — testing build
+# neoperro 1.3.4 — testing build
 
 Current branch: `repair/neoperro-evidence`. Main is older.
 
@@ -41,8 +41,9 @@ See [session evidence](neoperro-handoff/docs/SESSION-2026-10-22.md) for exact li
 Auto Y's newest jump-apex correction passes recorded-value regressions; its live
 follow-up was interrupted by focus loss. High-ping acceptance, broad weapon timing,
 Macro Abuse, custom tracer behavior and complete feature combinations remain open.
-The Anti-AimViewer setting scopes aim updates to firing windows; sending MOUSE
-coordinates does not establish administrator-view concealment.
+Anti-AimViewer now restores ordinary aim after an explicit shot send and passes
+continuous MOUSE updates through. One controlled manual shot hit with no observed
+observer-line snap; broader latency/automatic-fire validation remains open.
 
 ## Development
 
@@ -60,7 +61,10 @@ not prove Roblox compatibility. The old portable handoff snapshot/ZIP is still
 
 Latest feedback repairs and evidence: [session 2026-10-23](neoperro-handoff/docs/SESSION-2026-10-23.md).
 
-1.3.3 preserves native pellet spread/color during local-only visual redirection.
+1.3.4 preserves native pellet spread/color during local-only visual redirection.
 Macro Abuse no longer has Check Ammo; Macro Check follows this game's Head XZ
 speed >30 condition with a 120ms pre-shot buffer. Live trial rejected stationary
 shots and accepted seven fast-movement activations; see the session evidence.
+
+1.3.4 priority delivery: deferred shot-time aim restoration. See the session log
+for the controlled manual shot result, test limits and clean-client instructions.

@@ -1,6 +1,6 @@
 return {
 
-    -- Keep aim redirection inside firing windows; idle MOUSE updates pass through. No concealment guarantee.
+    -- Send target coordinates only for the shot, then restore ordinary aim. Continuous MOUSE updates pass through.
     ['Anti-AimViewer'] = {
         ['Enabled'] = true;
     };

@@ -1,3 +1,11 @@
+# 1.3.4 shot-time aim-view follow-up
+
+Continuous MOUSE overrides removed while Anti-AimViewer is enabled; explicit shot
+coordinates are followed by a coalesced ordinary-aim restoration. See the session
+log for one native manual hit with zero observed observer snaps and limitations.
+
+---
+
 # 1.3.3 pellet/macro follow-up
 
 See SESSION-2026-10-23.md for native effect source evidence, spread/style checks,
