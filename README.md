@@ -1,4 +1,4 @@
-# neoperro 1.3.10 - testing build
+# neoperro 1.3.11 - testing build
 
 Use [neoperro.lua](neoperro.lua): edit the table and execute the whole file.
 Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
@@ -11,6 +11,14 @@ vertical acceleration. Decelerating falls stop at rest instead of inventing a ne
 ascent. Horizontal/vertical resolver decisions are independent. Active Auto
 estimates refresh every half second; supported hitscan guns add zero flight time. The table uses **Activation** and **Triggerbot check**;
 older names migrate internally.
+
+Silent Aim now exposes only Resolver.Enabled; enabled always uses TrueVelocity.
+Coherent position history can correct persistent replicated-velocity mismatches
+without delaying a freshly changed velocity. Internal velocity sampling and the
+final Silent wall gate stay active. The old EndMath block and its point visualizer
+are removed; AntiCurve uses Endmath, accepting the older spelling on startup.
+Native Roblox Vector3 fixtures and Lua regressions pass. This new resolver has
+not been validated by controlled player damage or actual anti-aim opponents.
 
 Default controls: P Silent toggle, T Target selection, M Assist toggle, hold Q
 Assist, V Triggerbot toggle, hold RMB Triggerbot, Z ESP, E unload.
@@ -32,7 +40,7 @@ AntiCurve Max (studs) and Radius (pixels) accept 0.000000001 upward;
 use math.huge for unlimited distance/radius. Defaults remain 2.2 studs / 120 pixels.
 Muzzle obstruction and invalid geometry checks remain independent.
 
-Latest focused 15-player capture: 1,898 aim updates and draws on all 1,898 frames
+Prior 1.3.10 focused 15-player capture: 1,898 aim updates and draws on all 1,898 frames
 over 8.0017 seconds (~237 FPS). Updates follow frames; this is not a fixed 240 FPS
 guarantee. Selection/TB checks no longer wait for the 60 Hz history sampler.
 

@@ -18,6 +18,9 @@ getgenv()['neoperro'] = {
             ['Auto']    = true;
             ['Value']   = 0.128;
         };
+        ['Resolver'] = {
+            ['Enabled'] = true;
+        };
         ['GroundShotCheck'] = true;
         ['Mode']            = 'Auto';
         ['Ignore']          = false;
@@ -53,18 +56,13 @@ getgenv()['neoperro'] = {
             ['Unlock Mode'] = 'Repeat';
             ['Keybind']     = {'T', 'MouseButton2', 'Keyboard'};
         };
-        ['EndMath'] = {
-            ['VelocityHistory'] = true;
-            ['WallCheck']       = true;
-            ['Visualizer']      = false;
-        };
         ['AntiCurve'] = {
             ['Enabled'] = false;
             ['Mode']    = '3d-angles';
             ['3d-angles'] = {
                 ['Max'] = 2.2; -- Studs: 0.000000001 or larger; math.huge = unlimited.
             };
-            ['endmath'] = {
+            ['Endmath'] = {
                 ['Radius']    = 120; -- Pixels: 0.000000001 or larger; math.huge = unlimited.
                 ['WallCheck'] = true;
             };

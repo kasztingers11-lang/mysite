@@ -1,4 +1,4 @@
-# neoperro 1.3.10 settings and development
+# neoperro 1.3.11 settings and development
 
 Edit the table in neoperro.lua, then execute the entire file. The loader at its
 bottom fetches this repair branch. neoperro-full.lua is the equivalent bundle
@@ -37,16 +37,17 @@ Legacy Keybind Mode and Work With TB names migrate when the new names are absent
 | Section | Behavior |
 | --- | --- |
 | Prediction | Separate Enabled, Auto and Value in all three features. Active target/weapon/ping estimates refresh every 0.5 seconds, immediately on target/weapon changes; velocity response stays fast. Auto ignores Value and uses the larger overlapping RTT estimate, not their sum. Manual Value remains its baseline. Bounded horizontal speed response is always on; no Dynamic switch. |
+| Resolver | Silent Aim exposes Enabled only. TrueVelocity compares coherent sampled XYZ displacement with a persistent replicated-velocity mismatch. It requires at least four samples, 50 ms of evidence, stable reported components and a recent slope consistent with the fit. New direction changes remain immediate. Short/noisy/teleported histories fall back to the existing adaptive estimate. Disabled uses bounded raw velocity. No universal anti-aim guarantee. |
 | Movement | Every prediction path bounds fast horizontal lead. Turn shortening requires recent forecast evidence; it does not add sideways acceleration. Stable measured vertical slopes can compensate jump acceleration. No projectile speed is invented for hitscan. |
 | Closest | Part compares part centers. Point compares allowed part geometry against the forward cursor ray. Center permits local Y; All permits XYZ. Reduce=0 permits edges; 1 collapses to center. Sharpness is frame-time aware and clamped within the selected part. |
 | Closest.Raycast | A real character/accessory surface under the cursor bypasses Reduce and Sharpness before prediction. Otherwise Part/Point behavior applies. Tool surfaces are excluded. |
 | Y-Axis | Silent only. Auto ignores JumpOffset, uses measured vertical motion and ground support, and bounds lead by part height. Custom scales positive vertical lead with JumpOffset and stays separate. GroundShotCheck is independent. |
-| AntiCurve | Evaluates the final predicted point against camera and native muzzle-to-Mouse.Hit corridors. 3d-angles Max remains studs (2.2 default); endmath Radius remains pixels (120). It rejects rather than clamps. Max/Radius accept 0.000000001 and larger numbers, including math.huge for unlimited distance/radius. Invalid forward geometry and muzzle obstruction still reject eligible firing paths. |
-| Checks | Columns are Silent Aim, Aim Assist, Triggerbot. Wall checks use the firing muzzle for Silent/TB and the camera for Assist. Silent EndMath filters do not control independent features. |
+| AntiCurve | Evaluates the final predicted point against camera and native muzzle-to-Mouse.Hit corridors. 3d-angles Max remains studs (2.2 default); Endmath Radius remains pixels (120). It rejects rather than clamps. Max/Radius accept 0.000000001 and larger numbers, including math.huge for unlimited distance/radius. Invalid forward geometry and muzzle obstruction still reject eligible firing paths. |
+| Checks | Columns are Silent Aim, Aim Assist, Triggerbot. Wall checks use the firing muzzle for Silent/TB and the camera for Assist. Silent final wall checks are internal and always active; they do not control independent features. The removed EndMath block is ignored. |
 | Triggerbot | Fov.Enabled=false requires a real ray hit or scaled native body/HB bounds; Character=1 is native, 1.2 is 20% larger, 0.8 smaller. Selection is local only. Camera and native muzzle rays support third-person parallax without bypassing intervening walls. Fov.Enabled=true uses the chosen circle/box. |
 | Triggerbot timing | Acquisition presses immediately. Delay/RandomDelay sets button hold duration. SmartDelay uses Delay + min(distance/2000, 0.15) seconds as the hold duration, not a reaction delay. Owned cycles cancel on activation/target/weapon loss. |
 | Gun Specifications | Enable and equip a supported gun. Profiles override Silent box Width/Height at configured Close/Medium/Far upper bounds, including standalone ESP. Beyond Far/unlisted weapons use general dimensions. Aim Assist and Triggerbot keep their own boxes. |
-| 2d-Box / ESP | Root-centered world dimensions remain static under limb animation. Selection, Triggerbot checks, camera assistance, projection, circles and marker follow each render frame; no script FPS cap. History sampling remains paced separately and active estimates refresh every half second. Subpixel coordinates, property caching and reused visuals reduce stepping and property writes. Predicted Position follows the final lead. |
+| 2d-Box / ESP | Root-centered world dimensions remain static under limb animation. Selection, Triggerbot checks, camera assistance, projection and FOV circles follow each render frame; no script FPS cap. History sampling remains paced separately and active estimates refresh every half second. Subpixel coordinates, property caching and reused visuals reduce stepping and property writes. Predicted Position follows the final lead. |
 | Whitelist | Friend excludes assigned IDs; Target includes only them. Up to four IDs. Disabled clears assignments/markers. Enabled assignments color ESP. Knocked/dead checks hide eligible boxes and labels. |
 | Client Bullets | Rotates recognized native pellet endpoints toward ordinary mouse aim on this client. Native spread, color, width, texture and lifetime remain unchanged. Server shot coordinates stay separate. No substitute white beam or Mouse.Hit hook. |
 | Anti-AimViewer | Continuous ordinary MOUSE updates pass through. Explicit predicted shot coordinates receive a deferred ordinary-aim restoration. The user-confirmed path is preserved; no universal concealment claim. |
@@ -82,3 +83,8 @@ The tests require Lua 5.4 or Lupa's lua54 backend. Mock results do not prove Rob
 compatibility. Runtime Diagnose(), InputStatus() and bounded StartTrace()/ReadTrace()
 separate target/part, raw/sampled/resolved velocity, lead, muzzle, final coordinates,
 MOUSE sends/restores and shot-result uncertainty. Never save executor credentials.
+
+The EndMath point visualizer and its Drawing allocation are removed. AntiCurve mode
+and radius block are named Endmath; startup migrates older endmath tables.
+Resolver uses TrueVelocity internally and exposes no Method selector. History
+sampling remains active even when the resolver is disabled.

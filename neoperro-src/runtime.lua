@@ -13,6 +13,17 @@ for _, name in ipairs({'Silent Aim', 'Aim Assist'}) do
     if type(feature) == 'table' and feature.Activation == nil then feature.Activation = feature['Keybind Mode'] end
     if type(feature) == 'table' then feature['Keybind Mode'] = nil end
 end
+local suppliedSilent = suppliedConfig['Silent Aim']
+if type(suppliedSilent) == 'table' then
+    suppliedSilent.EndMath = nil
+    if type(suppliedSilent.Resolver) == 'table' then suppliedSilent.Resolver.Method = nil end
+    local anti = suppliedSilent.AntiCurve
+    if type(anti) == 'table' then
+        if anti.Endmath == nil then anti.Endmath = anti.endmath end
+        anti.endmath = nil
+        if anti.Mode == 'endmath' then anti.Mode = 'Endmath' end
+    end
+end
 local suppliedMacro = suppliedConfig.Misc and suppliedConfig.Misc['Macro Abuse']
 if type(suppliedMacro) == 'table' then
     if suppliedMacro['Triggerbot check'] == nil then suppliedMacro['Triggerbot check'] = suppliedMacro['Work With TB'] end
@@ -40,7 +51,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.10', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.11', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
@@ -450,12 +461,17 @@ local function velocity(record, feature)
         record.sampledVelocity = Core.velocity(record.history, raw, zero)
         record.resolvedVelocity, record.velocitySource = Core.resolveVelocity(record.history,
             record.root.AssemblyLinearVelocity, record.sampledVelocity, Vector3.new)
+        record.trueVelocity, record.trueVelocitySource = Core.trueVelocity(record.history,
+            record.root.AssemblyLinearVelocity, record.sampledVelocity, record.resolvedVelocity, record.velocitySource, Vector3.new)
         record.velocityAt = last and last.t
         record.velocityRaw = raw
         record.motion = Core.motion(record.history, record.root.AssemblyLinearVelocity)
     end
-    if feature ~= 'Silent Aim' or config['Silent Aim'].EndMath.VelocityHistory then return record.resolvedVelocity end
-    return Core.limit(raw, 180)
+    if feature == 'Silent Aim' then
+        if not config['Silent Aim'].Resolver.Enabled then return Core.limit(raw, 180) end
+        return record.trueVelocity
+    end
+    return record.resolvedVelocity
 end
 
 local function prediction(record, feature, point)
@@ -512,13 +528,16 @@ local function leadOffset(record, feature, part, point, evidence)
         minY, supportedGround = support(record, point, lead, part.Size.Y)
     end
     local vertical, source, correction, accelerationMode
+    local verticalRaw = raw.Y
+    if feature == 'Silent Aim' and settings.Resolver.Enabled and record.trueVelocitySource == 'true-velocity'
+        and vel.Y ~= record.resolvedVelocity.Y then verticalRaw = vel.Y end
     if useY and ySettings.Mode == 'Custom' then
         if vel.Y > 0 then lead = Vector3.new(lead.X, lead.Y * Core.number(ySettings.JumpOffset, 1, 0, 5), lead.Z) end
     elseif useY or feature ~= 'Silent Aim' then
         local grounded = supportedGround or (not airborne and math.abs(raw.Y) < 3)
-        vertical, source = Core.autoVertical(vel.Y, raw.Y)
+        vertical, source = Core.autoVertical(vel.Y, verticalRaw)
         local y
-        y, correction, accelerationMode = Core.verticalLead(vertical, raw.Y, baseLeadTime, part.Size.Y, grounded, motion)
+        y, correction, accelerationMode = Core.verticalLead(vertical, verticalRaw, baseLeadTime, part.Size.Y, grounded, motion)
         lead = Vector3.new(lead.X, y, lead.Z)
     end
     local groundCorrected
@@ -529,8 +548,10 @@ local function leadOffset(record, feature, part, point, evidence)
     if evidence then
         evidence.Part, evidence.PartPosition, evidence.BasePoint = part.Name, vectorData(part.Position), vectorData(point)
         evidence.RawVelocity, evidence.SampledVelocity = vectorData(raw), vectorData(record.sampledVelocity)
-        evidence.ResolvedVelocity, evidence.VelocitySource = vectorData(vel),
-            (feature ~= 'Silent Aim' or settings.EndMath.VelocityHistory) and record.velocitySource or 'raw'
+        evidence.ResolvedVelocity = vectorData(vel)
+        evidence.VelocitySource = feature ~= 'Silent Aim' and record.velocitySource
+            or settings.Resolver.Enabled and record.trueVelocitySource or 'raw'
+        evidence.Resolver = feature == 'Silent Aim' and (settings.Resolver.Enabled and 'TrueVelocity' or 'Disabled') or 'Adaptive'
         evidence.PredictionSource, evidence.SpeedFactor, evidence.LeadTime = predictionSource, speedFactor, leadTime
         evidence.BaseLeadTime, evidence.HorizontalLeadTime, evidence.FastMotionLimited = baseLeadTime, horizontalTime, limited
         evidence.TurnRate, evidence.TurnLeadTime = motion.TurnRate, turnTime
@@ -715,9 +736,9 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         evidence.AntiCurveCameraDistance, evidence.AntiCurveMuzzleDistance = cameraGap, nativeGap
         evidence.NativeAimOrigin = nativeRay and vectorData(nativeRay.Origin)
         evidence.NativeAimDirection = nativeRay and vectorData(nativeRay.Direction)
-        if anti.Mode == 'endmath' then
+        if anti.Mode == 'Endmath' then
             local projected, onScreen = camera:WorldToViewportPoint(point)
-            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'pixels', Core.curveLimit(anti.endmath.Radius, 120)
+            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'pixels', Core.curveLimit(anti.Endmath.Radius, 120)
             local screenGap = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
             local nativeScreenGap
             if nativePoint then
@@ -729,7 +750,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
             evidence.AntiCurveReference = nativeScreenGap and nativeScreenGap < screenGap and 'muzzle-to-mouse-ray' or 'forward-cursor-ray'
             if not onScreen or projected.Z <= 0 or
                 evidence.AntiCurveDistance > evidence.AntiCurveLimit then return reject('anti-curve-pixels') end
-            if anti.endmath.WallCheck and not visible(point, record.character, muzzle(), true) then return reject('anti-curve-wall') end
+            if anti.Endmath.WallCheck and not visible(point, record.character, muzzle(), true) then return reject('anti-curve-wall') end
         elseif anti.Mode == '3d-angles' then
             evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'studs', Core.curveLimit(anti['3d-angles'].Max, 2.2)
             local useMuzzle = nativeGap and nativeGap < (cameraGap or math.huge)
@@ -742,7 +763,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         end
     end
     if not Core.finiteVector(point) then return reject('nonfinite') end
-    if feature == 'Silent Aim' and settings.EndMath.WallCheck and
+    if feature == 'Silent Aim' and
         not firingVisible(point, record.character, feature, true) then return reject('final-wall') end
     evidence.Accepted = true
     record.renderAim = record.renderAim or {}
@@ -1361,7 +1382,6 @@ local fovVisuals = {}
 for _, name in ipairs({'Silent Aim', 'Aim Assist', 'Triggerbot'}) do
     fovVisuals[name] = {outline = visual('Circle'), circle = visual('Circle')}
 end
-local pointVisuals = {outline = visual('Circle'), point = visual('Circle')}
 
 local function color(rgb)
     return Color3.fromRGB(Core.number(rgb[1], 255, 0, 255), Core.number(rgb[2], 255, 0, 255), Core.number(rgb[3], 255, 0, 255))
@@ -1378,15 +1398,6 @@ local function drawFov()
         shapes.circle:Set({Visible = show, Position = cursor, Radius = radius, Filled = false,
             Thickness = 1, Color = color(circle.Color), Transparency = 1})
     end
-    local point = renderPoint('Silent Aim')
-    local projected, onScreen
-    if point then projected, onScreen = camera:WorldToViewportPoint(point) end
-    local position = projected and Vector2.new(projected.X, projected.Y) or cursor
-    local show = enabled('Silent Aim') and config['Silent Aim'].EndMath.Visualizer and onScreen == true
-    pointVisuals.outline:Set({Visible = show, Position = position, Radius = 4, Filled = true,
-        Color = Color3.new(0, 0, 0), Transparency = 0.85})
-    pointVisuals.point:Set({Visible = show, Position = position, Radius = 2, Filled = true,
-        Color = Color3.new(1, 1, 1), Transparency = 1})
 end
 
 local function assignedColor(id, fallback)

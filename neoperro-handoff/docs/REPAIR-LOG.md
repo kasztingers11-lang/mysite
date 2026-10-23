@@ -1,3 +1,23 @@
+# 1.3.11 resolver and table cleanup
+
+Silent Aim now has Resolver.Enabled only; TrueVelocity is internal. Sampled
+coherent XYZ movement can correct persistent reported-velocity mismatches with
+separate horizontal/vertical confidence checks. Fresh transitions are preserved.
+Velocity sampling and final Silent wall checks are always active. Removed the
+EndMath table and its point visualizer, including the two Drawing allocations.
+AntiCurve endmath is renamed Endmath, with startup migration for older tables.
+
+Lua regressions cover persistent XYZ mismatches, fresh transitions, irregular
+motion, teleport reset, live resolver toggles, legacy settings, mandatory wall
+checks, FOV drawings and every-frame ESP/selection. Both generated bundles
+pass REAL analysis with zero errors/warnings. A no-input Roblox Vector3 fixture
+passed 3 correction and 3 transition cases plus irregular/teleport guards.
+These are synthetic native-vector cases, not shots at actual anti-aim targets.
+No full runtime reload, firing or damage test occurred in this batch.
+No obfuscation, keys or logging was added; user table reorganization is pending.
+
+---
+
 # 1.3.10 frame cadence and AntiCurve range
 
 Selection, Triggerbot checks and prediction/packet refresh follow each render

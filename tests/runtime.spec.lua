@@ -442,7 +442,7 @@ end
 -- Point selection evaluates allowed part geometry; exact native HB hits bypass smoothing.
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
-    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.EndMath.WallCheck=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false
     s.Target.Closest.Method='Point';s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
     moveEnemy(2,0,-50)
     local raycast=World.Raycast
@@ -453,7 +453,7 @@ do
     local rt=loadRuntime(cfg);step(.04)
     assert(rt.Points['Silent Aim'] and rt.Points['Silent Aim'].X<=1.5,'Visible allowed point can be selected when its part center is blocked')
     rt.Config['Silent Aim'].Prediction.Enabled=true;rt.Config['Silent Aim'].Prediction.Auto=false
-    rt.Config['Silent Aim'].EndMath.VelocityHistory=false;enemyRoot.AssemblyLinearVelocity=V.new(22,0,0);step(.04)
+    enemyRoot.AssemblyLinearVelocity=V.new(22,0,0);step(.04)
     assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='predicted-wall','Wall checks follow final prediction rather than an earlier visible center')
     rt:Destroy('test');World.Raycast=raycast;moveEnemy(0,0,-50);enemyRoot.AssemblyLinearVelocity=V.new()
 end
@@ -461,7 +461,7 @@ end
 -- Point selection evaluates allowed part geometry; exact native HB hits bypass smoothing.
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
-    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.EndMath.WallCheck=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false
     s.Target.Closest.Raycast=false;s.Target.Closest.Method='Part';s.Target.Closest.Sharpness=1
     s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0
     moveEnemy(2,0,-50)
@@ -492,7 +492,7 @@ end
 do
     local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
     cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Fov.Mode='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Visible=true
-    cfg['Silent Aim'].Fov['2d-Circle'].Size=75;cfg['Silent Aim'].EndMath.Visualizer=true
+    cfg['Silent Aim'].Fov['2d-Circle'].Size=75;cfg['Silent Aim'].EndMath={Visualizer=true}
     local rt=loadRuntime(cfg);step(.04)
     local outline,circle,halo,dot=false,false,false,false
     for _,d in ipairs(drawingObjects) do if not d.removed and d.Visible and d.Kind=='Circle' then
@@ -501,7 +501,7 @@ do
         if d.Radius==4 and d.Filled then halo=true end
         if d.Radius==2 and d.Filled then dot=true end
     end end
-    assert(outline and circle and halo and dot,'Existing circle and final-point options receive plain outlined visuals')
+    assert(outline and circle and not halo and not dot,'FOV keeps its outline; the removed final-point visualizer creates no marker')
     rt.Config['Silent Aim'].Enabled=false;step(.04)
     for _,d in ipairs(drawingObjects) do if not d.removed and d.Kind=='Circle' then assert(not d.Visible,'Disabling the feature hides both visual layers') end end
     rt:Destroy('test')
@@ -691,7 +691,7 @@ do
     assert(rt.Points['Silent Aim'] and not rt.Points['Aim Assist'],'Firing uses a clear muzzle while assistance respects its camera wall')
     assert(rt.AimTrace['Silent Aim'].AntiCurveCameraDistance>2.2 and rt.AimTrace['Silent Aim'].AntiCurveMuzzleDistance<.01)
     assert(rt.AimTrace['Silent Aim'].AntiCurveReference=='muzzle-to-mouse-ray')
-    rt.Config['Silent Aim'].AntiCurve.Mode='endmath';rt.Config['Silent Aim'].AntiCurve.endmath.Radius=10;step(.04)
+    rt.Config['Silent Aim'].AntiCurve.Mode='Endmath';rt.Config['Silent Aim'].AntiCurve.Endmath.Radius=10;step(.04)
     assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveCameraPixels>10,'Pixel mode also accounts for native muzzle alignment')
     rt.Config.Triggerbot.Enabled=true;rt.Toggles.Triggerbot=true;rt.Config.Triggerbot.Fov.Character=1
     World.Raycast=function(self,origin,direction,params)
@@ -706,12 +706,12 @@ do
     handle.Position=V.new();moveEnemy(0,0,-50);camera.CFrame=CF.new()
 end
 
--- Rendering follows live part motion between 60 Hz selection updates.
+-- Rendering and selection follow live part motion between history updates.
 do
     local cfg=Core.copy(Defaults);cfg['Silent Aim'].Enabled=false;cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
     cfg.ESP.VisibleCheck=false;cfg['2d-Box']['Silent Aim'].Visible=true;cfg['2d-Box']['Silent Aim']['Predicted Position']=true
     cfg['Silent Aim'].Prediction.Auto=false;cfg['Silent Aim'].Prediction.Value=.1
-    cfg['Silent Aim'].EndMath.VelocityHistory=false;enemyRoot.AssemblyLinearVelocity=V.new(100,0,0)
+    enemyRoot.AssemblyLinearVelocity=V.new(100,0,0)
     local rt=loadRuntime(cfg);step(.04)
     local box
     for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then box=d end end
@@ -720,31 +720,59 @@ do
     rt:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
 end
 
--- Rendering follows live part motion between 60 Hz selection updates.
+-- Rendering and selection follow live part motion between history updates.
 do
     local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
-    cfg['Silent Aim'].EndMath.Visualizer=true;cfg['Silent Aim'].Prediction.Enabled=false
+    cfg['Silent Aim'].Prediction.Enabled=false
     cfg['Silent Aim'].Target.Closest.Enabled=false;cfg.ESP.VisibleCheck=false
     local rt=loadRuntime(cfg);step(.04)
     local updates=rt.Performance.Updates
     local aimUpdates=rt.Performance.AimUpdates
     local historyCount=#rt.Records[enemy].history
-    local dot
-    for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Circle' and d.Radius==2 then dot=d end end
-    assert(dot and dot.Visible)
-    local oldX=dot.Position.X
+    local box
+    for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then box=d end end
+    assert(box and box.Visible)
+    local oldX=box.Position.X
     for _=1,4 do
         moveEnemy(enemyRoot.Position.X+.001,0,-50);clock=clock+1/240
         for _,callback in pairs(renders)do callback(1/240)end
     end
-    assert(rt.Performance.Updates==updates and dot.Position.X>oldX,'Subpixel marker updates on render frames without a selection tick')
+    assert(rt.Performance.Updates==updates and box.Position.X>oldX,'Subpixel box updates on render frames without a history tick')
     assert(rt.Performance.AimUpdates==aimUpdates+4 and #rt.Records[enemy].history==historyCount,'Aim selection follows every frame while history fitting keeps its own cadence')
     assert(rt.Points['Silent Aim'].X==enemyRoot.Position.X,'Final target point refreshes without waiting for the old 60 Hz sampler')
     rt:Destroy('test');moveEnemy(0,0,-50)
 end
 
 -- Prediction and the barrel-alignment filters.
-local modes=Core.copy(Defaults);modes['Silent Aim'].Ignore=true;modes['Silent Aim'].EndMath.VelocityHistory=false
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local silent=cfg['Silent Aim'];silent.Ignore=true;silent.Target.Closest.Enabled=false
+    silent.EndMath={VelocityHistory=false,WallCheck=false,Visualizer=true}
+    silent.AntiCurve.Mode='endmath';silent.AntiCurve.endmath={Radius=91,WallCheck=true};silent.AntiCurve.Endmath=nil
+    silent.Prediction.Auto=false;cfg['Y-Axis'].Enabled=true
+    local rt=loadRuntime(cfg)
+    assert(rt.Config['Silent Aim'].EndMath==nil and rt.Config['Silent Aim'].Resolver.Method==nil)
+    assert(rt.Config['Silent Aim'].AntiCurve.Mode=='Endmath' and rt.Config['Silent Aim'].AntiCurve.Endmath.Radius==91)
+    enemyHum.FloorMaterial=Enum.Material.Air;enemyRoot.AssemblyLinearVelocity=V.new()
+    for i=0,7 do moveEnemy(i*.44,3-i*.3,-50-i*.16);step(.02) end
+    local evidence=rt.AimTrace['Silent Aim']
+    assert(evidence.Resolver=='TrueVelocity' and evidence.VelocitySource=='true-velocity')
+    assert(math.abs(evidence.ResolvedVelocity.X-22)<1e-6 and math.abs(evidence.ResolvedVelocity.Y+15)<1e-6 and math.abs(evidence.ResolvedVelocity.Z+8)<1e-6,'Persistent zero replicated velocity cannot hide coherent XYZ movement')
+    assert(rt.Points['Silent Aim'].X>enemyRoot.Position.X and rt.Points['Silent Aim'].Y<enemyRoot.Position.Y,'Auto Y retains the measured falling correction')
+    rt.Config['Silent Aim'].Resolver.Enabled=false
+    for _,callback in pairs(renders)do callback(1/240)end
+    assert(rt.Points['Silent Aim']==enemyRoot.Position and rt.AimTrace['Silent Aim'].VelocitySource=='raw','Resolver toggle changes the next render without restarting')
+    rt.Config['Silent Aim'].Resolver.Enabled=true
+    for _,callback in pairs(renders)do callback(1/240)end
+    assert(rt.AimTrace['Silent Aim'].VelocitySource=='true-velocity')
+    rt.Config.Checks.Wall[1]=false;rt.Config['Silent Aim'].EndMath={WallCheck=false}
+    handle.Position=V.new(5,0,0);muzzleBlocked=true;step(.02)
+    assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='final-wall','The internal final wall check cannot be disabled through an old table')
+    rt:Destroy('test');muzzleBlocked=false;handle.Position=V.new();enemyHum.FloorMaterial=Enum.Material.Plastic;moveEnemy(0,0,-50)
+end
+
+-- Prediction and the barrel-alignment filters.
+local modes=Core.copy(Defaults);modes['Silent Aim'].Ignore=true;
 modes['Silent Aim'].Prediction.Auto=false
 modes['Silent Aim'].Target.Closest.Enabled=false
 modes['Y-Axis'].Enabled=true;modes['Y-Axis'].Mode='Custom';modes['Y-Axis'].JumpOffset=2
@@ -756,11 +784,11 @@ assert(math.abs(filtered.Points['Silent Aim'].Y-1.28)<1e-6,'Rising motion is not
 enemyRoot.AssemblyLinearVelocity=V.new();step(0.04);assert(filtered.Points['Silent Aim'].Y==0)
 filtered.Config['Y-Axis'].Enabled=false
 filtered.Config['Silent Aim'].AntiCurve.Enabled=true
-filtered.Config['Silent Aim'].AntiCurve.Mode='endmath'
-filtered.Config['Silent Aim'].AntiCurve.endmath.Radius=1
+filtered.Config['Silent Aim'].AntiCurve.Mode='Endmath'
+filtered.Config['Silent Aim'].AntiCurve.Endmath.Radius=1
 enemyRoot.AssemblyLinearVelocity=V.new(100,0,0);step(0.04)
 assert(filtered.Points['Silent Aim']==nil,'Endmath rejects outside pixel radius instead of clamping prediction')
-filtered.Config['Silent Aim'].AntiCurve.endmath.Radius=300;step(0.04)
+filtered.Config['Silent Aim'].AntiCurve.Endmath.Radius=300;step(0.04)
 local acceptedLead=filtered.Points['Silent Aim'].X
 assert(acceptedLead>0 and filtered.AimTrace['Silent Aim'].FastMotionLimited,'Fast motion uses the permanent horizontal lead guard')
 filtered.Config['Silent Aim'].AntiCurve.Enabled=false;step(.04)
@@ -778,7 +806,7 @@ filtered:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
 do
     local cfg=Core.copy(Defaults)
     cfg['Silent Aim'].Target.Closest.Enabled=false
-    cfg['Silent Aim'].EndMath.VelocityHistory=false
+
     cfg['Silent Aim'].Prediction.Auto=false;cfg['Silent Aim'].Prediction.Value=.1
     cfg['Silent Aim'].Fov.Mode='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Size=10
     moveEnemy(2,0,-50);enemyRoot.AssemblyLinearVelocity=V.new(-20,0,0)
@@ -793,7 +821,7 @@ end
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
     cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
-    cfg['Silent Aim'].EndMath.VelocityHistory=false;cfg['Silent Aim'].Prediction.Auto=true
+    cfg['Silent Aim'].Prediction.Auto=true
     enemyRoot.AssemblyLinearVelocity=V.new(22,0,0)
     local rt=loadRuntime(cfg);rt.Network.RTT=.06;rt.Network.DataRTT=.06;rt.Network.NextSample=clock+10;step(.04)
     local baseline=rt.AimTrace['Silent Aim'].LeadTime
@@ -842,10 +870,10 @@ do
     local cfg=Core.copy(Defaults)
     cfg['Silent Aim'].Target.Closest.Enabled=false
     cfg['Silent Aim'].Prediction.Auto=false
-    cfg['Silent Aim'].EndMath.VelocityHistory=false
+
     cfg['Silent Aim'].AntiCurve.Enabled=true
-    cfg['Silent Aim'].AntiCurve.Mode='endmath'
-    cfg['Silent Aim'].AntiCurve.endmath.Radius=50
+    cfg['Silent Aim'].AntiCurve.Mode='Endmath'
+    cfg['Silent Aim'].AntiCurve.Endmath.Radius=50
     enemyRoot.AssemblyLinearVelocity=V.new(100,0,0)
     local rt=loadRuntime(cfg);step(.04)
     assert(rt.Targets['Silent Aim']==second,'Auto must try the next candidate after a final filter rejects the nearest')
@@ -879,8 +907,8 @@ do
     local checkCfg=Core.copy(Defaults)
     checkCfg['Silent Aim'].Target.Closest.Enabled=false
     checkCfg['Silent Aim'].Ignore=true
-    checkCfg['Silent Aim'].EndMath.VelocityHistory=false
-    checkCfg['Silent Aim'].EndMath.WallCheck=false
+
+
     checkCfg['Y-Axis'].Enabled=true
     checkCfg['Silent Aim'].Prediction.Auto=false
     local rt=loadRuntime(checkCfg)

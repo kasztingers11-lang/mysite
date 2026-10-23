@@ -1,6 +1,6 @@
 # neoperro - current repair handoff
 
-Current runtime: **1.3.10**, branch **repair/neoperro-evidence**. Main is older.
+Current runtime: **1.3.11**, branch **repair/neoperro-evidence**. Main is older.
 Use the repository-root `neoperro.lua` (commented table plus repair-branch loader)
 or `neoperro-full.lua` (full bundle). Preserve local edits before switching branches.
 

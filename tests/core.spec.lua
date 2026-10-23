@@ -120,8 +120,35 @@ near(Core.velocity(history, zero, zero).X, 1)
 assert(not Core.finiteVector(V.new(0/0, 0, 0)))
 assert(not Core.finiteVector(V.new(math.huge, 0, 0)))
 local defaults = dofile('neoperro-src/defaults.lua')
+do
+    local function estimate(samples,raw)
+        local fit=Core.velocity(samples,raw,zero)
+        local fallback,source=Core.resolveVelocity(samples,raw,fit,V.new)
+        return Core.trueVelocity(samples,raw,fit,fallback,source,V.new)
+    end
+    for _,raw in ipairs({V.new(0,0,0),V.new(-60,0,80),V.new(4,0,-2)}) do
+        local samples={}
+        for i=0,7 do Core.sample(samples,V.new(22*i*.02,-15*i*.02,-8*i*.02),i*.02,raw) end
+        local resolved,source=estimate(samples,raw)
+        near(resolved.X,22);near(resolved.Y,-15);near(resolved.Z,-8)
+        assert(source=='true-velocity','Coherent movement can correct a persistent replicated XYZ mismatch')
+        local fresh=V.new(-22,40,8)
+        Core.sample(samples,V.new(22*.16,-15*.16,-8*.16),.16,fresh)
+        resolved=estimate(samples,fresh)
+        near(resolved.X,-22);near(resolved.Y,40);near(resolved.Z,8)
+    end
+    local samples={}
+    for i=0,7 do Core.sample(samples,V.new(22*i*.02+(i%2)*4,0,0),i*.02,zero) end
+    local resolved,source=estimate(samples,zero)
+    near(resolved.X,0);assert(source~='true-velocity','Irregular displacement cannot establish a stable movement estimate')
+    Core.sample(samples,V.new(1000,0,0),.16,zero)
+    resolved,source=estimate(samples,zero)
+    near(resolved.Magnitude,0);assert(#samples==1 and source~='true-velocity','A teleport discards the previous correction')
+end
 Core.validate(defaults, defaults)
-assert(defaults.EndMath==nil and defaults['Silent Aim'].EndMath~=nil)
+assert(defaults.EndMath==nil and defaults['Silent Aim'].EndMath==nil)
+assert(defaults['Silent Aim'].Resolver.Enabled and defaults['Silent Aim'].Resolver.Method==nil)
+assert(defaults['Silent Aim'].AntiCurve.Endmath and defaults['Silent Aim'].AntiCurve.endmath==nil)
 assert(defaults.Prediction==nil and defaults.Triggerbot.Prediction.Value==0.121)
 for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do
     assert(defaults[feature].Prediction.Enabled and defaults[feature].Prediction.Auto)
@@ -195,7 +222,7 @@ near(Core.autoVertical(9,-1000),9) -- Do not trust an implausible raw spike.
 near(Core.autoVertical(9,12),9) -- Preserve history when direction agrees.
 local reversed={{p=zero,t=2},{p=zero,t=3}}
 Core.sample(reversed,zero,1); assert(#reversed==1 and reversed[1].t==1)
-assert(defaults['Silent Aim'].AntiCurve['3d-angles'].MaxAngle==nil and defaults['Silent Aim'].AntiCurve.endmath.MaxAngle==nil)
+assert(defaults['Silent Aim'].AntiCurve['3d-angles'].MaxAngle==nil and defaults['Silent Aim'].AntiCurve.Endmath.MaxAngle==nil)
 assert(defaults.Misc.Intro == nil and defaults['Client Bullets'].RequireTarget == nil)
 for name, value in pairs(defaults['Gun Specifications']) do
     if name ~= 'Ranges' and type(value) == 'table' then

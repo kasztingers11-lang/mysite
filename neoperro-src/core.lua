@@ -347,6 +347,50 @@ function Core.resolveVelocity(history, raw, fitted, newVector)
     return resolved(newVector(horizontal.X, vertical.Y, horizontal.Z), 'split-validated')
 end
 
+-- A persistent replicated-velocity mismatch needs coherent observed movement.
+-- A newly changed velocity remains immediate while history catches up.
+function Core.trueVelocity(history, raw, fitted, fallback, source, newVector)
+    if #history < 4 or not Core.finiteVector(raw) or not Core.finiteVector(fitted) then return fallback, source end
+    local last, first = history[#history], history[1]
+    local span = last.t - first.t
+    if span < 0.05 or span > 0.2 then return fallback, source end
+    local fitXZ = math.sqrt(fitted.X * fitted.X + fitted.Z * fitted.Z)
+    local rawXZ = math.sqrt(raw.X * raw.X + raw.Z * raw.Z)
+    local xzStable, yStable, xzError, yError = last.t, last.t, 0, 0
+    local xzTail, yTail, recent
+    for i = #history, 1, -1 do
+        local sample = history[i]
+        local dt = last.t - sample.t
+        local error = last.p - sample.p - fitted * dt
+        xzError = math.max(xzError, math.sqrt(error.X * error.X + error.Z * error.Z))
+        yError = math.max(yError, math.abs(error.Y))
+        if not recent and dt >= 0.035 then recent = (last.p - sample.p) / dt end
+        if not sample.raw or not Core.finiteVector(sample.raw) then
+            xzTail, yTail = true, true
+        else
+            local dx, dz = sample.raw.X - raw.X, sample.raw.Z - raw.Z
+            if dx * dx + dz * dz > math.max(1, rawXZ * 0.1) ^ 2 then xzTail = true end
+            if math.abs(sample.raw.Y - raw.Y) > math.max(2, math.abs(raw.Y) * 0.1) then yTail = true end
+        end
+        if not xzTail then xzStable = sample.t end
+        if not yTail then yStable = sample.t end
+    end
+    if not recent then return fallback, source end
+    local dx, dz = recent.X - fitted.X, recent.Z - fitted.Z
+    local mismatchX, mismatchZ = raw.X - fitted.X, raw.Z - fitted.Z
+    local useXZ = fitXZ >= 1 and last.t - xzStable >= 0.05
+        and xzError <= math.max(0.05, fitXZ * span * 0.15)
+        and dx * dx + dz * dz <= math.max(3, fitXZ * 0.25) ^ 2
+        and mismatchX * mismatchX + mismatchZ * mismatchZ >= math.max(3, fitXZ * 0.25) ^ 2
+    local useY = math.abs(fitted.Y) >= 1 and last.t - yStable >= 0.05
+        and yError <= math.max(0.05, math.abs(fitted.Y) * span * 0.15)
+        and math.abs(recent.Y - fitted.Y) <= math.max(3, math.abs(fitted.Y) * 0.25)
+        and math.abs(raw.Y - fitted.Y) >= math.max(3, math.abs(fitted.Y) * 0.25)
+    if not useXZ and not useY then return fallback, source end
+    return Core.limit(newVector(useXZ and fitted.X or fallback.X, useY and fitted.Y or fallback.Y,
+        useXZ and fitted.Z or fallback.Z), 180), 'true-velocity'
+end
+
 -- Fit only measured replicated velocities. A stable slope is useful at a jump
 -- apex; sparse updates, a one-frame impulse and noisy slopes are not gravity.
 function Core.motion(history, raw)
