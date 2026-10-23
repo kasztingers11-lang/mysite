@@ -13,10 +13,12 @@ Lua suites and REAL analysis pass. Full 1.3.12 loaded in a rejoined empty server
 with canonical-state assertions and no console problems. Zero remote players
 and zero shots were available; broader firing/visual validation remains open.
 
-The user now requests protection/obfuscation artifacts for their FlowAuth project
-and supplied its public loader. Never store a real customer key or API secret.
-Prepare protected upload artifacts and the editable key/table/loader separately
-from public development sources. Public history already contains older source.
+Protected upload artifacts and a readable key/table/loader are built. See the
+root neoperro-protection/README.md. Mock regressions and REAL native integrity/
+startup fixtures pass; native authorization was a local fixture only. The user
+must upload/publish to FlowAuth, require keys and enable Auto-obfuscate before
+real provider authentication/output can be verified. Do not collect their key.
+Public source/history remains readable. Normal development runtime is restored.
 
 Implemented: shared XYZ forecast for all features/boxes; separate XZ/Y resolution;
 speed/turn bounds; measured jump acceleration with braking-to-rest for decelerating

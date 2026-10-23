@@ -32,3 +32,6 @@ Latest feedback repairs and evidence: [session 2026-10-23](docs/SESSION-2026-10-
 
 Historical table review: [comparison](reviews/table-comparison.md) and
 [aligned proposal](reviews/table-proposal.lua). These snapshots precede the accepted 1.3.12 integration; use the root config.
+
+Protected distribution: [build and FlowAuth guide](../neoperro-protection/README.md),
+[readable key/table/loader](../neoperro-flowauth.lua). Actual provider login is pending.

@@ -1,5 +1,11 @@
 # neoperro 1.3.12 - testing build
 
+FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
+[build, upload and validation instructions](neoperro-protection/README.md).
+Only the runtime upload is obfuscated; the table remains readable. Generated
+upload files stay outside this public repository. Public development source and
+its history remain available; obfuscation cannot revoke those copies.
+
 Use [neoperro.lua](neoperro.lua): edit the table and execute the whole file.
 Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
 [neoperro-full.lua](neoperro-full.lua) contains the same table and runtime.
