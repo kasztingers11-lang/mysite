@@ -29,12 +29,12 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.2', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.3', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
     InitialWhitelist = Core.ids(config.Whitelist.Players), InitialWhiteMode = config.Whitelist.Mode,
-    Epoch = 0, Visuals = {}, Focused = true, MacroInputs = {},
+    Epoch = 0, Visuals = {}, Focused = true,
     Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, AimSendSkipped = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
     AimTrace = {}, Trace = {Events = {}, Sequence = 0, Until = 0, Limit = 128},
     Network = {NextSample = 0}, Performance = {Updates = 0, TotalMs = 0, MaxMs = 0},
@@ -44,7 +44,7 @@ local zero = Vector3.new(0, 0, 0)
 local now = os.clock
 local camera, cursor, cursorRay
 local localCharacter, localHumanoid, localRoot, equipped, weaponName, muzzleAttachment
-local tryMacro, releaseShotInput
+local releaseShotInput
 local charConnections, toolConnections = {}, {}
 local pendingTrigger, pendingPrefire, macro, activation
 local renderName = 'neoperro.' .. tostring(now())
@@ -82,7 +82,7 @@ end
 function state:Diagnose()
     local result = {Version = self.Version, Alive = self.Alive, Capabilities = Core.copy(self.Capabilities),
         Stats = Core.copy(self.Stats), Warnings = Core.copy(self.Warnings), Targets = {}, Boxes = {},
-        Prefire = Core.copy(self.LastPrefire),
+        Prefire = Core.copy(self.LastPrefire), MacroCheck = Core.copy(self.LastMacroCheck),
         MouseOwned = self.MouseOwned == true, ControlOwned = self.ControlOwned == true,
         Equipped = equipped and equipped.Name or nil, Remote = self.Remote and self.Remote.Name or nil,
         Aim = Core.copy(self.AimTrace), LastSend = Core.copy(self.LastSend), Network = Core.copy(self.Network),
@@ -605,6 +605,7 @@ end
 local hooks = environment[hooksKey]
 if type(hooks) ~= 'table' then hooks = {}; environment[hooksKey] = hooks end
 function state:TracePacket(inputPoint, outputPoint)
+    self.LastMousePayload = outputPoint -- Also works through an older permanent dispatcher.
     if now() >= self.Trace.Until then return end
     local time = now()
     if time < (self.NextPacketTrace or 0) then return end
@@ -697,37 +698,49 @@ local function macroEnabled()
     return state.Alive and config.Misc['Macro Abuse'].Enabled == true and type(live) == 'table' and live.Enabled == true
 end
 
-local function detectedMacro()
-    local moving = localHumanoid and localHumanoid.MoveDirection.Magnitude > 0.05
-    return Core.macroActive(state.MacroInputs, now(), moving)
+local function observeMacroMotion(time)
+    local motion = state.MacroMotion or {LastFastAt = -math.huge}
+    state.MacroMotion = motion
+    local part = localCharacter and localCharacter:FindFirstChild('Head') or localRoot
+    local velocity = part and part.AssemblyLinearVelocity
+    motion.Part = part and part.Name
+    motion.Speed = velocity and Core.finiteVector(velocity) and math.sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z) or 0
+    if velocity and Core.macroActive(velocity) then
+        motion.LastFastAt, motion.LastFastSpeed = time, motion.Speed
+    end
+    return motion
 end
 
-local function beginMacro(source, tool, confirmed)
+local function detectedMacro()
+    local time = now()
+    local motion = observeMacroMotion(time)
+    -- Game shot acknowledgement can clear velocity before Tool.Activated listeners run.
+    -- Retain only 120ms of pre-shot motion, never an input-pattern or indefinite latch.
+    local current = motion.Speed > 30
+    local recent = time >= motion.LastFastAt and time - motion.LastFastAt <= 0.12
+    local detected = current or recent
+    state.LastMacroCheck = {Time = time, Part = motion.Part, Detected = detected,
+        HorizontalSpeed = motion.Speed, Threshold = 30, RecentSpeed = motion.LastFastSpeed,
+        RecentAge = recent and time - motion.LastFastAt or nil,
+        Source = current and 'current-speed' or recent and 'recent-pre-shot-speed' or 'below-threshold'}
+    return detected
+end
+
+local function beginMacro(source, tool)
     local settings = config.Misc['Macro Abuse']
     if not macroEnabled() or macro or (source ~= 'Manual' and source ~= 'Triggerbot') then return end
     if source == 'Triggerbot' and not settings['Work With TB'] then return end
     if settings['Macro Check'] and not detectedMacro() then return end
-    if settings['Check Ammo'] and not confirmed then
-        local ammo = ammoCount(tool)
-        if type(ammo) ~= 'number' then warnOnce('macro-ammo', 'Macro Check Ammo is on, but this tool has no replicated Ammo value.'); return end
-        local drop = state.LastAmmoDrop
-        if not drop or drop.consumed or drop.tool ~= tool or now() - drop.time > 0.2 then
-            state.PendingMacro = {source = source, tool = tool, expires = now() + 0.65}
-            return
-        end
-    end
-    state.PendingMacro = nil
     if not virtualInput then warnOnce('macro-input', 'Macro needs VirtualInputManager key events.'); return end
     if not localHumanoid or localHumanoid.Health <= 0 or typing() then return end
-    if settings['Check Ammo'] and state.LastAmmoDrop then state.LastAmmoDrop.consumed = true end
     macro = {stage = 'wait', due = now() + 0.04, tool = tool, character = localCharacter}
 end
-tryMacro = beginMacro
 
 local function macroStep(time)
     if not macro then return end
     local cycle = macro
-    if not macroEnabled() or (config.Misc['Macro Abuse']['Macro Check'] and not detectedMacro()) or typing() or localCharacter ~= cycle.character
+    -- Latch eligibility at activation: the game's shot handler itself zeros speed.
+    if not macroEnabled() or typing() or localCharacter ~= cycle.character
         or not localHumanoid or localHumanoid.Health <= 0 or not cycle.tool.Parent then cancelMacro(); return end
     if time < cycle.due then return end
     if cycle.stage == 'wait' then
@@ -820,7 +833,8 @@ local function activated(tool)
     updateAim()
     refreshPacket()
     if source == 'Manual' and enabled('Silent Aim') then sendAim(state.Points['Silent Aim']) end
-    state.LastShot = {time = now(), tool = tool, origin = muzzle(), point = config['Client Bullets'].Enabled and state.RawMousePoint or nil}
+    state.LastShot = {time = now(), tool = tool, origin = muzzle(), point = config['Client Bullets'].Enabled and state.RawMousePoint or nil,
+        serverPoint = state.PacketPoint or state.LastMousePayload or state.RawMousePoint}
     beginMacro(source, tool)
 end
 
@@ -843,9 +857,6 @@ local function bindTool(tool)
             local value = ammoValue.Value
             if value < previousAmmo then
                 state.Stats.AmmoDrops = state.Stats.AmmoDrops + 1
-                state.LastAmmoDrop = {tool = tool, time = now()}
-                local pending = state.PendingMacro
-                if pending and pending.tool == tool and now() <= pending.expires then tryMacro(pending.source, tool, true) end
             end
             previousAmmo = value
         end, toolConnections)
@@ -855,7 +866,6 @@ local function bindTool(tool)
         if tool.Parent ~= localCharacter and equipped == tool then
             releaseShotInput()
             equipped, weaponName, muzzleAttachment = nil, nil, nil
-            state.PendingMacro = nil
             state.PacketPoint, state.ClientPoint = nil, nil
             pendingTrigger, pendingPrefire = nil, nil
             disconnect(toolConnections)
@@ -870,8 +880,7 @@ local function bindCharacter(character)
     localCharacter, localHumanoid, localRoot = character, nil, nil
     equipped, weaponName, muzzleAttachment = nil, nil, nil
     pendingTrigger, pendingPrefire, activation = nil, nil, nil
-    state.LastLocalVelocity, state.LastShot = nil, nil
-    state.PendingMacro, state.MacroInputs, state.LastAmmoDrop = nil, {}, nil
+    state.LastLocalVelocity, state.LastShot, state.MacroMotion = nil, nil, nil
     local function added(child)
         if child:IsA('Humanoid') then localHumanoid = child
         elseif child.Name == 'HumanoidRootPart' and child:IsA('BasePart') then localRoot = child
@@ -1166,9 +1175,6 @@ end
 
 local function inputChanged(input, began, processed)
     if state.MouseOwned and input.UserInputType == Enum.UserInputType.MouseButton1 then return end
-    if began and not typing() and (input.KeyCode.Name == 'I' or input.KeyCode.Name == 'O') then
-        Core.observeMacro(state.MacroInputs, input.KeyCode.Name == 'I' and 1 or -1, now())
-    end
     if began and (processed or typing()) then return end
     if began and config.Misc.Panic.Enabled and inputMatches(input, config.Misc.Panic) then state:Destroy('panic'); return end
     if began and input.UserInputType == Enum.UserInputType.MouseButton1 and equipped then
@@ -1245,7 +1251,9 @@ local function inspectBeam(beam)
     local label = beam.Name:lower() .. parentName
     if not (beam.Name == 'gb' or label:find('gun') or label:find('bullet') or label:find('tracer')) then return end
     if (a.WorldPosition - shot.origin).Magnitude > 6 then return end
-    local previousPosition, target = b.Position, shot.point
+    local previousPosition = b.Position
+    local target = Core.redirectTracer(a.WorldPosition, b.WorldPosition, shot.serverPoint, shot.point, Vector3.new)
+    if not target then return end
     b.WorldPosition = target
     beamEdits[#beamEdits + 1] = {beam = beam, attachment = b, old = previousPosition, written = b.Position}
 end
@@ -1294,16 +1302,10 @@ local function start()
     end)
     connect(Input.InputBegan, function(input, processed) inputChanged(input, true, processed) end)
     connect(Input.InputEnded, function(input) inputChanged(input, false, false) end)
-    connect(Input.InputChanged, function(input)
-        if not typing() and input.UserInputType == Enum.UserInputType.MouseWheel and input.Position.Z ~= 0 then
-            Core.observeMacro(state.MacroInputs, input.Position.Z > 0 and 1 or -1, now())
-        end
-    end)
     local function suspend()
-        state.Held = {}; state.Points = {}; state.Targets = {}
+        state.Held = {}; state.Points = {}; state.Targets = {}; state.MacroMotion = nil
         state.PacketPoint, state.ClientPoint = nil, nil
         pendingTrigger, pendingPrefire = nil, nil
-        state.PendingMacro, state.MacroInputs = nil, {}
         cancelMacro(); releaseShotInput()
         if state.AutomatedTool then pcall(function() state.AutomatedTool:Deactivate() end); state.AutomatedTool = nil end
     end
@@ -1328,6 +1330,8 @@ local function start()
     local elapsed = 0
     connect(RunService.Heartbeat, function(dt)
         local time = now()
+        if macroEnabled() and config.Misc['Macro Abuse']['Macro Check'] then observeMacroMotion(time)
+        else state.MacroMotion = nil end
         if not config.Whitelist.Enabled then state.Whitelist = {} end
         if state.FiringSource == 'Triggerbot' then
             local ammo = ammoCount(state.FiringTool)
@@ -1352,7 +1356,6 @@ local function start()
             state.Performance.MaxMs = math.max(state.Performance.MaxMs, cost)
         end
         if (state.ShotRelease or state.AutomatedTool) and time >= state.DeactivateAt then releaseShotInput() end
-        if state.PendingMacro and (not macroEnabled() or time > state.PendingMacro.expires) then state.PendingMacro = nil end
         macroStep(time); antiFling(); restoreBeams(false)
     end)
     RunService:BindToRenderStep(renderName, Enum.RenderPriority.Camera.Value + 1, function(dt)

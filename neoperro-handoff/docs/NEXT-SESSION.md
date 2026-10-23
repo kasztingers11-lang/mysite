@@ -1,3 +1,14 @@
+# Latest delivery: 1.3.3
+
+Read the 1.3.3 section in SESSION-2026-10-23 first. Pellet redirection now retains
+native spread/style and is local-only; server aim stays predicted. Macro Check
+matches the game's observed Head horizontal speed >30 shot condition. Check Ammo
+was removed from Macro Abuse. The old wheel/I/O heuristic and older pending-work
+statements below are superseded. Focused live movement/cycle results still need
+to be distinguished from unit tests and the native-engine visual fixture.
+
+---
+
 # Latest priority: user-feedback repairs 1.3.2
 
 Read [SESSION-2026-10-23](SESSION-2026-10-23.md) first. It supersedes older status below.

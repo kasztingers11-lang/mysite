@@ -140,6 +140,32 @@ function Core.finiteVector(v)
         and math.abs(v.X) < 1e8 and math.abs(v.Y) < 1e8 and math.abs(v.Z) < 1e8
 end
 
+-- Rotate a native pellet ray toward local mouse aim without merging endpoints.
+-- Native length, pairwise spread and all Beam styling remain independent.
+function Core.redirectTracer(origin, endpoint, serverPoint, mousePoint, newVector)
+    if not (Core.finiteVector(origin) and Core.finiteVector(endpoint)
+        and Core.finiteVector(serverPoint) and Core.finiteVector(mousePoint)) then return nil end
+    local from, toward, ray = serverPoint - origin, mousePoint - origin, endpoint - origin
+    if from.Magnitude < 1e-5 or toward.Magnitude < 1e-5 or ray.Magnitude < 1e-5 then return nil end
+    local a, b = from / from.Magnitude, toward / toward.Magnitude
+    local dot = math.max(-1, math.min(1, a:Dot(b)))
+    if dot > 1 - 1e-8 then return endpoint end
+    local rotated
+    if dot < -1 + 1e-6 then
+        -- Use one shared rotation plane for all pellets, including the center ray.
+        if not newVector then return nil end
+        local basis = math.abs(a.X) < 0.9 and newVector(1, 0, 0) or newVector(0, 1, 0)
+        local axis = a:Cross(basis)
+        axis = axis / axis.Magnitude
+        rotated = axis * (2 * axis:Dot(ray)) - ray
+    else
+        local cross = a:Cross(b)
+        local first = cross:Cross(ray)
+        rotated = ray + first + cross:Cross(first) / (1 + dot)
+    end
+    return origin + rotated
+end
+
 function Core.limit(v, maximum)
     local magnitude = v.Magnitude
     if magnitude > maximum and magnitude > 0 then return v * (maximum / magnitude) end
@@ -214,15 +240,9 @@ function Core.restoreToggle(incoming, oldInitial, oldValue)
     return incoming == true
 end
 
--- A walking speed is not evidence of a macro. Require repeated alternating zoom inputs.
-function Core.observeMacro(events, direction, time)
-    local last = events[#events]
-    if not last or direction ~= last.direction then events[#events + 1] = {direction = direction, time = time} end
-    while #events > 8 or (#events > 0 and time - events[1].time > 0.65) do table.remove(events, 1) end
-end
-
-function Core.macroActive(events, time, moving)
-    return moving and #events >= 4 and time - events[#events].time <= 0.65
+-- Mirrors the observed game shot handler's Head XZ-speed condition.
+function Core.macroActive(velocity)
+    return Core.finiteVector(velocity) and velocity.X * velocity.X + velocity.Z * velocity.Z > 30 * 30
 end
 
 -- Integer-like viewport geometry in world units, independent of limb animation.

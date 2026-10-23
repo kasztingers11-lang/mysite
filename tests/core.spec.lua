@@ -41,7 +41,11 @@ local mt = {
     __sub = function(a, b) return V.new(a.X - b.X, a.Y - b.Y, a.Z - b.Z) end,
     __mul = function(a, b) return V.new(a.X * b, a.Y * b, a.Z * b) end,
     __div = function(a, b) return V.new(a.X / b, a.Y / b, a.Z / b) end,
-    __index = function(a, key) if key == 'Magnitude' then return math.sqrt(a.X*a.X + a.Y*a.Y + a.Z*a.Z) end end,
+    __index = function(a, key)
+        if key == 'Magnitude' then return math.sqrt(a.X*a.X + a.Y*a.Y + a.Z*a.Z) end
+        if key == 'Dot' then return function(a,b)return a.X*b.X+a.Y*b.Y+a.Z*b.Z end end
+        if key == 'Cross' then return function(a,b)return V.new(a.Y*b.Z-a.Z*b.Y,a.Z*b.X-a.X*b.Z,a.X*b.Y-a.Y*b.X) end end
+    end,
 }
 function V.new(x,y,z) return setmetatable({X=x,Y=y,Z=z}, mt) end
 local history, zero = {}, V.new(0,0,0)
@@ -95,3 +99,28 @@ assert(Core.rayBox({X=0,Y=0,Z=5},{X=0,Y=0,Z=-1},{X=1,Y=1,Z=1})==4)
 assert(Core.rayBox({X=1.1,Y=0,Z=5},{X=0,Y=0,Z=-1},{X=1,Y=1,Z=1})==nil)
 assert(Core.rayBox({X=1.1,Y=0,Z=5},{X=0,Y=0,Z=-1},{X=1.2,Y=1.2,Z=1.2})==3.8)
 assert(Core.rayBox({X=0,Y=0,Z=5},{X=0,Y=0,Z=1},{X=1,Y=1,Z=1})==nil)
+
+-- Rigid tracer rotation keeps spread/length and uses no substitute Beam style.
+do
+    local o=V.new(0,0,0);local from=V.new(0,0,-50);local to=V.new(50,0,0)
+    local a,b=V.new(-2,1,-50),V.new(2,-1,-50)
+    local ra=Core.redirectTracer(o,a,from,to,V.new)
+    local rb=Core.redirectTracer(o,b,from,to,V.new)
+    near(ra.Magnitude,a.Magnitude);near(rb.Magnitude,b.Magnitude)
+    near(ra:Dot(rb),a:Dot(b));assert((ra-rb).Magnitude>4)
+    local center=Core.redirectTracer(o,from,from,to,V.new)
+    near(center.X,50);near(center.Y,0);near(center.Z,0)
+    local reverse=Core.redirectTracer(o,a,from,from*-1,V.new)
+    near(reverse.Magnitude,a.Magnitude)
+    near(reverse:Dot(Core.redirectTracer(o,b,from,from*-1,V.new)),a:Dot(b))
+    assert(Core.redirectTracer(o,a,o,to,V.new)==nil)
+    assert(Core.redirectTracer(o,a,from,V.new(0/0,0,0),V.new)==nil)
+end
+assert(not Core.macroActive(V.new(16,0,0)))
+assert(not Core.macroActive(V.new(30,100,0)))
+assert(Core.macroActive(V.new(30.1,0,0)))
+assert(Core.macroActive(V.new(22,0,22)))
+assert(not Core.macroActive(V.new(0,200,0)))
+assert(not Core.macroActive(V.new(0/0,0,0)))
+
+assert(defaults.Misc['Macro Abuse']['Check Ammo']==nil,'Removed Macro Abuse ammo setting stays absent')

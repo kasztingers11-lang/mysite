@@ -1,3 +1,10 @@
+# 1.3.3 pellet/macro follow-up
+
+See SESSION-2026-10-23.md for native effect source evidence, spread/style checks,
+Macro Check's game-derived velocity condition, removed ammo setting, and limits.
+
+---
+
 # 1.3.2 feedback repair
 
 See [2026-10-23 evidence and changes](SESSION-2026-10-23.md). Two-client local tracer

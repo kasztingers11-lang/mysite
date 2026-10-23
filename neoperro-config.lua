@@ -324,8 +324,7 @@ getgenv()['neoperro'] = {
         ['Macro Abuse'] = {
             ['Enabled'] = false;
             ['Work With TB'] = false; -- Also run after Triggerbot fires.
-            ['Check Ammo'] = true; -- Require a fresh Ammo/AMMO decrease before starting.
-            ['Macro Check'] = true; -- Require movement plus repeated I/O or alternating wheel inputs.
+            ['Macro Check'] = true; -- Require Head horizontal speed >30 studs/s, matching this game's shot handler (120ms pre-shot buffer).
         };
 
         -- Unload the runtime, remove visuals, and release simulated inputs.

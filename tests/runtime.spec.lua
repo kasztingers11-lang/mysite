@@ -17,6 +17,7 @@ VM.__index=function(a,k)
     if k=='Magnitude' then return math.sqrt(a.X*a.X+a.Y*a.Y+a.Z*a.Z) end
     if k=='Unit' then return a/a.Magnitude end
     if k=='Dot' then return function(a,b)return a.X*b.X+a.Y*b.Y+a.Z*b.Z end end
+    if k=='Cross' then return function(a,b)return V.new(a.Y*b.Z-a.Z*b.Y,a.Z*b.X-a.X*b.Z,a.X*b.Y-a.Y*b.X) end end
 end
 local CF, CM = {}, {}
 function CF.new(x,y,z) return setmetatable({Position=type(x)=='table' and x or V.new(x,y,z),LookVector=V.new(0,0,-1)},CM) end
@@ -255,15 +256,18 @@ remote:FireServer('OTHER',V.new(1,2,3),'tail')
 assert(packets[#packets][2]=='OTHER' and packets[#packets][4]=='tail')
 remote:FireServer('MOUSE',V.new(1,2,3),'tail')
 assert(packets[#packets][3]==V.new(1,2,3),'Anti-AimViewer leaves idle updates alone')
+assert(second.LastMousePayload==V.new(1,2,3),'Original dispatcher refreshes current runtime payload tracking')
 key('MouseButton1',true);remote:FireServer('MOUSE',V.new(1,2,3));key('MouseButton1',false)
 assert(packets[#packets][3]==second.Points['Silent Aim'],'Shot packets use the fresh point')
 tool.Activated:Fire()
 assert(second.ClientPoint==nil and second.LastShot.point==mouse.Hit.Position,'Local visual uses raw mouse without an index spoof')
 assert(not hooks.__index,'Local visuals do not install a Mouse.Target/Hit hook')
 local ownA=obj('Attachment','Start');ownA.WorldPosition=second.LastShot.origin
-local ownB=obj('Attachment','End');ownB.Position=V.new();ownB.WorldPosition=V.new(999,0,0)
-local localBeam=obj('Beam','gb');localBeam.Attachment0=ownA;localBeam.Attachment1=ownB;localBeam.Parent=World
-assert(ownB.WorldPosition==mouse.Hit.Position,'Observed gb tracer uses raw cursor endpoint')
+local ownB=obj('Attachment','End');ownB.Position=V.new();ownB.WorldPosition=second.LastShot.serverPoint
+local nativeEndpoint=ownB.WorldPosition
+local localBeam=obj('Beam','gb');localBeam.Color='native-yellow';localBeam.Width0=.002;localBeam.Width1=.1;localBeam.Texture='native-texture';localBeam.Attachment0=ownA;localBeam.Attachment1=ownB;localBeam.Parent=World
+assert((ownB.WorldPosition-Core.redirectTracer(ownA.WorldPosition,nativeEndpoint,second.LastShot.serverPoint,mouse.Hit.Position,V.new)).Magnitude<1e-6,'Native ray rotates toward raw cursor')
+assert(localBeam.Color=='native-yellow' and localBeam.Width0==.002 and localBeam.Width1==.1 and localBeam.Texture=='native-texture','Native Beam style is untouched')
 local farA=obj('Attachment','Start');farA.WorldPosition=V.new(100,100,100)
 local farB=obj('Attachment','End');farB.Position=V.new();farB.WorldPosition=V.new(999,0,0)
 local foreignBeam=obj('Beam','gb');foreignBeam.Attachment0=farA;foreignBeam.Attachment1=farB;foreignBeam.Parent=World
@@ -455,41 +459,51 @@ local fallback=loadRuntime(rc);key('MouseButton2',true);step(0.12)
 assert(fallback.Capabilities.FireInput=='Tool.Activate fallback' and fallback.FiringSource=='Triggerbot' and fallback.ForcedPoint,'Fallback retains owned cycle and target')
 fallback:Destroy('test');clearInput();env.mouse1press,env.mouse1release=savedPress,savedRelease
 
--- Disabled means no macro operation even while a zoom macro is detected.
-local disabled=loadRuntime(Defaults);zoomMacro()
-local eventCount=#keyEvents
-tool.Activated:Fire();ammo.Value=ammo.Value-1;step(0.3)
+-- Disabled Macro Abuse ignores fast movement; enabled checks the game's speed gate.
+myRoot.AssemblyLinearVelocity=V.new(45,0,0)
+local disabled=loadRuntime(Defaults)
+local eventCount=#keyEvents;tool.Activated:Fire();step(.3)
 assert(tool.Parent==myChar and #keyEvents==eventCount,'Disabled Macro Abuse must do nothing')
 disabled:Destroy('test');clearInput()
-
--- Normal walking is insufficient. A real shot and a detected macro are both required.
 local mc=Core.copy(Defaults);mc.Misc['Macro Abuse'].Enabled=true
 local macroRuntime=loadRuntime(mc)
-tool.Activated:Fire();ammo.Value=ammo.Value-1;step(0.3)
-assert(tool.Parent==myChar,'Walking alone must not trigger Macro Abuse')
-zoomMacro();tool.Activated:Fire();step(0.05)
-assert(tool.Parent==myChar,'Wait for ammo confirmation')
-ammo.Value=ammo.Value-1;step(0.05);assert(tool.Parent==backpack)
-step(0.07);assert(Input.keys.LeftControl)
-step(0.08);assert(tool.Parent==myChar)
-step(0.08);assert(not Input.keys.LeftControl)
-zoomMacro();tool.Activated:Fire();step(0.05)
-assert(tool.Parent==myChar,'A previous confirmed ammo drop cannot authorize another shot cycle')
-macroRuntime.PendingMacro=nil
-step(0.3);zoomMacro();tool.Activated:Fire();ammo.Value=ammo.Value-1;step(0.05);step(0.07)
-assert(Input.keys.LeftControl)
-env.neoperro.Misc['Macro Abuse'].Enabled=false;step(0.01)
-assert(not Input.keys.LeftControl and tool.Parent==myChar,'Live disable cancels an in-progress cycle')
--- Cancelling cannot reuse an already consumed ammo confirmation within its freshness window.
+myRoot.AssemblyLinearVelocity=V.new(16,0,0)
+zoomMacro();tool.Activated:Fire();step(.3)
+assert(tool.Parent==myChar,'Zoom keys with normal walking do not authorize a cycle')
+myRoot.AssemblyLinearVelocity=V.new(0,100,0)
+tool.Activated:Fire();step(.3);assert(tool.Parent==myChar,'Vertical jumping does not count as macro speed')
+myRoot.AssemblyLinearVelocity=V.new(45,0,0)
+local initialAmmo=ammo.Value
+tool.Activated:Fire();step(.05);assert(tool.Parent==backpack,'Fast movement starts cycle without ammo confirmation')
+step(.07);assert(Input.keys.LeftControl)
+step(.08);assert(tool.Parent==myChar)
+step(.08);assert(not Input.keys.LeftControl and ammo.Value==initialAmmo)
+tool.Activated:Fire();step(.05);step(.07);assert(Input.keys.LeftControl)
+env.neoperro.Misc['Macro Abuse'].Enabled=false;step(.01)
+assert(not Input.keys.LeftControl and tool.Parent==myChar,'Disable cancels and restores tool')
 env.neoperro.Misc['Macro Abuse'].Enabled=true
-tool.Activated:Fire();step(0.05)
-assert(tool.Parent==myChar,'A consumed ammo drop must not authorize the next activation')
-macroRuntime.PendingMacro=nil
+myRoot.AssemblyLinearVelocity=V.new(45,0,0);tool.Activated:Fire();step(.05)
+myRoot.AssemblyLinearVelocity=V.new(16,0,0);step(.07)
+assert(Input.keys.LeftControl,'Game shot slowdown does not cancel an already qualified bounded cycle')
+step(.08);step(.08);assert(tool.Parent==myChar and not Input.keys.LeftControl)
+local myHead=obj('Part','Head',myChar);myHead.AssemblyLinearVelocity=V.new(16,0,0)
+myRoot.AssemblyLinearVelocity=V.new(50,0,0);step(.15);tool.Activated:Fire();step(.05)
+assert(tool.Parent==myChar,'Head speed is authoritative when Head exists')
+myHead.AssemblyLinearVelocity=V.new(45,0,0);myRoot.AssemblyLinearVelocity=V.new(16,0,0)
+tool.Activated:Fire();step(.05);assert(tool.Parent==backpack,'Fast Head passes even when root is slower')
+step(.07);step(.08);step(.08)
+myHead.AssemblyLinearVelocity=V.new(45,0,0);step(.02)
+myHead.AssemblyLinearVelocity=V.new();tool.Activated:Fire();step(.05)
+assert(tool.Parent==backpack and macroRuntime.LastMacroCheck.Source=='recent-pre-shot-speed','Pre-shot speed survives game velocity reset before activation')
+step(.07);step(.08);step(.08)
+myHead.AssemblyLinearVelocity=V.new();step(.15);tool.Activated:Fire();step(.05)
+assert(tool.Parent==myChar and not macroRuntime.LastMacroCheck.Detected,'Expired pre-shot speed cannot authorize a later stationary shot')
+myHead:Destroy()
 macroRuntime.Config.Misc.Panic.Enabled=false
 key('E',true);key('E',false);assert(macroRuntime.Alive,'Panic false honors its switch')
 macroRuntime.Config.Misc.Panic.Enabled=true;key('E',true);key('E',false)
 assert(not macroRuntime.Alive and activeConnections()==0 and renderCount()==0)
-clearInput()
+clearInput();myRoot.AssemblyLinearVelocity=V.new()
 
 -- Prediction and the barrel-alignment filters.
 local modes=Core.copy(Defaults);modes['Silent Aim'].Ignore=true;modes['Silent Aim'].EndMath.VelocityHistory=false

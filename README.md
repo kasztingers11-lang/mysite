@@ -1,4 +1,4 @@
-# neoperro 1.3.2 — testing build
+# neoperro 1.3.3 — testing build
 
 Current branch: `repair/neoperro-evidence`. Main is older.
 
@@ -59,3 +59,8 @@ not prove Roblox compatibility. The old portable handoff snapshot/ZIP is still
 1.2.0; use current repository-root files. Repository consolidation is pending.
 
 Latest feedback repairs and evidence: [session 2026-10-23](neoperro-handoff/docs/SESSION-2026-10-23.md).
+
+1.3.3 preserves native pellet spread/color during local-only visual redirection.
+Macro Abuse no longer has Check Ammo; Macro Check follows this game's Head XZ
+speed >30 condition with a 120ms pre-shot buffer. Live trial rejected stationary
+shots and accepted seven fast-movement activations; see the session evidence.
