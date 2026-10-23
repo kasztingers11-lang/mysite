@@ -29,7 +29,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.1', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.2', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
@@ -81,13 +81,17 @@ end
 
 function state:Diagnose()
     local result = {Version = self.Version, Alive = self.Alive, Capabilities = Core.copy(self.Capabilities),
-        Stats = Core.copy(self.Stats), Warnings = Core.copy(self.Warnings), Targets = {},
+        Stats = Core.copy(self.Stats), Warnings = Core.copy(self.Warnings), Targets = {}, Boxes = {},
+        Prefire = Core.copy(self.LastPrefire),
         MouseOwned = self.MouseOwned == true, ControlOwned = self.ControlOwned == true,
         Equipped = equipped and equipped.Name or nil, Remote = self.Remote and self.Remote.Name or nil,
         Aim = Core.copy(self.AimTrace), LastSend = Core.copy(self.LastSend), Network = Core.copy(self.Network),
         Performance = Core.copy(self.Performance),
         ShotResult = 'unverified; activation and MOUSE submission do not establish damage'}
     for name, player in pairs(self.Targets) do result.Targets[name] = player.UserId end
+    for _, record in pairs(self.Records) do
+        if record.BoxInfo then result.Boxes[tostring(record.player.UserId)] = Core.copy(record.BoxInfo) end
+    end
     return result
 end
 
@@ -381,39 +385,48 @@ local function support(record, point, lead)
     return hit.Position.Y + stand + (point.Y - root.Position.Y), standing
 end
 
-local function playerBox(record, feature, standalone)
+local function playerBox(record, feature, standalone, predictedOffset)
     if not record.root or not record.character then return nil end
     local style = config['2d-Box'][feature]
     local origin = record.root.Position
     if not standalone and style['Predicted Position'] then
-        origin = origin + velocity(record, feature) * prediction(record, feature, origin)
+        local cached = record.finalLead and record.finalLead[feature]
+        if not predictedOffset and cached and now() - cached.time < 0.05 then predictedOffset = cached.offset end
+        origin = origin + (predictedOffset or velocity(record, feature) * prediction(record, feature, origin))
     end
     local distance = (origin - (localRoot and localRoot.Position or camera.CFrame.Position)).Magnitude
     if distance > Core.number(standalone and config.ESP.MaxDistance or style['Max Distance'], 5050, 0, 100000) then return nil end
     local projected = camera:WorldToViewportPoint(origin)
     local width, height = Core.number(style.Size.Width, 5, 0.1, 100), Core.number(style.Size.Height, 4.3, 0.1, 100)
     if standalone then width, height = 6, 6 end
-    local profile = not standalone and Core.profile(config['Gun Specifications'], weaponName, distance)
+    local profile, range
+    local physicalDistance = (record.root.Position - (localRoot and localRoot.Position or camera.CFrame.Position)).Magnitude
+    if not standalone and feature == 'Silent Aim' then
+        profile, range = Core.profile(config['Gun Specifications'], weaponName, physicalDistance)
+    end
     if profile and profile.BoxSize then
         width = Core.number(profile.BoxSize[1], width, 0.1, 100)
         height = Core.number(profile.BoxSize[2], height, 0.1, 100)
     end
+    record.BoxInfo = record.BoxInfo or {}
+    record.BoxInfo[feature] = {Width = width, Height = height, Distance = physicalDistance,
+        Weapon = weaponName, Range = profile and range or nil, Standalone = standalone == true}
     local focal = camera.ViewportSize.Y / (2 * math.tan(math.rad(camera.FieldOfView) / 2))
     local x, y, w, h = Core.projectedBox(projected.X, projected.Y, projected.Z, width, height, focal)
     if not x or x+w < 0 or y+h < 0 or x > camera.ViewportSize.X or y > camera.ViewportSize.Y then return nil end
     return Vector2.new(x, y), Vector2.new(w, h)
 end
 
-local function inFov(record, feature, part)
+local function inFov(record, feature, part, predictedPoint, basePoint)
     local settings = config[feature]
     if settings.Ignore then return true end
     if settings.Fov.Mode == '2d-Circle' then
-        local p, onScreen = camera:WorldToViewportPoint(part.Position)
+        local p, onScreen = camera:WorldToViewportPoint(predictedPoint or part.Position)
         if not onScreen or p.Z <= 0 then return false end
         return Core.fov(p.X - cursor.X, p.Y - cursor.Y, '2d-Circle', 0, 0,
             Core.number(settings.Fov['2d-Circle'].Size, 50, 1, 10000))
     end
-    local position, size = playerBox(record, feature)
+    local position, size = playerBox(record, feature, false, predictedPoint and (predictedPoint - (basePoint or part.Position)))
     return position ~= nil and cursor.X >= position.X and cursor.X <= position.X+size.X
         and cursor.Y >= position.Y and cursor.Y <= position.Y+size.Y
 end
@@ -423,7 +436,7 @@ local function nearest(feature, assignment, resolve)
     local choices = {}
     for _, record in pairs(state.Records) do
         local part = assignment and partFor(record, 'HumanoidRootPart') or targetPart(record, feature)
-        if part and (assignment or (valid(record, feature, part, true) and inFov(record, feature, part))) then
+        if part and (assignment or (valid(record, feature, part, true))) then
             local projected, onScreen = camera:WorldToViewportPoint(part.Position)
             if projected.Z > 0 and (onScreen or (not assignment and config[feature].Ignore)) then
                 local distance = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
@@ -458,7 +471,6 @@ local function aimPoint(record, feature, hitPart, hitPoint)
         return nil
     end
     if not valid(record, feature, part, hitPart ~= nil) then return reject('eligibility') end
-    if (feature ~= 'Triggerbot' or settings.Fov.Enabled) and not inFov(record, feature, part) then return reject('fov') end
     local point = hitPoint or part.Position
     local exact = closest.Enabled and closest.Raycast and state.CursorHit
     if hitPart then
@@ -532,6 +544,11 @@ local function aimPoint(record, feature, hitPart, hitPoint)
     evidence.GroundMinimumY, evidence.GroundedByGeometry = minY, supportedGround
     evidence.LeadAfterY, evidence.PredictedPoint = vectorData(lead), vectorData(point)
     evidence.VerticalAdjustment = lead.Y - evidence.LeadBeforeY.Y
+    record.finalLead = record.finalLead or {}
+    record.finalLead[feature] = {offset = lead, time = now()}
+    if not Core.finiteVector(point) then return reject('nonfinite') end
+    if (feature ~= 'Triggerbot' or settings.Fov.Enabled) and not inFov(record, feature, part, point,
+        Vector3.new(evidence.BasePoint.X, evidence.BasePoint.Y, evidence.BasePoint.Z)) then return reject('fov') end
     -- Final Silent settings never reject camera assistance or independent trigger candidates.
     local anti = feature == 'Silent Aim' and settings.AntiCurve
     if anti and anti.Enabled then
@@ -618,25 +635,12 @@ local function installHooks()
         end)
         if ok then original = result; hooks.Namecall = true; hooks.PacketTrace = true else warnOnce('namecall', tostring(result)) end
     end
-    if hooks.Namecall and type(hookmetamethod) == 'function' and type(checkcaller) == 'function' and not hooks.Index then
-        local original
-        local ok, result = pcall(function()
-            return hookmetamethod(game, '__index', wrap(function(object, key)
-                local active = hooks.Active
-                if active and active.Alive and object == active.Mouse and not checkcaller()
-                    and active.ClientPoint and os.clock() < active.ShotUntil then
-                    if key == 'Hit' then return CFrame.new(active.ClientPoint) end
-                    if key == 'Target' and active.AimPart then return active.AimPart end
-                end
-                return original(object, key)
-            end))
-        end)
-        if ok then original = result; hooks.Index = true else warnOnce('index', tostring(result)) end
-    end
+    -- Existing dispatchers from older executions stay pass-through because this
+    -- runtime never supplies ClientPoint. No new Mouse.Hit/Target hook is needed.
     hooks.Active = state
     state.Mouse = mouse
     state.Capabilities.RemoteHook = hooks.Namecall == true
-    state.Capabilities.ClientMouseHook = hooks.Index == true
+    state.Capabilities.ClientMouseHook = false
     state.Capabilities.PacketTrace = hooks.PacketTrace == true
 end
 
@@ -650,9 +654,8 @@ local function refreshPacket()
         else state.PacketPoint = point end
     end
     if shooting and state.ForcedPoint and now() < state.ForcedUntil then state.PacketPoint = state.ForcedPoint end
-    state.ClientPoint = config['Client Bullets'].Enabled and (point or state.Points['Aim Assist']) or nil
-    -- Keep the local-visual hook from turning camera-only assistance into silent aim.
-    if shooting and state.ClientPoint and not state.PacketPoint then state.PacketPoint = state.RawMousePoint end
+    state.ClientPoint = nil -- Disable legacy Mouse.Hit/Target substitution on replacement.
+    -- Local visuals never create or change a server redirection point.
 end
 
 local function findRemote()
@@ -817,7 +820,7 @@ local function activated(tool)
     updateAim()
     refreshPacket()
     if source == 'Manual' and enabled('Silent Aim') then sendAim(state.Points['Silent Aim']) end
-    state.LastShot = {time = now(), tool = tool, origin = muzzle(), point = state.ClientPoint}
+    state.LastShot = {time = now(), tool = tool, origin = muzzle(), point = config['Client Bullets'].Enabled and state.RawMousePoint or nil}
     beginMacro(source, tool)
 end
 
@@ -891,6 +894,7 @@ local function opponentShot(record)
     local settings = config.Misc.Prefire
     if not prefireActive() or not localRoot or not equipped or not record.root then return end
     if (record.root.Position - localRoot.Position).Magnitude > Core.number(settings.Range, 100, 0, 5000) then return end
+    state.LastPrefire = {DetectedAt = now(), Target = record.player.UserId, Status = 'queued'}
     if not pendingPrefire then
         pendingPrefire = {record = record, tool = equipped, due = now() + Core.number(settings.Delay, 0.25, 0, 10)}
     end
@@ -901,7 +905,7 @@ local function bindOpponent(record, character)
     record.character, record.root, record.humanoid, record.history = character, nil, nil, {}
     record.sampledVelocity, record.velocityAt = nil, nil
     record.bounds, record.boundsAt, record.visibilityAt = nil, nil, nil
-    record.pointState = {}
+    record.pointState, record.finalLead = {}, {}
     record.lastAmmo, record.ammoTool = nil, nil
     local function added(item)
         if item.Name == 'HumanoidRootPart' and item:IsA('BasePart') then record.root = item end
@@ -939,6 +943,34 @@ local function addPlayer(player)
     if player.Character then bindOpponent(record, player.Character) end
 end
 
+local function scaledCursorTarget(hit, onlyRecord)
+    local scale = Core.number(config.Triggerbot.Fov.Character, 1.2, 0.1, 3)
+    if scale == 1 or not cursorRay then return nil end
+    local best, bestPart, bestPoint, distance = nil, nil, nil, 5000
+    if hit and not onlyRecord then distance = (hit.Position - cursorRay.Origin).Magnitude end
+    for _, record in pairs(state.Records) do
+        if (not onlyRecord or record == onlyRecord) and record.character and record.root and valid(record, 'Triggerbot', record.root, true) then
+            for _, part in ipairs(record.character:GetChildren()) do
+                if bodyPart(part, record.character) then
+                    local origin = part.CFrame:PointToObjectSpace(cursorRay.Origin)
+                    local direction = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction) - origin
+                    local entry = Core.rayBox(origin, direction, part.Size * (scale * 0.5))
+                    if entry and entry < distance then
+                        local p = origin + direction * entry
+                        local half = part.Size * 0.5
+                        local point = part.CFrame:PointToWorldSpace(Vector3.new(
+                            math.clamp(p.X, -half.X, half.X), math.clamp(p.Y, -half.Y, half.Y), math.clamp(p.Z, -half.Z, half.Z)))
+                        if visible(point, record.character) then
+                            best, bestPart, bestPoint, distance = record, part, point, entry
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return best, bestPart, bestPoint
+end
+
 local function triggerCandidate()
     if not enabled('Triggerbot') or typing() or not equipped or not captureView() then return nil end
     state.CursorHit = cursorHit()
@@ -950,12 +982,13 @@ local function triggerCandidate()
         local hit = state.CursorHit
         local object, player = hit and hit.Instance or mouse.Target, nil
         if hit and object:IsA('BasePart') then hitPart, hitPoint = object, hit.Position end
-        if not object then return nil end
         while object and object ~= World do
             if object:IsA('Model') then player = Players:GetPlayerFromCharacter(object); if player then break end end
             object = object.Parent
         end
         record = player and state.Records[player]
+        local scale = Core.number(config.Triggerbot.Fov.Character, 1.2, 0.1, 3)
+        if scale < 1 or not record then record, hitPart, hitPoint = scaledCursorTarget(hit, scale < 1 and record or nil) end
     end
     if not record then return nil end
     if config.Triggerbot.TargetOnly and record.player ~= state.Targets['Silent Aim'] then return nil end
@@ -981,7 +1014,10 @@ local function automaticFire(time)
         elseif time >= shot.due then
             pendingPrefire = nil
             local aim = aimPoint(shot.record, 'Triggerbot')
-            if aim then fire('Prefire', shot.record, aim) end
+            local fired = aim and fire('Prefire', shot.record, aim)
+            state.LastPrefire = {DetectedAt = shot.due - Core.number(config.Misc.Prefire.Delay, 0.25, 0, 10),
+                Target = shot.record.player.UserId, Status = fired and 'input-started' or 'rejected',
+                Reason = not fired and (not aim and state.AimTrace.Triggerbot and state.AimTrace.Triggerbot.Reason or 'weapon/input readiness') or nil}
         end
     end
 end
@@ -1082,11 +1118,13 @@ local function drawPlayers(time)
         local ok, reason = pcall(function()
             local exists = record.root and record.humanoid and record.character and record.character.Parent
             local dead = exists and (record.humanoid.Health <= 0 or record.character:GetAttribute('Dead') == true)
+            local knocked = exists and isKnocked(record.character)
             for _, feature in ipairs({'Silent Aim', 'Aim Assist', 'Triggerbot'}) do
                 local style = config['2d-Box'][feature]
                 local standalone = feature == 'Silent Aim' and not style.Visible
                 local show = exists and enabled('ESP') and (style.Visible or standalone)
                 if dead and (config.ESP.DeadCheck or config.Checks.Dead[checkIndices[feature]]) then show = false end
+                if knocked and config.ESP.KnockedCheck then show = false end
                 if show then show = (record.root.Position - camera.CFrame.Position).Magnitude <= Core.number(config.ESP.MaxDistance, 5050, 0, 100000) end
                 if show and config.ESP.VisibleCheck then
                     if time >= (record.visibilityAt or 0) then
@@ -1205,17 +1243,17 @@ local function inspectBeam(beam)
     if not a or not b then return end
     local parentName = beam.Parent and beam.Parent.Name:lower() or ''
     local label = beam.Name:lower() .. parentName
-    if not (label:find('gun') or label:find('bullet') or label:find('tracer')) then return end
+    if not (beam.Name == 'gb' or label:find('gun') or label:find('bullet') or label:find('tracer')) then return end
     if (a.WorldPosition - shot.origin).Magnitude > 6 then return end
     local previousPosition, target = b.Position, shot.point
     b.WorldPosition = target
-    beamEdits[#beamEdits + 1] = {attachment = b, old = previousPosition, written = b.Position, expires = now() + 0.3}
+    beamEdits[#beamEdits + 1] = {beam = beam, attachment = b, old = previousPosition, written = b.Position}
 end
 
 local function restoreBeams(all)
     for i = #beamEdits, 1, -1 do
         local edit = beamEdits[i]
-        if all or now() >= edit.expires or not edit.attachment.Parent then
+        if all or not config['Client Bullets'].Enabled or not edit.beam.Parent or not edit.attachment.Parent then
             if edit.attachment.Parent and edit.attachment.Position == edit.written then edit.attachment.Position = edit.old end
             table.remove(beamEdits, i)
         end
@@ -1233,7 +1271,6 @@ local function start()
     installHooks()
     if not state.Remote then warnOnce('missing-remote', 'MAINEVENT is missing; firing redirection waits for it to appear.') end
     if not hooks.Namecall then warnOnce('no-hook', 'Namecall hooks unavailable: using Looten-style activation updates; Anti-AimViewer is unavailable.') end
-    if not hooks.Index then warnOnce('no-index', 'Mouse hooks unavailable: local bullet redirection is limited to recognized Beams.') end
     connect(ReplicatedStorage.ChildAdded, function(child) if child.Name == 'MAINEVENT' or child.Name == 'MainEvent' then findRemote() end end)
     connect(ReplicatedStorage.ChildRemoved, function(child) if child == state.Remote then findRemote() end end)
     connect(localPlayer.CharacterAdded, bindCharacter)

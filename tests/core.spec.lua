@@ -90,3 +90,8 @@ for name, value in pairs(defaults['Gun Specifications']) do
     end
 end
 print('Core: damping, FOV, inputs, weapon ranges, state retention, delays and velocity history passed')
+
+assert(Core.rayBox({X=0,Y=0,Z=5},{X=0,Y=0,Z=-1},{X=1,Y=1,Z=1})==4)
+assert(Core.rayBox({X=1.1,Y=0,Z=5},{X=0,Y=0,Z=-1},{X=1,Y=1,Z=1})==nil)
+assert(Core.rayBox({X=1.1,Y=0,Z=5},{X=0,Y=0,Z=-1},{X=1.2,Y=1.2,Z=1.2})==3.8)
+assert(Core.rayBox({X=0,Y=0,Z=5},{X=0,Y=0,Z=1},{X=1,Y=1,Z=1})==nil)

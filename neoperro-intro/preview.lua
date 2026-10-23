@@ -123,12 +123,6 @@ local function run()
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     }, playerGui)
 
-    local backdrop = make('Frame', {
-        Name = 'NightBackdrop', Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.fromRGB(9, 4, 12), BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-    }, screen)
-
     local letterGroup = make('Frame', {
         Name = 'LetterGroup', AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
@@ -137,10 +131,10 @@ local function run()
 
     local logoContainer = make('Frame', {
         Name = 'Swirl', AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.5, 0.5),
-        BackgroundTransparency = 1, Rotation = 0,
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.36, 0.36),
+        BackgroundTransparency = 1, Rotation = -180,
     }, letterGroup)
-    local logoScale = make('UIScale', {Scale = 0.86}, logoContainer)
+    local logoScale = make('UIScale', {Scale = 0.02}, logoContainer)
 
     local logo = make('ImageLabel', {
         Name = 'Monogram', AnchorPoint = Vector2.new(0.5, 0.5),
@@ -231,7 +225,6 @@ local function run()
 
     local enter = math.min(1.05, duration * 0.4)
     local leave = math.min(0.6, duration * 0.25)
-    tween(backdrop, enter, {BackgroundTransparency = 0.4})
     tween(blur, enter, {Size = 18})
     tween(logo, 0.55, {ImageTransparency = 0})
     tween(fallback, 0.3, {TextTransparency = 0})
@@ -247,7 +240,6 @@ local function run()
     if not alive() then return end
 
     tween(soundGroup, blurTail, {Volume = 0})
-    tween(backdrop, blurTail, {BackgroundTransparency = 1})
     local clearBlur = tween(blur, blurTail, {Size = 0})
     clearBlur.Completed:Wait()
 end

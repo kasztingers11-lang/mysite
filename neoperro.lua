@@ -38,8 +38,9 @@ getgenv()['neoperro'] = {
         ['Prediction'] = {
             ['Enabled'] = true;
             ['Auto'] = true; -- Measured latency estimate; ignores Value. Not a hit guarantee.
-            ['Value'] = 0.128; -- Manual lead in seconds, used only when Auto = false.
+            ['Value'] = 0.128; -- Manual lead in seconds; ignored when Auto = true.
         };
+
         ['GroundShotCheck'] = true; -- Bound downward prediction using actual ground/rig geometry.
         ['Mode'] = 'Auto'; -- Auto = nearest eligible to cursor; Target = select with a keybind.
         ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
@@ -51,7 +52,7 @@ getgenv()['neoperro'] = {
                 ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
                 ['Method'] = 'Part'; -- Part = nearest part center; Point = nearest point in that part.
                 ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
-                ['Sharpness'] = 0.65; -- Point response: 1 = immediate, 0.01 = slow.
+                ['Sharpness'] = 0.7; -- Point response: 1 = immediate, 0.01 = slow.
                 ['Reduce'] = {
                     ['Center'] = 0.7; -- Keep this far from Y edges: 0 = edges, 1 = center.
                     ['All'] = 0.7; -- Same reduction on all axes when Axis is All.
@@ -178,6 +179,7 @@ getgenv()['neoperro'] = {
             ['Auto'] = true; -- Independent from Silent Aim and Aim Assist.
             ['Value'] = 0.121; -- Manual seconds; ignored in Auto.
         };
+
         ['TargetOnly'] = false; -- When true, require the Silent Aim target.
 
         ['Delay'] = 0.1; -- Button hold duration in seconds, as in Looten; not a pre-shot wait.
@@ -195,10 +197,18 @@ getgenv()['neoperro'] = {
             ['Holding'] = true;
             ['Keybind'] = {'Q', 'MouseButton2', 'Mouse'}; -- Hold RMB; change Mouse to Keyboard for Q.
         };
+
         ['Fov'] = {
-            ['Enabled'] = false; -- False = cursor must hit the actual character. True = use a selection shape.
+            ['Enabled'] = false; -- False = character bounds. True = use a selection shape.
+            ['Character'] = 1.2; -- FOV off: 1 = actual hit; 1.2 = 20% larger, 0.8 = 20% smaller. Local selection only (0.1-3).
+
             ['Mode'] = '2d-Box'; -- Player-centered box or crosshair-centered circle.
-            ['2d-Circle'] = {['Visible'] = false; ['Size'] = 50; ['Color'] = {255, 255, 255}};
+
+            ['2d-Circle'] = {
+                ['Visible'] = false;
+                ['Size'] = 50; -- Radius in pixels.
+                ['Color'] = {255, 255, 255}; -- RGB.
+            };
         };
     };
 
@@ -207,6 +217,7 @@ getgenv()['neoperro'] = {
         ['Enabled'] = true;
         ['VisibleCheck'] = false; -- Hide ESP for obstructed players.
         ['Names'] = true; -- Also respects each box's Name setting.
+        ['KnockedCheck'] = true; -- Hide boxes and names while knocked.
         ['DeadCheck'] = true; -- Hide dead bodies; an enabled Silent Aim Dead check also hides them.
         ['MaxDistance'] = 5050; -- Maximum ESP distance in studs.
 
@@ -224,7 +235,7 @@ getgenv()['neoperro'] = {
     ['2d-Box'] = {
         ['Silent Aim'] = {
             ['Visible'] = true;
-            ['Predicted Position'] = false;
+            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
             ['Name'] = {true, 'DisplayName'}; -- DisplayName / Name / UserId.
             ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}}; -- Foreground, outline.
             ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
@@ -234,7 +245,7 @@ getgenv()['neoperro'] = {
         };
         ['Aim Assist'] = {
             ['Visible'] = false;
-            ['Predicted Position'] = false;
+            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
             ['Name'] = {false, 'DisplayName'};
             ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
             ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
@@ -244,7 +255,7 @@ getgenv()['neoperro'] = {
         };
         ['Triggerbot'] = {
             ['Visible'] = false;
-            ['Predicted Position'] = false;
+            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
             ['Name'] = {false, 'DisplayName'};
             ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
             ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
@@ -254,7 +265,7 @@ getgenv()['neoperro'] = {
         };
     };
 
-    -- Weapon profiles change box dimensions only; each feature owns its Prediction settings.
+    -- Weapon profiles override Silent Aim box dimensions only; Aim Assist/TB stay independent.
     -- BoxSize = projected target-box width/height in studs, not cursor FOV pixels.
     -- Unlisted weapons and targets beyond Far use the general settings.
     ['Gun Specifications'] = {
@@ -267,9 +278,9 @@ getgenv()['neoperro'] = {
         };
 
         ['Revolver'] = {
-            ['Close'] = {['BoxSize'] = {5, 6}};
-            ['Medium'] = {['BoxSize'] = {5, 6}};
-            ['Far'] = {['BoxSize'] = {4, 5}};
+            ['Close'] = {['BoxSize'] = {5.1, 5.1}};
+            ['Medium'] = {['BoxSize'] = {5.5, 5.5}};
+            ['Far'] = {['BoxSize'] = {5, 4.5}};
         };
 
         ['Double-Barrel SG'] = {
@@ -298,9 +309,9 @@ getgenv()['neoperro'] = {
     };
 
     -- Local tracer visuals. Weapon handling stays inside the script.
-    -- Uses the selected aim point when available, otherwise your normal mouse aim.
+    -- Draw recognized local tracers toward your mouse; server aim stays independent.
     ['Client Bullets'] = {
-        ['Enabled'] = true; -- Requires a valid selected target internally; no separate keybind.
+        ['Enabled'] = true; -- Local visuals only; no separate keybind.
     };
 
     -- Extra controls. No intro settings are exposed here.

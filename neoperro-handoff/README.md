@@ -1,6 +1,6 @@
 # neoperro - current repair handoff
 
-Current runtime: **1.3.1**, branch **repair/neoperro-evidence**. Main is older.
+Current runtime: **1.3.2**, branch **repair/neoperro-evidence**. Main is older.
 Use the repository-root `neoperro.lua` (commented table plus repair-branch loader)
 or `neoperro-full.lua` (full bundle). Preserve local edits before switching branches.
 
@@ -27,3 +27,5 @@ certify runtime behavior or update the historical ZIP. Repository consolidation
 and refreshing/removing the historical snapshot remain pending.
 
 Never store executor credentials. Keep supported game IDs internal to runtime.
+
+Latest feedback repairs and evidence: [session 2026-10-23](docs/SESSION-2026-10-23.md).

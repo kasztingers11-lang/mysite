@@ -236,7 +236,7 @@ local function anyBoxVisible()
     return false
 end
 
-local cfg=Core.copy(Defaults);cfg.ESP.Toggle.Keybind={'P','MouseButton2','Keyboard'}
+local cfg=Core.copy(Defaults);cfg['Silent Aim'].Prediction.Enabled=false;cfg.ESP.Toggle.Keybind={'P','MouseButton2','Keyboard'}
 local first=loadRuntime(cfg);step(0.04)
 assert(first.Targets['Silent Aim']==enemy,'Auto needs no selection input')
 local baseline=activeConnections()
@@ -257,6 +257,18 @@ remote:FireServer('MOUSE',V.new(1,2,3),'tail')
 assert(packets[#packets][3]==V.new(1,2,3),'Anti-AimViewer leaves idle updates alone')
 key('MouseButton1',true);remote:FireServer('MOUSE',V.new(1,2,3));key('MouseButton1',false)
 assert(packets[#packets][3]==second.Points['Silent Aim'],'Shot packets use the fresh point')
+tool.Activated:Fire()
+assert(second.ClientPoint==nil and second.LastShot.point==mouse.Hit.Position,'Local visual uses raw mouse without an index spoof')
+assert(not hooks.__index,'Local visuals do not install a Mouse.Target/Hit hook')
+local ownA=obj('Attachment','Start');ownA.WorldPosition=second.LastShot.origin
+local ownB=obj('Attachment','End');ownB.Position=V.new();ownB.WorldPosition=V.new(999,0,0)
+local localBeam=obj('Beam','gb');localBeam.Attachment0=ownA;localBeam.Attachment1=ownB;localBeam.Parent=World
+assert(ownB.WorldPosition==mouse.Hit.Position,'Observed gb tracer uses raw cursor endpoint')
+local farA=obj('Attachment','Start');farA.WorldPosition=V.new(100,100,100)
+local farB=obj('Attachment','End');farB.Position=V.new();farB.WorldPosition=V.new(999,0,0)
+local foreignBeam=obj('Beam','gb');foreignBeam.Attachment0=farA;foreignBeam.Attachment1=farB;foreignBeam.Parent=World
+assert(farB.WorldPosition==V.new(999,0,0),'Another muzzle is not rewritten')
+
 
 -- Box selection is centered on a player and sizes are world units; circle stays on the cursor.
 moveEnemy(1,0,-50);step(0.04)
@@ -301,6 +313,8 @@ second.Config.Whitelist.Enabled=false;step(0.04)
 assert(#second.Whitelist==0)
 key('R',true);key('R',false);assert(#second.Whitelist==0,'Assignment disabled with whitelist')
 for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then assert(d.Color[2]==255,'Disabled whitelist removes marker colors')end end
+enemyChar.props['attr:Knocked']=true;step(0.04);assert(not anyBoxVisible(),'Knocked check hides boxes and labels')
+enemyChar.props['attr:Knocked']=false;step(0.04);assert(anyBoxVisible(),'Recovery restores eligible ESP')
 enemyHum.Health=0;step(0.04);assert(not anyBoxVisible(),'Dead check hides boxes and labels')
 enemyHum.Health=100;enemyTorso.Size=V.new(2,2,1);second:Destroy('test');clearInput()
 
@@ -364,9 +378,29 @@ do
     rt:Destroy('test');stale:Destroy();clearInput()
 end
 
+-- Expanded body tolerance does not resize the target and stops outside its margin.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
+    local rt=loadRuntime(cfg)
+    moveEnemy(1.1,0,-50);rayHit=nil
+    local size=enemyTorso.Size
+    key('MouseButton2',true);local prior=shots;step(.04)
+    assert(shots==prior+1 and enemyTorso.Size==size,'1.2x local tolerance accepts near edge without resizing')
+    moveEnemy(2,0,-50);step(.04)
+    assert(not rt.MouseOwned,'Leaving expanded body releases input')
+    rt.Config.Triggerbot.Fov.Character=.8
+    moveEnemy(.9,0,-50);rayHit={Instance=enemyTorso,Position=V.new(0,0,-49.5)};step(.15)
+    assert(not rt.MouseOwned,'A real edge hit outside shrunken bounds is rejected')
+    moveEnemy(.5,0,-50);step(.04)
+    assert(rt.MouseOwned,'A ray inside shrunken bounds remains eligible')
+
+    key('MouseButton2',false);rt:Destroy('test');clearInput();moveEnemy(0,0,-50)
+end
+
 -- Native trigger input: immediate press, configured hold, cancellation, optional FOV.
 ammo.Value=20
 local trigger=loadRuntime(Defaults)
+trigger.Config.Triggerbot.Fov.Character=1 -- Exact-ray legacy mode; expanded mode is checked separately.
 rayHit={Instance=enemyTorso,Position=enemyTorso.Position}
 local before=shots
 key('MouseButton2',true);step(0.04)
@@ -458,7 +492,7 @@ assert(not macroRuntime.Alive and activeConnections()==0 and renderCount()==0)
 clearInput()
 
 -- Prediction and the barrel-alignment filters.
-local modes=Core.copy(Defaults);modes['Silent Aim'].EndMath.VelocityHistory=false
+local modes=Core.copy(Defaults);modes['Silent Aim'].Ignore=true;modes['Silent Aim'].EndMath.VelocityHistory=false
 modes['Silent Aim'].Prediction.Auto=false
 modes['Silent Aim'].Target.Closest.Enabled=false
 modes['Y-Axis'].Enabled=true;modes['Y-Axis'].Mode='Custom';modes['Y-Axis'].JumpOffset=2
@@ -483,6 +517,37 @@ filtered.Config.Whitelist.Enabled=true;filtered.WhiteMode='Friend';filtered.Whit
 assert(filtered.Targets['Silent Aim']==nil)
 filtered.WhiteMode='Target';step(0.04);assert(filtered.Targets['Silent Aim']==enemy)
 filtered:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
+
+-- Circle gating uses the final predicted point, including leads entering the circle.
+do
+    local cfg=Core.copy(Defaults)
+    cfg['Silent Aim'].Target.Closest.Enabled=false
+    cfg['Silent Aim'].EndMath.VelocityHistory=false
+    cfg['Silent Aim'].Prediction.Auto=false;cfg['Silent Aim'].Prediction.Value=.1
+    cfg['Silent Aim'].Fov.Mode='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Size=10
+    moveEnemy(2,0,-50);enemyRoot.AssemblyLinearVelocity=V.new(-20,0,0)
+    local rt=loadRuntime(cfg);step(.04)
+    assert(rt.Targets['Silent Aim']==enemy,'A predicted point entering FOV remains eligible')
+    enemyRoot.AssemblyLinearVelocity=V.new(20,0,0);step(.04)
+    assert(rt.Targets['Silent Aim']==nil,'A predicted point outside FOV is rejected')
+    rt:Destroy('test');moveEnemy(0,0,-50);enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- Gun ranges use physical distance and only override Silent box dimensions.
+do
+    local cfg=Core.copy(Defaults);cfg['Gun Specifications'].Enabled=true
+    cfg['Gun Specifications'].Ranges={Close=20,Medium=60,Far=100}
+    cfg['Gun Specifications'].Revolver={Close={BoxSize={5.1,5.1}},Medium={BoxSize={5.5,5.5}},Far={BoxSize={5,4.5}}}
+    cfg['2d-Box']['Aim Assist'].Visible=true
+    local rt=loadRuntime(cfg)
+    for _, case in ipairs({{10,'Close',5.1,5.1},{40,'Medium',5.5,5.5},{80,'Far',5,4.5}}) do
+        moveEnemy(0,0,-case[1]);step(.04)
+        local info=rt:Diagnose().Boxes[tostring(enemy.UserId)]
+        assert(info['Silent Aim'].Range==case[2] and info['Silent Aim'].Width==case[3] and info['Silent Aim'].Height==case[4])
+        assert(info['Aim Assist'].Width==5 and info['Aim Assist'].Height==4.3,'Weapon box must not override Assist')
+    end
+    rt:Destroy('test');moveEnemy(0,0,-50)
+end
 
 -- Auto continues to the next candidate after final prediction/filter rejection.
 do

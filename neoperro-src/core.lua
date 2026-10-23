@@ -95,7 +95,24 @@ function Core.profile(spec, weapon, distance)
     if distance <= close then key = 'Close'
     elseif distance <= medium then key = 'Medium'
     elseif distance <= far then key = 'Far' end
-    return key and spec[weapon][key] or nil
+    return key and spec[weapon][key] or nil, key
+end
+
+-- Entry distance into an oriented box after transforming the ray to its local frame.
+function Core.rayBox(origin, direction, half)
+    local near, far = 0, math.huge
+    for _, axis in ipairs({'X', 'Y', 'Z'}) do
+        local o, d, h = origin[axis], direction[axis], half[axis]
+        if math.abs(d) < 1e-8 then
+            if math.abs(o) > h then return nil end
+        else
+            local a, b = (-h - o) / d, (h - o) / d
+            if a > b then a, b = b, a end
+            near, far = math.max(near, a), math.min(far, b)
+            if near > far then return nil end
+        end
+    end
+    return near
 end
 
 function Core.input(binding, key, mouse)

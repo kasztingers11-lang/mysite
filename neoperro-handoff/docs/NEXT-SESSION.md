@@ -1,3 +1,14 @@
+# Latest priority: user-feedback repairs 1.3.2
+
+Read [SESSION-2026-10-23](SESSION-2026-10-23.md) first. It supersedes older status below.
+User confirmed shot-time aim-view snap is expected. Character scaling now lives at
+Triggerbot.Fov.Character (default 1.2; 1 actual; smaller/larger supported). SmartDelay
+awaits user decision, and Macro Check awaits demonstration. Continue focused live
+Auto Y, Character edge/occlusion tests and the user's specific Prefire reproduction
+before the older backlog. Current source/bundles are root files on repair/neoperro-evidence.
+
+---
+
 # Continue neoperro 1.3.1
 
 Use branch `repair/neoperro-evidence`; main and the portable 1.2.0 snapshot/ZIP are

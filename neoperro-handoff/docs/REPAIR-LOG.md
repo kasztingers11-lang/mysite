@@ -1,3 +1,12 @@
+# 1.3.2 feedback repair
+
+See [2026-10-23 evidence and changes](SESSION-2026-10-23.md). Two-client local tracer
+separation and one Prefire response were observed; airborne follow-up lacked focus.
+Expanded/shrunken trigger bounds, predicted FOV, gun-box separation and knocked ESP
+pass mocks. Full details and limitations are in that record. Older history follows.
+
+---
+
 # Current status: 1.3.1 (2026-10-22)
 
 See [session evidence](SESSION-2026-10-22.md) for the subsequent local REAL work and

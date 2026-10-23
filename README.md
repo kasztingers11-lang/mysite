@@ -1,4 +1,4 @@
-# neoperro 1.3.1 — testing build
+# neoperro 1.3.2 — testing build
 
 Current branch: `repair/neoperro-evidence`. Main is older.
 
@@ -21,7 +21,8 @@ download once and reuse the local cache. No executor credentials belong in this 
 | R | Assign whitelist entry when enabled; also overlaps the game's reload key |
 | E | Panic/unload |
 
-Triggerbot FOV=false requires the cursor ray to hit the character. Prediction has
+Triggerbot FOV=false uses Fov.Character: 1 = actual hit, 1.2 = larger body bounds,
+0.8 = smaller bounds. It never resizes characters. Prediction has
 independent Enabled/Auto/Value settings for each feature; Auto ignores Value.
 Auto Y ignores JumpOffset; Custom uses it separately. Feature Enabled=false is a
 hard gate even if its key toggle remains armed. Intro plays once per client session.
@@ -33,7 +34,7 @@ hard gate even if its key toggle remains armed. Intro plays once per client sess
   0.250 shot without observed damage. This is not a general hit-rate claim.
 - Triggerbot held-RMB/FOV-off produced ammo consumption and damage with other aim
   features disabled; released input afterward.
-- Cat intro rendered with the smaller logo, dark backdrop and blur. Engine reported
+- Cat intro rendered with the smaller logo and blur; the latest preview has no tinted backdrop. Engine reported
   the original synthesized meow loaded and playing for 2.1 seconds.
 
 See [session evidence](neoperro-handoff/docs/SESSION-2026-10-22.md) for exact limits.
@@ -56,3 +57,5 @@ python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua
 Tests require a Lua 5.4 shared library or Python Lupa's lua54 backend. Mock tests do
 not prove Roblox compatibility. The old portable handoff snapshot/ZIP is still
 1.2.0; use current repository-root files. Repository consolidation is pending.
+
+Latest feedback repairs and evidence: [session 2026-10-23](neoperro-handoff/docs/SESSION-2026-10-23.md).
