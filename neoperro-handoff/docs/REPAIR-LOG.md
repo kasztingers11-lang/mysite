@@ -1,3 +1,15 @@
+# 1.3.6 prediction/Closest follow-up
+
+Always-on bounded speed response in every prediction path, without a switch;
+manual Value remains a baseline. Silent has a permanent high-speed horizontal
+lead guard. Resolver validates historical forecasts against arriving positions;
+Auto no longer double-counts sampler age at activation. Closest Point uses exact
+ray/box geometry and honors real accessory surfaces in Raycast mode. See the
+session log for replay metrics, live direction/ground counts, mixed shot results
+and limits. Full audit, table organization and existing visual polish follow.
+
+---
+
 # 1.3.5 Character repair
 
 Fixed native-HB/body mismatch in FOV-off Character scaling after reproducing it

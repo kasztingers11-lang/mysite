@@ -1,4 +1,4 @@
-# neoperro 1.3.5 — testing build
+# neoperro 1.3.6 — testing build
 
 Current branch: `repair/neoperro-evidence`. Main is older.
 
@@ -74,3 +74,15 @@ exact native hits at scale 1. Live cursor sweeps now select outside native bound
 at 1.3 and reject those points at 1; shrinking rejects native edge hits. These were
 selection tests with firing disabled. Client tracer and Macro Abuse regressions
 still pass unchanged, as does the confirmed aim-restoration path.
+
+1.3.6: prediction always scales horizontal time gently with movement speed; manual
+Value remains the baseline and Auto ignores it. No Dynamic toggle exists. Silent
+also permanently bounds high-speed horizontal extrapolation. Y timing stays
+independent. The resolver chooses history/raw velocity using earlier forecast
+errors, and Auto no longer adds sampler age to freshly read shot positions.
+Closest Point compares allowed geometry across parts; Raycast honors the first
+character/accessory surface without applying Reduce/Sharpness before prediction.
+
+Focused airborne captures verified direction/ground guards, but shots still had
+mixed damage results. These changes do not establish flawless prediction or
+high-ping/macro acceptance. See the latest session section for exact observations.

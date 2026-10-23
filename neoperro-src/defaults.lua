@@ -29,7 +29,7 @@ return {
         ['Prediction'] = {
             ['Enabled'] = true;
             ['Auto'] = true; -- Measured latency estimate; ignores Value. Not a hit guarantee.
-            ['Value'] = 0.128; -- Manual lead in seconds; ignored when Auto = true.
+            ['Value'] = 0.128; -- Manual baseline seconds; ignored in Auto. Both modes always adjust XZ time by speed (0.75-1.25x); Y stays separate.
         };
 
         ['GroundShotCheck'] = true; -- Bound downward prediction using actual ground/rig geometry.
@@ -41,7 +41,7 @@ return {
             ['Closest'] = {
                 ['Enabled'] = true; -- Choose the body part nearest your crosshair.
                 ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
-                ['Method'] = 'Part'; -- Part = nearest part center; Point = nearest point in that part.
+                ['Method'] = 'Part'; -- Part = nearest center; Point = nearest allowed point to the cursor ray, across body parts.
                 ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
                 ['Sharpness'] = 0.7; -- Point response: 1 = immediate, 0.01 = slow.
                 ['Reduce'] = {
@@ -78,7 +78,7 @@ return {
 
         -- Distance filters; disabled by default. Units are explicit interpretations of the screenshots.
         ['EndMath'] = {
-            ['VelocityHistory'] = true; -- Fit recent positions; teleport jumps reset history.
+            ['VelocityHistory'] = true; -- Compare history/raw forecasts against received positions; teleport jumps reset history.
             ['WallCheck'] = true; -- Silent-only final camera/muzzle visibility checks.
             ['Visualizer'] = false; -- Display the final Silent Aim point.
         };
@@ -101,7 +101,7 @@ return {
         ['Prediction'] = {
             ['Enabled'] = true;
             ['Auto'] = true; -- Same measured latency model, independently enabled.
-            ['Value'] = 0.121; -- Manual seconds; ignored in Auto.
+            ['Value'] = 0.121; -- Manual baseline seconds; ignored in Auto. Always speed-aware in XZ (0.75-1.25x); Y time stays separate.
         };
         ['Mode'] = 'Auto'; -- Auto searches while its key is held; Target uses a selected player.
         ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
@@ -114,7 +114,7 @@ return {
             ['Closest'] = {
                 ['Enabled'] = true; -- Choose the body part nearest your crosshair.
                 ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
-                ['Method'] = 'Part'; -- Part = nearest part center; Point = nearest point in that part.
+                ['Method'] = 'Part'; -- Part = nearest center; Point = nearest allowed point to the cursor ray, across body parts.
                 ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
                 ['Sharpness'] = 0.65; -- Point response: 1 = immediate, 0.01 = slow.
                 ['Reduce'] = {
@@ -168,7 +168,7 @@ return {
         ['Prediction'] = {
             ['Enabled'] = true;
             ['Auto'] = true; -- Independent from Silent Aim and Aim Assist.
-            ['Value'] = 0.121; -- Manual seconds; ignored in Auto.
+            ['Value'] = 0.121; -- Manual baseline seconds; ignored in Auto. Always speed-aware in XZ (0.75-1.25x); Y time stays separate.
         };
 
         ['TargetOnly'] = false; -- When true, require the Silent Aim target.

@@ -408,6 +408,36 @@ do
     rt:Destroy('test')
 end
 
+-- Point selection evaluates allowed part geometry; exact native HB hits bypass smoothing.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.EndMath.WallCheck=false
+    s.Target.Closest.Raycast=false;s.Target.Closest.Method='Part';s.Target.Closest.Sharpness=1
+    s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0
+    moveEnemy(2,0,-50)
+    local leg=obj('Part','LeftUpperLeg',enemyChar);leg.Size=V.new(2,8,1);leg.Position=V.new(1.5,4,-50);leg.CFrame=CF.new(leg.Position)
+    local rt=loadRuntime(cfg);step(.04)
+    assert(rt.AimTrace['Silent Aim'].Part=='UpperTorso','Part retains nearest-center semantics')
+    rt.Config['Silent Aim'].Target.Closest.Method='Point';step(.04)
+    assert(rt.AimTrace['Silent Aim'].Part=='LeftUpperLeg','Point compares nearest allowed points, not only part centers')
+    local p=rt.AimTrace['Silent Aim'].BasePoint
+    assert(p.X>=.5 and p.X<=2.5 and p.Y>=0 and p.Y<=8,'The selected point remains in the real part')
+    local hb=obj('Part','HB',enemyChar);hb.CanQuery=true
+    local hit=V.new(1.8,.7,-49.5);rayHit={Instance=hb,Position=hit}
+    local closest=rt.Config['Silent Aim'].Target.Closest
+    closest.Raycast=true;closest.Reduce.All=1;closest.Sharpness=.01;step(.04)
+    assert(rt.AimTrace['Silent Aim'].SurfacePart=='HB' and rt.Points['Silent Aim']==hit,'Native HB exact surface bypasses Reduce and Sharpness')
+    local accessory=obj('Accessory','Accessory',enemyChar);local accessoryHandle=obj('Part','Handle',accessory)
+    local accessoryHit=V.new(1.7,.8,-49)
+    rayHit={Instance=accessoryHandle,Position=accessoryHit};step(.04)
+    assert(rt.Points['Silent Aim']==accessoryHit and rt.AimTrace['Silent Aim'].PointSource=='cursor-surface','The actual first accessory surface must not fall back to reduced limb points')
+    assert(rt.AimTrace['Silent Aim'].Part~='Handle','Accessory size cannot replace body-part vertical geometry')
+    accessory:Destroy();rayHit={Instance=hb,Position=hit}
+    closest.Raycast=false;step(.04)
+    assert(rt.Points['Silent Aim']~=hit,'Leaving raycast clears its smoothing state')
+    rt:Destroy('test');leg:Destroy();hb:Destroy();rayHit=nil;moveEnemy(0,0,-50)
+end
+
 -- Expanded body tolerance does not resize the target and stops outside its margin.
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
@@ -569,7 +599,11 @@ filtered.Config['Silent Aim'].AntiCurve.endmath.Radius=1
 enemyRoot.AssemblyLinearVelocity=V.new(100,0,0);step(0.04)
 assert(filtered.Points['Silent Aim']==nil,'Endmath rejects outside pixel radius instead of clamping prediction')
 filtered.Config['Silent Aim'].AntiCurve.endmath.Radius=300;step(0.04)
-assert(math.abs(filtered.Points['Silent Aim'].X-12.8)<1e-6,'Accepted lead is not clamped')
+local acceptedLead=filtered.Points['Silent Aim'].X
+assert(acceptedLead>0 and filtered.AimTrace['Silent Aim'].FastMotionLimited,'Fast motion uses the permanent horizontal lead guard')
+filtered.Config['Silent Aim'].AntiCurve.Enabled=false;step(.04)
+assert(math.abs(filtered.Points['Silent Aim'].X-acceptedLead)<1e-6,'AntiCurve never clamps the final guarded prediction')
+filtered.Config['Silent Aim'].AntiCurve.Enabled=true
 filtered.Config['Silent Aim'].AntiCurve.Mode='3d-angles';step(0.04)
 assert(filtered.Points['Silent Aim']==nil,'Reject world-space mouse-to-target distance')
 filtered.Config['Silent Aim'].AntiCurve.Enabled=false
@@ -591,6 +625,20 @@ do
     enemyRoot.AssemblyLinearVelocity=V.new(20,0,0);step(.04)
     assert(rt.Targets['Silent Aim']==nil,'A predicted point outside FOV is rejected')
     rt:Destroy('test');moveEnemy(0,0,-50);enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- Activation reads a live point, not an old history point needing extra age.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+    cfg['Silent Aim'].EndMath.VelocityHistory=false;cfg['Silent Aim'].Prediction.Auto=true
+    enemyRoot.AssemblyLinearVelocity=V.new(22,0,0)
+    local rt=loadRuntime(cfg);rt.Network.RTT=.06;rt.Network.DataRTT=.06;rt.Network.NextSample=clock+10;step(.04)
+    local baseline=rt.AimTrace['Silent Aim'].LeadTime
+    clock=clock+.0125;tool.Activated:Fire()
+    assert(rt.AimTrace['Silent Aim'].HistoryAge>.0124)
+    assert(math.abs(rt.AimTrace['Silent Aim'].LeadTime-baseline)<1e-8,'Fresh activation points cannot add history sampler age to Auto again')
+    rt:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
 end
 
 -- Gun ranges use physical distance and only override Silent box dimensions.
@@ -663,9 +711,9 @@ do
     rt.Config['Silent Aim'].Prediction.Enabled=true;rt.Config['Silent Aim'].Prediction.Auto=true
     rt.Config['Silent Aim'].Prediction.Value=1
     rt.Network.RTT=.15;rt.Network.DataRTT=.2;rt.Network.NextSample=clock+10;step(.04)
-    assert(math.abs(rt.Points['Silent Aim'].X-2)<1e-6,'Auto uses measured RTT, not manual Value or summed ping')
+    assert(math.abs(rt.Points['Silent Aim'].X-1.5)<1e-6,'Auto uses measured RTT and bounded horizontal speed scaling, not Value or summed ping')
     rt.Config['Silent Aim'].Prediction.Value=0;step(.04)
-    assert(math.abs(rt.Points['Silent Aim'].X-2)<1e-6)
+    assert(math.abs(rt.Points['Silent Aim'].X-1.5)<1e-6)
     rt:StartTrace(1,8);tool.Activated:Fire();ammo.Value=5;step(.04)
     assert(rt.Stats.AmmoDrops==1 and rt.LastSend.Returned and rt.Stats.AimSendReturns>0,'AMMO is observed and send return is separately counted')
     assert(rt.LastSend.Result:find('unverified'))

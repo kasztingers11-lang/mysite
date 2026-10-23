@@ -48,6 +48,16 @@ local mt = {
     end,
 }
 function V.new(x,y,z) return setmetatable({X=x,Y=y,Z=z}, mt) end
+do
+    local p=Core.closestRayBox(V.new(0,0,10),V.new(0,0,-1),V.new(1,1,1),V.new)
+    near(p.X,0);near(p.Y,0);near(p.Z,1)
+    p=Core.closestRayBox(V.new(4,3,10),V.new(0,0,-1),V.new(1,1,1),V.new)
+    near(p.X,1);near(p.Y,1)
+    p=Core.closestRayBox(V.new(3,2,10),V.new(-.2,0,-1),V.new(0,1,0),V.new)
+    near(p.X,0);near(p.Y,1);near(p.Z,0)
+    p=Core.closestRayBox(V.new(3,2,10),V.new(0,0,1),V.new(1,1,1),V.new)
+    near(p.X,1);near(p.Y,1);near(p.Z,1)
+end
 local history, zero = {}, V.new(0,0,0)
 for i = 0, 7 do Core.sample(history, V.new(i * 16 / 30, 0, 0), i / 30) end
 near(Core.velocity(history, zero, zero).X, 16)
@@ -75,6 +85,40 @@ near(Core.predictionTime({Enabled=true,Auto=true,Value=0},.15,.2,.01),.21)
 near(Core.predictionTime({Enabled=true,Auto=true,Value=1},nil,nil,0),.1)
 near(Core.predictionTime({Enabled=true,Auto=true,Value=0},.2,.2,0,100,1000),.3)
 near(Core.predictionTime({Enabled=true,Auto=true,Value=0},1,1,.1),.35)
+do
+    local cfg={Enabled=true,Auto=false,Value=.121}
+    near(Core.predictionTime(cfg,0,0,0,0,nil,22,22),.121)
+    local slow=Core.predictionTime(cfg,0,0,0,0,nil,5,22)
+    local fast=Core.predictionTime(cfg,0,0,0,0,nil,100,22)
+    assert(slow<.121 and slow>=.121*.75 and fast>.121 and fast<=.121*1.25)
+    assert(cfg.Value==.121 and cfg.Dynamic==nil,'Dynamic behavior has no extra setting and does not mutate Value')
+    cfg.Auto=true;near(Core.predictionTime(cfg,.1,.1,0,0,nil,22,22),.1)
+    cfg.Value=1;near(Core.predictionTime(cfg,.1,.1,0,0,nil,22,22),.1)
+    local time,limited=Core.silentLeadTime(.121,200,22)
+    assert(limited and time*200<=.121*30+1e-8,'Fast-motion horizontal lead cannot grow unbounded')
+    near(Core.silentLeadTime(.121,22,22),.121)
+end
+do
+    local samples={}
+    for i=0,7 do
+        Core.sample(samples,V.new(i*.02*22,0,0),i*.02,V.new(22,0,0))
+        local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0))
+        Core.resolveVelocity(samples,V.new(22,0,0),fit,V.new(0,0,0))
+    end
+    local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0))
+    local resolved,source=Core.resolveVelocity(samples,V.new(-22,0,0),fit,V.new(0,0,0))
+    near(resolved.X,-22);assert(source=='raw-transition','A reversal must not keep old forward lead')
+    resolved=Core.resolveVelocity(samples,V.new(0,0,0),fit,V.new(0,0,0));near(resolved.X,0)
+    resolved,source=Core.resolveVelocity(samples,V.new(1000,0,0),fit,V.new(0,0,0))
+    near(resolved.X,22);assert(source=='history-fallback')
+    samples={}
+    for i=0,7 do
+        local raw=V.new(11,0,0)
+        Core.sample(samples,V.new(i*.02*22,0,0),i*.02,raw)
+        resolved,source=Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,V.new(0,0,0)),V.new(0,0,0))
+    end
+    near(resolved.X,22);assert(source=='history-validated','History wins when its earlier forecasts actually fit arriving positions better')
+end
 near(Core.autoY(0,.128,1.6,false),0) -- Live Air + zero vertical motion must not invent -1.6 studs.
 near(Core.autoY(-30,.128,1.6,true),0)
 near(Core.autoY(-30,.128,1.6,false),-1.6)

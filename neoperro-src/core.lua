@@ -115,6 +115,50 @@ function Core.rayBox(origin, direction, half)
     return near
 end
 
+-- Exact closest pair between a forward ray and an axis-aligned box. Transform
+-- into part space first; zero half-extents also support a center axis or point.
+function Core.closestRayBox(origin, direction, half, newVector)
+    local cuts = {0}
+    for _, axis in ipairs({'X', 'Y', 'Z'}) do
+        local d = direction[axis]
+        if math.abs(d) > 1e-8 then
+            for _, bound in ipairs({-half[axis], half[axis]}) do
+                local t = (bound - origin[axis]) / d
+                if t > 0 then cuts[#cuts + 1] = t end
+            end
+        end
+    end
+    table.sort(cuts)
+    local bestT, bestDistance = 0, math.huge
+    local function test(t)
+        local distance = 0
+        for _, axis in ipairs({'X', 'Y', 'Z'}) do
+            local x = origin[axis] + direction[axis] * t
+            local excess = math.max(0, math.abs(x) - half[axis])
+            distance = distance + excess * excess
+        end
+        if distance < bestDistance then bestT, bestDistance = t, distance end
+    end
+    for i, low in ipairs(cuts) do
+        local high = cuts[i + 1] or math.huge
+        local middle = high < math.huge and (low + high) / 2 or low + 1
+        local numerator, denominator = 0, 0
+        for _, axis in ipairs({'X', 'Y', 'Z'}) do
+            local x = origin[axis] + direction[axis] * middle
+            local bound = x < -half[axis] and -half[axis] or (x > half[axis] and half[axis] or nil)
+            if bound then
+                numerator = numerator + direction[axis] * (origin[axis] - bound)
+                denominator = denominator + direction[axis] * direction[axis]
+            end
+        end
+        test(low)
+        if denominator > 1e-12 then test(math.max(low, math.min(high, -numerator / denominator))) end
+    end
+    local p = origin + direction * bestT
+    return newVector(Core.number(p.X, 0, -half.X, half.X), Core.number(p.Y, 0, -half.Y, half.Y),
+        Core.number(p.Z, 0, -half.Z, half.Z)), bestT
+end
+
 function Core.input(binding, key, mouse)
     if type(binding) ~= 'table' then return false end
     if binding[3] == 'Mouse' then return mouse == binding[2] end
@@ -173,7 +217,7 @@ function Core.limit(v, maximum)
 end
 
 -- Bounded timestamp history; teleport spikes reset the fit instead of poisoning it.
-function Core.sample(history, position, now)
+function Core.sample(history, position, now, raw)
     local last = history[#history]
     if last and now >= last.t and now - last.t < 1 / 90 then return false end
     if last then
@@ -182,7 +226,7 @@ function Core.sample(history, position, now)
             for i = #history, 1, -1 do history[i] = nil end
         end
     end
-    history[#history + 1] = {p = position, t = now}
+    history[#history + 1] = {p = position, t = now, raw = Core.finiteVector(raw) and Core.limit(raw, 180) or nil}
     while #history > 8 or (#history > 2 and now - history[1].t > 0.18) do table.remove(history, 1) end
     return true
 end
@@ -190,14 +234,34 @@ end
 -- RTT sources overlap: use the larger estimate, never add them together.
 -- No assumed projectile speed: travel is included only when supplied by a
 -- verified weapon adapter. Auto deliberately does not read the manual Value.
-function Core.predictionTime(settings, networkRTT, dataRTT, age, distance, speed)
+function Core.predictionTime(settings, networkRTT, dataRTT, age, distance, speed, movementSpeed, walkSpeed)
     if not settings.Enabled then return 0, 'disabled' end
-    if not settings.Auto then return Core.number(settings.Value, 0.121, 0, 1), 'manual' end
+    local factor = 1
+    if type(movementSpeed) == 'number' then
+        -- Horizontal speed only. Gentle bounds prevent quadratic lead growth at
+        -- macro speeds; ordinary walking keeps the configured baseline unchanged.
+        factor = Core.number(math.sqrt(Core.number(movementSpeed, 0, 0, 180) /
+            Core.number(walkSpeed, 22, 1, 180)), 1, 0.75, 1.25)
+    end
+    if not settings.Auto then
+        local base = Core.number(settings.Value, 0.121, 0, 1)
+        return base * factor, 'manual-speed', factor, base
+    end
     local latency = math.max(Core.number(networkRTT, 0, 0, 1), Core.number(dataRTT, 0, 0, 1))
     local source = latency > 0 and 'latency-estimate' or 'fallback-estimate'
     if latency == 0 then latency = 0.1 end
     local travel = type(speed) == 'number' and speed > 0 and math.max(0, distance or 0) / speed or 0
-    return Core.number(latency + Core.number(age, 0, 0, 0.05) + travel, 0.1, 0, 0.35), source
+    local base = Core.number(latency + Core.number(age, 0, 0, 0.05) + travel, 0.1, 0, 0.35)
+    return Core.number(base * factor, 0.1, 0, 0.35), source, factor, base
+end
+
+-- Always-on Silent guard. Above the game's observed fast-motion threshold,
+-- limit extrapolated travel to one normal/fast-boundary stride over this horizon.
+-- It never changes the selected point, direction, vertical motion or manual Value.
+function Core.silentLeadTime(seconds, horizontalSpeed, walkSpeed)
+    local reference = math.max(30, Core.number(walkSpeed, 22, 1, 180))
+    if horizontalSpeed > reference then return seconds * reference / horizontalSpeed, true end
+    return seconds, false
 end
 
 -- A conservative vertical lead, without inventing gravity from FloorMaterial.
@@ -232,6 +296,27 @@ function Core.velocity(history, fallback, zero)
     end
     if denominator < 1e-7 then return zero end
     return Core.limit(numerator / denominator, 180)
+end
+
+-- Compare earlier forecasts with positions that actually arrived, on this client's
+-- clock. Replication interpolation can make a position fit faster than real motion.
+-- Keep history as a fallback, rather than always preferring it over valid velocity.
+function Core.resolveVelocity(history, raw, fitted, zero)
+    local last = history[#history]
+    if last then last.fitted = fitted end
+    if not Core.finiteVector(raw) or raw.Magnitude > 180 then return fitted, 'history-fallback' end
+    if raw:Dot(fitted) <= 0 then return raw, 'raw-transition' end
+    local rawError, fitError, count = 0, 0, 0
+    for _, sample in ipairs(history) do
+        local dt = last.t - sample.t
+        if dt >= 0.035 and sample.raw and sample.fitted then
+            local a = last.p - (sample.p + sample.raw * dt)
+            local b = last.p - (sample.p + sample.fitted * dt)
+            rawError, fitError, count = rawError + a:Dot(a), fitError + b:Dot(b), count + 1
+        end
+    end
+    if count >= 2 and fitError < rawError then return fitted, 'history-validated' end
+    return raw, 'raw-validated'
 end
 
 -- State changes in the supplied config win; otherwise keep the running toggle.

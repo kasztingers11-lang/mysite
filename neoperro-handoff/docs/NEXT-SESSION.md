@@ -1,3 +1,15 @@
+# Current continuation: 1.3.6
+
+Prediction/Closest batch is delivered. Dynamic horizontal timing is always on
+for all features/modes, with no setting. Silent has a permanent fast-motion lead
+bound. Recorded-motion replay improves on the old history fit; focused airborne
+captures have no falling-upward or grounded-lead violations, but damage results
+remain mixed. Do not claim all shots or high-ping/macro acceptance. Continue
+AntiCurve reproduction, full source/lifecycle/performance review and table/visual
+polish as requested. Keep confirmed tracer/Macro Abuse/aim restoration unchanged.
+
+---
+
 # Current continuation: 1.3.5
 
 User confirmed 1.3.4 aim restoration works. Character scaling now includes the

@@ -29,7 +29,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.5', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.6', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
@@ -303,9 +303,33 @@ local function bodyPart(part, character)
     return part and part:IsA('BasePart') and part.Parent == character and bodyParts[part.Name] == true
 end
 
+local function nativeBodyPart(part, character)
+    return part and part:IsA('BasePart') and part.Parent == character and part.CanQuery ~= false
+        and (bodyParts[part.Name] == true or part.Name == 'HB' or part.Name == 'HumanoidRootPart')
+end
+
+local function characterSurface(part, character)
+    if not part or not part:IsA('BasePart') then return false end
+    local parent = part.Parent
+    while parent and parent ~= character do
+        if parent:IsA('Tool') then return false end
+        parent = parent.Parent
+    end
+    return parent == character
+end
+
 local function cursorHit()
     rayParams.FilterDescendantsInstances = localCharacter and {localCharacter, camera} or {camera}
     return World:Raycast(cursorRay.Origin, cursorRay.Direction * 5000, rayParams)
+end
+
+local function closestLocal(part, closest)
+    local reduction = Core.number(closest.Reduce[closest.Axis == 'All' and 'All' or 'Center'], 0.7, 0, 1)
+    local half = part.Size * (0.5 * (1 - reduction))
+    if closest.Axis ~= 'All' then half = Vector3.new(0, half.Y, 0) end
+    local origin = part.CFrame:PointToObjectSpace(cursorRay.Origin)
+    local direction = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction) - origin
+    return Core.closestRayBox(origin, direction, half, Vector3.new), half
 end
 
 local function targetPart(record, feature)
@@ -315,7 +339,12 @@ local function targetPart(record, feature)
     local best, distance = nil, math.huge
     for _, part in ipairs(record.character:GetChildren()) do
         if bodyPart(part, record.character) then
-            local p, onScreen = camera:WorldToViewportPoint(part.Position)
+            local point = part.Position
+            if target.Closest.Method == 'Point' then
+                local localPoint = closestLocal(part, target.Closest)
+                point = part.CFrame:PointToWorldSpace(localPoint)
+            end
+            local p, onScreen = camera:WorldToViewportPoint(point)
             if onScreen and p.Z > 0 then
                 local d = (Vector2.new(p.X, p.Y) - cursor).Magnitude
                 if d < distance then best, distance = part, d end
@@ -351,19 +380,24 @@ local function velocity(record, feature)
     local last = record.history[#record.history]
     if record.velocityAt ~= (last and last.t) or not record.sampledVelocity then
         record.sampledVelocity = Core.velocity(record.history, raw, zero)
+        record.resolvedVelocity, record.velocitySource = Core.resolveVelocity(record.history,
+            record.root.AssemblyLinearVelocity, record.sampledVelocity, zero)
         record.velocityAt = last and last.t
     end
-    if feature ~= 'Silent Aim' or config['Silent Aim'].EndMath.VelocityHistory then return record.sampledVelocity end
+    if feature ~= 'Silent Aim' or config['Silent Aim'].EndMath.VelocityHistory then return record.resolvedVelocity end
     return Core.limit(raw, 180)
 end
 
 local function prediction(record, feature, point)
-    local last = record.history[#record.history]
     local origin = muzzle()
     -- Projectile travel is intentionally absent until the actual weapon controller
     -- establishes a speed. Visual tracer duration is not ballistic flight time.
+    local vel = velocity(record, feature)
+    -- Point and replicated velocity are read live. History sampler age is not
+    -- replication age; adding it again caused shot-time lead spikes between ticks.
     return Core.predictionTime(config[feature].Prediction, state.Network.RTT, state.Network.DataRTT,
-        last and now() - last.t or 0, origin and (point - origin).Magnitude or 0, nil)
+        0, origin and (point - origin).Magnitude or 0, nil,
+        Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed)
 end
 
 local groundParams = RaycastParams.new()
@@ -448,7 +482,7 @@ local function nearest(feature, assignment, resolve)
     for _, choice in ipairs(choices) do
         if assignment or valid(choice.record, feature, choice.part) then
             if resolve then
-                local point, part = resolve(choice.record, feature)
+                local point, part = resolve(choice.record, feature, nil, nil, choice.part)
                 if point then return choice.record, point, part end
             else
                 return choice.record
@@ -457,11 +491,11 @@ local function nearest(feature, assignment, resolve)
     end
 end
 
-local function aimPoint(record, feature, hitPart, hitPoint)
+local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
     local settings = config[feature]
     local target = targetSettings(feature)
     local closest = target.Closest
-    local part = hitPart or targetPart(record, feature)
+    local part = hitPart or selectedPart or targetPart(record, feature)
     local evidence = {Feature = feature, Time = now(), Target = record.player.UserId,
         Part = part and part.Name, Accepted = false}
     state.AimTrace[feature] = evidence
@@ -475,39 +509,49 @@ local function aimPoint(record, feature, hitPart, hitPoint)
     local exact = closest.Enabled and closest.Raycast and state.CursorHit
     if hitPart then
         -- Triggerbot without FOV uses the actual unobstructed cursor surface.
-    elseif exact and bodyPart(exact.Instance, record.character) then
-        part, point = exact.Instance, exact.Position
+        if record.pointState then record.pointState[feature] = nil end
+    elseif exact and characterSurface(exact.Instance, record.character) then
+        -- Accessory handles can be the actual first surface of the cursor ray.
+        -- Keep the body part for rig/Y math, but retain the exact surface point.
+        if bodyPart(exact.Instance, record.character) then part = exact.Instance end
+        point = exact.Position
+        evidence.PointSource, evidence.SurfacePart = 'cursor-surface', exact.Instance.Name
+        if record.pointState then record.pointState[feature] = nil end
     elseif closest.Enabled and closest.Method == 'Point' then
-        local depth = math.max(0, (point - cursorRay.Origin):Dot(cursorRay.Direction))
-        local localPoint = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction * depth)
-        local reduction = Core.number(closest.Reduce[closest.Axis == 'All' and 'All' or 'Center'], 0.7, 0, 1)
-        local half = part.Size * (0.5 * (1 - reduction))
-        localPoint = Vector3.new(
-            closest.Axis == 'All' and math.clamp(localPoint.X, -half.X, half.X) or 0,
-            math.clamp(localPoint.Y, -half.Y, half.Y),
-            closest.Axis == 'All' and math.clamp(localPoint.Z, -half.Z, half.Z) or 0)
+        evidence.PointSource = 'closest-point'
+        local localPoint, half = closestLocal(part, closest)
         record.pointState = record.pointState or {}
         local last = record.pointState[feature]
-        if last and last.part == part then
+        if last and last.part.Parent == record.character and last.axis == closest.Axis and now() - last.time <= 0.2 then
             local alpha = Core.alpha(Core.number(closest.Sharpness, 0.65, 0.01, 1), now() - last.time)
-            localPoint = last.point + (localPoint - last.point) * alpha
+            local prior = last.part == part and last.point or part.CFrame:PointToObjectSpace(last.part.CFrame:PointToWorldSpace(last.point))
+            localPoint = prior + (localPoint - prior) * alpha
         end
         localPoint = Vector3.new(closest.Axis == 'All' and math.clamp(localPoint.X, -half.X, half.X) or 0,
             math.clamp(localPoint.Y, -half.Y, half.Y), closest.Axis == 'All' and math.clamp(localPoint.Z, -half.Z, half.Z) or 0)
-        record.pointState[feature] = {part = part, point = localPoint, time = now()}
+        record.pointState[feature] = {part = part, point = localPoint, time = now(), axis = closest.Axis}
         point = part.CFrame:PointToWorldSpace(localPoint)
+    else
+        if record.pointState then record.pointState[feature] = nil end
     end
-    local leadTime, predictionSource = prediction(record, feature, point)
+    local leadTime, predictionSource, speedFactor, baseLeadTime = prediction(record, feature, point)
     local vel = velocity(record, feature)
-    local lead = vel * leadTime
+    baseLeadTime = baseLeadTime or leadTime
+    local horizontalTime, limited = leadTime, false
+    if feature == 'Silent Aim' then
+        horizontalTime, limited = Core.silentLeadTime(leadTime, Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed)
+    end
+    local lead = Vector3.new(vel.X * horizontalTime, vel.Y * baseLeadTime, vel.Z * horizontalTime)
     evidence.Part, evidence.PartPosition, evidence.BasePoint = part.Name, vectorData(part.Position), vectorData(point)
     evidence.RawVelocity = vectorData(record.root.AssemblyLinearVelocity)
     evidence.SampledVelocity = vectorData(record.sampledVelocity)
     evidence.PredictionSource = predictionSource
+    evidence.SpeedFactor = speedFactor
+    evidence.BaseLeadTime, evidence.HorizontalLeadTime, evidence.FastMotionLimited = baseLeadTime, horizontalTime, limited
     evidence.ResolvedVelocity, evidence.LeadTime = vectorData(vel), leadTime
     evidence.HistoryCount = #record.history
     evidence.HistoryAge = record.history[#record.history] and now() - record.history[#record.history].t
-    evidence.VelocitySource = (feature ~= 'Silent Aim' or settings.EndMath.VelocityHistory) and (#record.history >= 3 and 'history' or 'raw-fallback') or 'raw'
+    evidence.VelocitySource = (feature ~= 'Silent Aim' or settings.EndMath.VelocityHistory) and record.velocitySource or 'raw'
     evidence.LeadBeforeY = vectorData(lead)
     evidence.Airborne = record.humanoid.FloorMaterial == Enum.Material.Air
     evidence.FloorMaterial = record.humanoid.FloorMaterial.Name
@@ -529,7 +573,7 @@ local function aimPoint(record, feature, hitPart, hitPoint)
             local grounded = supportedGround or (not evidence.Airborne and math.abs(record.root.AssemblyLinearVelocity.Y) < 3)
             local vertical, source = Core.autoVertical(vel.Y, record.root.AssemblyLinearVelocity.Y)
             evidence.AutoVerticalVelocity, evidence.AutoVerticalSource = vertical, source
-            y = Core.autoY(vertical, leadTime, part.Size.Y, grounded)
+            y = Core.autoY(vertical, baseLeadTime, part.Size.Y, grounded)
         end
         lead = Vector3.new(lead.X, y, lead.Z)
     end
@@ -988,8 +1032,7 @@ local function scaledCursorTarget(hit, onlyRecord)
             for _, part in ipairs(record.character:GetChildren()) do
                 -- This game's real cursor ray also hits the transparent HB. Scaling
                 -- only visible limbs left 1.3 no larger than its native hitbox.
-                if part:IsA('BasePart') and part.CanQuery ~= false and
-                    (bodyPart(part, record.character) or part.Name == 'HB' or part == record.root) then
+                if nativeBodyPart(part, record.character) then
                     local origin = part.CFrame:PointToObjectSpace(cursorRay.Origin)
                     local direction = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction) - origin
                     local entry = Core.rayBox(origin, direction, part.Size * (scale * 0.5))
@@ -1373,7 +1416,9 @@ local function start()
             elapsed = elapsed % (1 / 60)
             sampleNetwork(time)
             for _, record in pairs(state.Records) do
-                if record.root and Core.finiteVector(record.root.Position) then Core.sample(record.history, record.root.Position, time) end
+                if record.root and Core.finiteVector(record.root.Position) then
+                    Core.sample(record.history, record.root.Position, time, record.root.AssemblyLinearVelocity)
+                end
                 if config.Misc.Prefire.Enabled then observeAmmo(record) end
             end
             updateAim()
