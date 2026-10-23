@@ -40,7 +40,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.9', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.10', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
@@ -48,7 +48,7 @@ local state = {
     Epoch = 0, Visuals = {}, Focused = true,
     Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, AimSendSkipped = 0, AimRestores = 0, AimRestoreErrors = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
     AimTrace = {}, Trace = {Events = {}, Sequence = 0, Until = 0, Limit = 128},
-    Network = {NextSample = 0}, Performance = {Updates = 0, TotalMs = 0, MaxMs = 0},
+    Network = {NextSample = 0}, Performance = {Updates = 0, TotalMs = 0, MaxMs = 0, AimUpdates = 0, AimTotalMs = 0, AimMaxMs = 0},
     ControlOwned = false, MouseOwned = false, PrefireToggle = false,
     CursorHit = nil, ShotRelease = nil, AutomatedTool = nil, MacroMotion = nil,
     TriggerRandom = nil, LastMousePayload = nil, MouseRemainder = nil, Intro = nil,
@@ -507,7 +507,8 @@ local function leadOffset(record, feature, part, point, evidence)
     local ySettings = config['Y-Axis']
     local useY = feature == 'Silent Aim' and ySettings.Enabled and ySettings.SilentAim
     local minY, supportedGround
-    if feature ~= 'Silent Aim' or settings.GroundShotCheck or (useY and ySettings.Mode == 'Auto') then
+    local needsGround = lead.Y ~= 0 or raw.Y ~= 0 or (motion.VerticalConfidence or 0) >= 0.5
+    if needsGround and (feature ~= 'Silent Aim' or settings.GroundShotCheck or (useY and ySettings.Mode == 'Auto')) then
         minY, supportedGround = support(record, point, lead, part.Size.Y)
     end
     local vertical, source, correction, accelerationMode
@@ -702,8 +703,8 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
     record.finalLead[feature] = {offset = lead, time = now()}
     if not Core.finiteVector(point) then return reject('nonfinite') end
     evidence.WallOrigin = vectorData(feature == 'Aim Assist' and camera.CFrame.Position or muzzle())
-    if config.Checks.Wall[checkIndices[feature]] and not firingVisible(point, record.character, feature) then return reject('predicted-wall') end
     if (feature ~= 'Triggerbot' or settings.Fov.Enabled) and not inFov(record, feature, part, point, basePoint) then return reject('fov') end
+    if config.Checks.Wall[checkIndices[feature]] and not firingVisible(point, record.character, feature) then return reject('predicted-wall') end
     -- Final Silent settings never reject camera assistance or independent trigger candidates.
     local anti = feature == 'Silent Aim' and settings.AntiCurve
     if anti and anti.Enabled then
@@ -716,7 +717,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         evidence.NativeAimDirection = nativeRay and vectorData(nativeRay.Direction)
         if anti.Mode == 'endmath' then
             local projected, onScreen = camera:WorldToViewportPoint(point)
-            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'pixels', Core.number(anti.endmath.Radius, 120, 0, 10000)
+            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'pixels', Core.curveLimit(anti.endmath.Radius, 120)
             local screenGap = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
             local nativeScreenGap
             if nativePoint then
@@ -730,12 +731,13 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
                 evidence.AntiCurveDistance > evidence.AntiCurveLimit then return reject('anti-curve-pixels') end
             if anti.endmath.WallCheck and not visible(point, record.character, muzzle(), true) then return reject('anti-curve-wall') end
         elseif anti.Mode == '3d-angles' then
-            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'studs', Core.number(anti['3d-angles'].Max, 2.2, 0, 10000)
+            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'studs', Core.curveLimit(anti['3d-angles'].Max, 2.2)
             local useMuzzle = nativeGap and nativeGap < (cameraGap or math.huge)
             evidence.AntiCurveReference = useMuzzle and 'muzzle-to-mouse-ray' or 'forward-cursor-ray'
             evidence.AntiCurveCursorPoint = vectorData(useMuzzle and nativePoint or cameraPoint)
             evidence.AntiCurveRawSurfaceDistance = (point - rawMousePoint).Magnitude
             evidence.AntiCurveDistance = math.min(cameraGap or math.huge, nativeGap or math.huge)
+            if not (cameraGap or nativeGap) then return reject('anti-curve-direction') end
             if evidence.AntiCurveDistance > evidence.AntiCurveLimit then return reject('anti-curve-studs') end
         end
     end
@@ -1622,10 +1624,6 @@ local function start()
                 end
                 if config.Misc.Prefire.Enabled then observeAmmo(record) end
             end
-            updateAim()
-            if not typing() then automaticFire(time) end
-            refreshAutoPrediction(time)
-            refreshPacket()
             local cost = (now() - updateStarted) * 1000
             state.Performance.Updates = state.Performance.Updates + 1
             state.Performance.TotalMs = state.Performance.TotalMs + cost
@@ -1636,6 +1634,15 @@ local function start()
     end)
     RunService:BindToRenderStep(renderName, Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not state.Alive or not captureView() then return end
+        local aimStarted = now()
+        updateAim()
+        if not typing() then automaticFire(aimStarted) end
+        refreshAutoPrediction(aimStarted)
+        refreshPacket()
+        state.Performance.AimUpdates = state.Performance.AimUpdates + 1
+        local aimMs = (now() - aimStarted) * 1000
+        state.Performance.AimTotalMs = state.Performance.AimTotalMs + aimMs
+        state.Performance.AimMaxMs = math.max(state.Performance.AimMaxMs, aimMs)
         local point = renderPoint('Aim Assist')
         if point and enabled('Aim Assist') and not typing() then
             local offset = point - camera.CFrame.Position

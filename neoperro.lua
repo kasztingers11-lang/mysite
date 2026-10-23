@@ -62,10 +62,10 @@ getgenv()['neoperro'] = {
             ['Enabled'] = false;
             ['Mode']    = '3d-angles';
             ['3d-angles'] = {
-                ['Max'] = 2.2;
+                ['Max'] = 2.2; -- Studs: 0.000000001 or larger; math.huge = unlimited.
             };
             ['endmath'] = {
-                ['Radius']    = 120;
+                ['Radius']    = 120; -- Pixels: 0.000000001 or larger; math.huge = unlimited.
                 ['WallCheck'] = true;
             };
         };

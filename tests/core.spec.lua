@@ -1,4 +1,9 @@
 local Core = dofile('neoperro-src/core.lua')
+assert(Core.curveLimit(0,2.2)==0.000000001)
+assert(Core.curveLimit(0.000000001,2.2)==0.000000001)
+assert(Core.curveLimit(1e20,2.2)==1e20)
+assert(Core.curveLimit(math.huge,2.2)==math.huge)
+assert(Core.curveLimit(0/0,2.2)==2.2)
 local function near(a, b, epsilon) assert(math.abs(a - b) < (epsilon or 1e-8), tostring(a) .. ' != ' .. tostring(b)) end
 
 -- One second's damping must agree at 30, 60, 120 and 240 FPS.
@@ -174,6 +179,8 @@ do
     near(v.X,-22);near(v.Y,40) -- Vertical motion cannot mask an XZ reversal.
     v=Core.resolveVelocity(h,V.new(.1,40,0),V.new(22,40,0),V.new)
     near(v.X,.1) -- Resting noise cannot retain a walking horizontal fit.
+    v=Core.resolveVelocity(h,V.new(0,40,0),V.new(22,0,0),V.new)
+    near(v.X,0);near(v.Y,40) -- Fresh jump onset must not retain a zero-Y fit.
     local source
     v,source=Core.resolveVelocity(h,V.new(11,40,0),V.new(22,20,0),V.new)
     near(v.X,22);near(v.Y,40);assert(source=='split-validated')

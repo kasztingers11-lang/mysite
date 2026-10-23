@@ -1,3 +1,18 @@
+# 1.3.10 frame cadence and AntiCurve range
+
+Selection, Triggerbot checks and prediction/packet refresh follow each render
+frame. History sampling and half-second active estimates keep separate pacing.
+AntiCurve supports 1e-9 upward, with math.huge for unlimited distance/radius;
+defaults/units and obstruction/invalid-geometry checks remain intact.
+
+Focused populated capture: 1,898 aim updates and draws on all 1,898 frames over
+eight seconds (~237 FPS). Both bundles analyze cleanly and regression suites pass.
+This is frame-rate responsiveness, not a fixed 240 FPS or damage guarantee.
+Computer Use was stopped with Escape; no further computer input was resumed.
+See SESSION-2026-10-23 for exact evidence and remaining shot uncertainty.
+
+---
+
 # 1.3.9 remote-motion repair and active Auto estimates
 
 Fixed an observed falling-to-upward error using a braking-to-rest rule; split XZ/Y

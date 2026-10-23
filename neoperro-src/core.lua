@@ -322,7 +322,8 @@ function Core.resolveVelocity(history, raw, fitted, newVector)
     if not Core.finiteVector(raw) or raw.Magnitude > 180 then return resolved(fitted, 'history-fallback') end
     local horizontalTransition = raw.X * fitted.X + raw.Z * fitted.Z <= 0
         or (raw.X * raw.X + raw.Z * raw.Z < 1 and fitted.X * fitted.X + fitted.Z * fitted.Z > 9)
-    local verticalTransition = raw.Y * fitted.Y < 0 or (math.abs(raw.Y) < 1 and math.abs(fitted.Y) > 3)
+    local verticalTransition = raw.Y * fitted.Y <= 0 and raw.Y ~= fitted.Y
+        or (math.abs(raw.Y) < 1 and math.abs(fitted.Y) > 3)
     local rawXZ, fitXZ, rawY, fitY, count = 0, 0, 0, 0, 0
     for _, sample in ipairs(history) do
         local dt = last.t - sample.t
@@ -422,6 +423,11 @@ function Core.motionTime(seconds, turnRate)
     if angle < 1e-5 then return seconds end
     -- The forward component of a constant-rate turn is sin(angle)/rate.
     return seconds * math.sin(angle) / angle
+end
+
+function Core.curveLimit(value, fallback)
+    if value == math.huge then return math.huge end
+    return Core.number(value, fallback, 0.000000001)
 end
 
 function Core.verticalLead(vertical, rawY, seconds, height, grounded, model)

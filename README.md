@@ -1,10 +1,10 @@
-# neoperro 1.3.9 - testing build
+# neoperro 1.3.10 - testing build
 
 Use [neoperro.lua](neoperro.lua): edit the table and execute the whole file.
 Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
 [neoperro-full.lua](neoperro-full.lua) contains the same table and runtime.
 
-This repair fixes standalone ESP weapon profiles, removes the 60 Hz drawing cap,
+This repair fixes standalone ESP weapon profiles, removes the 60 Hz drawing and aim-selection caps,
 recovers physically held activation keys, and adds shared muzzle/camera geometry.
 Prediction uses bounded speed response, validated turn compensation and measured
 vertical acceleration. Decelerating falls stop at rest instead of inventing a new
@@ -27,6 +27,14 @@ third-person muzzle alignment/obstruction, and drawing on every frame at about
 server damage or hit-rate tests. Latest remote motion capture covered 15 players at about 200 ms Data Ping; native shot results remain inconclusive.
 Lua regression suites pass; mocks do not prove Roblox compatibility.
 Full and runtime bundles pass REAL static analysis with zero errors/warnings.
+
+AntiCurve Max (studs) and Radius (pixels) accept 0.000000001 upward;
+use math.huge for unlimited distance/radius. Defaults remain 2.2 studs / 120 pixels.
+Muzzle obstruction and invalid geometry checks remain independent.
+
+Latest focused 15-player capture: 1,898 aim updates and draws on all 1,898 frames
+over 8.0017 seconds (~237 FPS). Updates follow frames; this is not a fixed 240 FPS
+guarantee. Selection/TB checks no longer wait for the 60 Hz history sampler.
 
 [Settings reference](NEOPERRO.md) |
 [Exact evidence and limitations](neoperro-handoff/docs/SESSION-2026-10-23.md) |

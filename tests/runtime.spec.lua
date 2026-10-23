@@ -665,6 +665,13 @@ do
     assert(rt.AimTrace['Silent Aim'].AntiCurveRawSurfaceDistance>4000,'Keep raw-surface evidence separately')
     moveEnemy(3,0,-50);step(.04)
     assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='anti-curve-studs','The 2.2-stud lateral limit still rejects actual large redirects')
+    rt.Config['Silent Aim'].AntiCurve['3d-angles'].Max=math.huge;step(.04)
+    assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveLimit==math.huge,'Unlimited only removes the distance threshold')
+    rt.Config['Silent Aim'].AntiCurve['3d-angles'].Max=.000000001;moveEnemy(.000001,0,-50);step(.04)
+    assert(not rt.Points['Silent Aim'],'Sub-nanostud tolerance is supported without an old fixed cap')
+    rt.Config['Silent Aim'].AntiCurve['3d-angles'].Max=math.huge;rt.Config['Silent Aim'].Mode='Target';rt.Locks['Silent Aim']=enemy.UserId
+    moveEnemy(0,0,50);step(.04)
+    assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='anti-curve-direction','Unlimited cannot create a missing forward alignment')
     rt:Destroy('test');mouse.Hit=originalHit;moveEnemy(0,0,-50)
 end
 
@@ -720,6 +727,8 @@ do
     cfg['Silent Aim'].Target.Closest.Enabled=false;cfg.ESP.VisibleCheck=false
     local rt=loadRuntime(cfg);step(.04)
     local updates=rt.Performance.Updates
+    local aimUpdates=rt.Performance.AimUpdates
+    local historyCount=#rt.Records[enemy].history
     local dot
     for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Circle' and d.Radius==2 then dot=d end end
     assert(dot and dot.Visible)
@@ -729,6 +738,8 @@ do
         for _,callback in pairs(renders)do callback(1/240)end
     end
     assert(rt.Performance.Updates==updates and dot.Position.X>oldX,'Subpixel marker updates on render frames without a selection tick')
+    assert(rt.Performance.AimUpdates==aimUpdates+4 and #rt.Records[enemy].history==historyCount,'Aim selection follows every frame while history fitting keeps its own cadence')
+    assert(rt.Points['Silent Aim'].X==enemyRoot.Position.X,'Final target point refreshes without waiting for the old 60 Hz sampler')
     rt:Destroy('test');moveEnemy(0,0,-50)
 end
 
