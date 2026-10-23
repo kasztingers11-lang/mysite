@@ -1,4 +1,4 @@
-# neoperro 1.3.4 — testing build
+# neoperro 1.3.5 — testing build
 
 Current branch: `repair/neoperro-evidence`. Main is older.
 
@@ -21,7 +21,7 @@ download once and reuse the local cache. No executor credentials belong in this 
 | R | Assign whitelist entry when enabled; also overlaps the game's reload key |
 | E | Panic/unload |
 
-Triggerbot FOV=false uses Fov.Character: 1 = actual hit, 1.2 = larger body bounds,
+Triggerbot FOV=false uses Fov.Character: 1 = actual hit, 1.2 = larger native body/HB bounds,
 0.8 = smaller bounds. It never resizes characters. Prediction has
 independent Enabled/Auto/Value settings for each feature; Auto ignores Value.
 Auto Y ignores JumpOffset; Custom uses it separately. Feature Enabled=false is a
@@ -68,3 +68,9 @@ shots and accepted seven fast-movement activations; see the session evidence.
 
 1.3.4 priority delivery: deferred shot-time aim restoration. See the session log
 for the controlled manual shot result, test limits and clean-client instructions.
+
+1.3.5 fixes Character scaling around the game's native transparent HB, preserving
+exact native hits at scale 1. Live cursor sweeps now select outside native bounds
+at 1.3 and reject those points at 1; shrinking rejects native edge hits. These were
+selection tests with firing disabled. Client tracer and Macro Abuse regressions
+still pass unchanged, as does the confirmed aim-restoration path.

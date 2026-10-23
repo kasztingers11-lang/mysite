@@ -29,7 +29,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.4', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.5', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
@@ -986,7 +986,10 @@ local function scaledCursorTarget(hit, onlyRecord)
     for _, record in pairs(state.Records) do
         if (not onlyRecord or record == onlyRecord) and record.character and record.root and valid(record, 'Triggerbot', record.root, true) then
             for _, part in ipairs(record.character:GetChildren()) do
-                if bodyPart(part, record.character) then
+                -- This game's real cursor ray also hits the transparent HB. Scaling
+                -- only visible limbs left 1.3 no larger than its native hitbox.
+                if part:IsA('BasePart') and part.CanQuery ~= false and
+                    (bodyPart(part, record.character) or part.Name == 'HB' or part == record.root) then
                     local origin = part.CFrame:PointToObjectSpace(cursorRay.Origin)
                     local direction = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction) - origin
                     local entry = Core.rayBox(origin, direction, part.Size * (scale * 0.5))

@@ -1,3 +1,13 @@
+# Current continuation: 1.3.5
+
+User confirmed 1.3.4 aim restoration works. Character scaling now includes the
+observed native HB and root, with before/after live selection sweeps and passing
+wall/shrink mocks. Client redirection and Macro Abuse remain unchanged and their
+regressions pass. Continue prediction/Auto and Closest improvements, then airborne
+Auto Y and intermittent AntiCurve reproduction. See SESSION-2026-10-23.
+
+---
+
 # Latest priority delivery: 1.3.4
 
 User is testing shot-time aim-view restoration first. See SESSION-2026-10-23's

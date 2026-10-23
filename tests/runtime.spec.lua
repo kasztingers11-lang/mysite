@@ -428,6 +428,26 @@ do
 end
 
 -- Native trigger input: immediate press, configured hold, cancellation, optional FOV.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
+    local hb=obj('Part','HB',enemyChar);hb.Size=V.new(4,4,1);hb.CanQuery=true
+    local rt=loadRuntime(cfg)
+    local function place(x)
+        moveEnemy(x,0,-50);hb.Position=enemyRoot.Position;hb.CFrame=CF.new(hb.Position)
+    end
+    place(2.1);rayHit=nil;rt.Config.Triggerbot.Fov.Character=1
+    key('MouseButton2',true);step(.04);assert(not rt.MouseOwned)
+    rt.Config.Triggerbot.Fov.Character=1.3;step(.04)
+    assert(rt.MouseOwned and rt.AimTrace.Triggerbot.Part=='HB','Expand the actual native HB, not just smaller visible limbs')
+    rt.Config.Triggerbot.Fov.Character=.8;place(1.8)
+    rayHit={Instance=hb,Position=V.new(0,0,-49.5)};step(.04)
+    assert(not rt.MouseOwned,'A native HB hit must still respect shrinking')
+    place(1.4);step(.15);assert(rt.MouseOwned,'Shrunken HB interior remains eligible')
+    rayHit={Instance=World,Position=V.new(0,0,-5)};step(.04)
+    assert(not rt.MouseOwned,'Scaled selection cannot pass through a nearer wall')
+    key('MouseButton2',false);rt:Destroy('test');hb:Destroy();clearInput();moveEnemy(0,0,-50);rayHit=nil
+end
+
 ammo.Value=20
 local trigger=loadRuntime(Defaults)
 trigger.Config.Triggerbot.Fov.Character=1 -- Exact-ray legacy mode; expanded mode is checked separately.

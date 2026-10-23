@@ -191,7 +191,7 @@ return {
 
         ['Fov'] = {
             ['Enabled'] = false; -- False = character bounds. True = use a selection shape.
-            ['Character'] = 1.2; -- FOV off: 1 = actual hit; 1.2 = 20% larger, 0.8 = 20% smaller. Local selection only (0.1-3).
+            ['Character'] = 1.2; -- FOV off: scale native body/HB bounds. 1 = actual hit, 1.2 = 20% larger, 0.8 = 20% smaller. Local only (0.1-3).
 
             ['Mode'] = '2d-Box'; -- Player-centered box or crosshair-centered circle.
 

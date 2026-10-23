@@ -1,3 +1,12 @@
+# 1.3.5 Character repair
+
+Fixed native-HB/body mismatch in FOV-off Character scaling after reproducing it
+with the actual cursor ray. Before/after sweeps verify selection expansion and
+shrinking; firing was disabled. Mock occlusion and existing tracer/Macro Abuse/
+aim restoration checks pass. No confirmed feature behavior was retuned.
+
+---
+
 # 1.3.4 shot-time aim-view follow-up
 
 Continuous MOUSE overrides removed while Anti-AimViewer is enabled; explicit shot
