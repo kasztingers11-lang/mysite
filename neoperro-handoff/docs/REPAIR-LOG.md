@@ -1,3 +1,17 @@
+# 1.3.9 remote-motion repair and active Auto estimates
+
+Fixed an observed falling-to-upward error using a braking-to-rest rule; split XZ/Y
+resolver decisions and apply fast-motion bounds across Silent/Assist/TB. Predicted
+boxes now use the shared model. Active target/weapon/ping estimates refresh every
+0.5 seconds without delaying motion updates; hitscan adds no projectile flight.
+Both bundles now have zero REAL analyzer errors/warnings and mocks pass.
+
+Public-server captures at roughly 186-200 ms Data Ping verified direction guards;
+native shots did not establish reliable damage. Populated render and local shared
+key/half-second fixtures are recorded separately. See SESSION-2026-10-23.
+
+---
+
 # 1.3.8 activation, profiles, rendering and shared geometry
 
 Fixed standalone ESP bypassing weapon profiles; removed the drawing throttle and

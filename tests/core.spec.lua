@@ -64,6 +64,12 @@ do
     near(gap,3);near(p.Z,-50);near(t,5)
     assert(Core.rayDistance(V.new(0,0,1),zero,V.new(0,0,-1))==nil)
     assert(Core.rayDistance(zero,zero,zero)==nil)
+    for _,d in ipairs({V.new(1,2,-3),V.new(-3,-2,1),V.new(0,4,0),V.new(0,-4,0)})do
+        local target=V.new(5,7,9)+d*15
+        local gap,_,depth=Core.rayDistance(target,V.new(5,7,9),d)
+        near(gap,0);near(depth,15)
+        assert(Core.rayDistance(target,V.new(5,7,9),d*-1)==nil,'Rearward rays cannot create an alignment')
+    end
     local samples={}
     for i=0,7 do
         local time=i*.02
@@ -75,6 +81,12 @@ do
     local lead,correction=Core.verticalLead(26,12,.1,4,false,model)
     near(lead,.2);near(correction,-1)
     near(Core.verticalLead(26,12,.1,4,true,model),0)
+    -- Captured non-knocked remote fall: the old acceleration extrapolation led
+    -- 2.695 studs upward before any ascent was observed.
+    local braking={VerticalAcceleration=462.45916874964985,VerticalConfidence=.5440542127578352}
+    local y,_,mode=Core.verticalLead(-8.994217872619629,-8.994217872619629,.1864221009532532,4,false,braking)
+    assert(y<0 and mode=='braking-stop','Decelerating fall cannot invent an upward launch')
+    near(Core.verticalLead(0,0,.2,4,false,braking),0)
     near(Core.motionTime(.121,model.TurnRate),.121)
     samples[#samples].raw=V.new(22,150,0)
     assert(Core.motion(samples,V.new(22,150,0)).VerticalConfidence==0,'A one-frame impulse is not a stable acceleration')
@@ -86,7 +98,7 @@ do
     for i=0,14 do
         local t=i*.02;local angle=t*10;local raw=V.new(-22*math.sin(angle),0,22*math.cos(angle))
         Core.sample(samples,V.new(2.2*math.cos(angle),0,2.2*math.sin(angle)),t,raw)
-        Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero),zero)
+        Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero),V.new)
         model=Core.motion(samples,raw)
     end
     assert(model.TurnValidated and Core.motionTime(.121,model.TurnRate)<.121,'Validated curved motion shortens extrapolation')
@@ -126,32 +138,46 @@ do
     assert(cfg.Value==.121 and cfg.Dynamic==nil,'Dynamic behavior has no extra setting and does not mutate Value')
     cfg.Auto=true;near(Core.predictionTime(cfg,.1,.1,0,0,nil,22,22),.1)
     cfg.Value=1;near(Core.predictionTime(cfg,.1,.1,0,0,nil,22,22),.1)
-    local time,limited=Core.silentLeadTime(.121,200,22)
+    local time,limited=Core.fastLeadTime(.121,200,22)
     assert(limited and time*200<=.121*30+1e-8,'Fast-motion horizontal lead cannot grow unbounded')
-    near(Core.silentLeadTime(.121,22,22),.121)
+    near(Core.fastLeadTime(.121,22,22),.121)
 end
 do
     local samples={}
     for i=0,7 do
         Core.sample(samples,V.new(i*.02*22,0,0),i*.02,V.new(22,0,0))
         local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0))
-        Core.resolveVelocity(samples,V.new(22,0,0),fit,V.new(0,0,0))
+        Core.resolveVelocity(samples,V.new(22,0,0),fit,V.new)
     end
     local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0))
-    local resolved,source=Core.resolveVelocity(samples,V.new(-22,0,0),fit,V.new(0,0,0))
+    local resolved,source=Core.resolveVelocity(samples,V.new(-22,0,0),fit,V.new)
     near(resolved.X,-22);assert(source=='raw-transition','A reversal must not keep old forward lead')
-    resolved=Core.resolveVelocity(samples,V.new(0,0,0),fit,V.new(0,0,0));near(resolved.X,0)
-    resolved,source=Core.resolveVelocity(samples,V.new(1000,0,0),fit,V.new(0,0,0))
+    resolved=Core.resolveVelocity(samples,V.new(0,0,0),fit,V.new);near(resolved.X,0)
+    resolved,source=Core.resolveVelocity(samples,V.new(1000,0,0),fit,V.new)
     near(resolved.X,22);assert(source=='history-fallback')
     samples={}
     for i=0,7 do
         local raw=V.new(11,0,0)
         Core.sample(samples,V.new(i*.02*22,0,0),i*.02,raw)
-        resolved,source=Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,V.new(0,0,0)),V.new(0,0,0))
+        resolved,source=Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,V.new(0,0,0)),V.new)
     end
     near(resolved.X,22);assert(source=='history-validated','History wins when its earlier forecasts actually fit arriving positions better')
 end
 near(Core.autoY(0,.128,1.6,false),0) -- Live Air + zero vertical motion must not invent -1.6 studs.
+do
+    local h={}
+    for i=0,7 do
+        Core.sample(h,V.new(22*i*.02,40*i*.02,0),i*.02,V.new(11,40,0))
+        h[#h].fitted=V.new(22,20,0)
+    end
+    local v=Core.resolveVelocity(h,V.new(-22,40,0),V.new(22,40,0),V.new)
+    near(v.X,-22);near(v.Y,40) -- Vertical motion cannot mask an XZ reversal.
+    v=Core.resolveVelocity(h,V.new(.1,40,0),V.new(22,40,0),V.new)
+    near(v.X,.1) -- Resting noise cannot retain a walking horizontal fit.
+    local source
+    v,source=Core.resolveVelocity(h,V.new(11,40,0),V.new(22,20,0),V.new)
+    near(v.X,22);near(v.Y,40);assert(source=='split-validated')
+end
 near(Core.autoY(-30,.128,1.6,true),0)
 near(Core.autoY(-30,.128,1.6,false),-1.6)
 near(Core.autoY(30,.128,1.6,false),3.2)

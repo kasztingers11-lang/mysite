@@ -1,4 +1,4 @@
-# neoperro 1.3.8 - testing build
+# neoperro 1.3.9 - testing build
 
 Use [neoperro.lua](neoperro.lua): edit the table and execute the whole file.
 Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
@@ -7,7 +7,9 @@ Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
 This repair fixes standalone ESP weapon profiles, removes the 60 Hz drawing cap,
 recovers physically held activation keys, and adds shared muzzle/camera geometry.
 Prediction uses bounded speed response, validated turn compensation and measured
-vertical acceleration. The table uses **Activation** and **Triggerbot check**;
+vertical acceleration. Decelerating falls stop at rest instead of inventing a new
+ascent. Horizontal/vertical resolver decisions are independent. Active Auto
+estimates refresh every half second; supported hitscan guns add zero flight time. The table uses **Activation** and **Triggerbot check**;
 older names migrate internally.
 
 Default controls: P Silent toggle, T Target selection, M Assist toggle, hold Q
@@ -22,9 +24,9 @@ also change standalone ESP when the Silent box is hidden.
 Live local fixtures verified profile ranges, Q/RMB selection and release,
 third-person muzzle alignment/obstruction, and drawing on every frame at about
 240 Hz. One native jump replay reduced vertical forecast error. These are not
-server damage or hit-rate tests. The latest server had no second player.
+server damage or hit-rate tests. Latest remote motion capture covered 15 players at about 200 ms Data Ping; native shot results remain inconclusive.
 Lua regression suites pass; mocks do not prove Roblox compatibility.
-Full-bundle static analysis still reports dynamic/optional-state type findings.
+Full and runtime bundles pass REAL static analysis with zero errors/warnings.
 
 [Settings reference](NEOPERRO.md) |
 [Exact evidence and limitations](neoperro-handoff/docs/SESSION-2026-10-23.md) |

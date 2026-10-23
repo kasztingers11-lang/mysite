@@ -266,10 +266,10 @@ function Core.predictionTime(settings, networkRTT, dataRTT, age, distance, speed
     return Core.number(base * factor, 0.1, 0, 0.35), source, factor, base
 end
 
--- Always-on Silent guard. Above the game's observed fast-motion threshold,
+-- Always-on motion guard. Above the game's observed fast-motion threshold,
 -- limit extrapolated travel to one normal/fast-boundary stride over this horizon.
 -- It never changes the selected point, direction, vertical motion or manual Value.
-function Core.silentLeadTime(seconds, horizontalSpeed, walkSpeed)
+function Core.fastLeadTime(seconds, horizontalSpeed, walkSpeed)
     local reference = math.max(30, Core.number(walkSpeed, 22, 1, 180))
     if horizontalSpeed > reference then return seconds * reference / horizontalSpeed, true end
     return seconds, false
@@ -312,7 +312,7 @@ end
 -- Compare earlier forecasts with positions that actually arrived, on this client's
 -- clock. Replication interpolation can make a position fit faster than real motion.
 -- Keep history as a fallback, rather than always preferring it over valid velocity.
-function Core.resolveVelocity(history, raw, fitted, zero)
+function Core.resolveVelocity(history, raw, fitted, newVector)
     local last = history[#history]
     if last then last.fitted = fitted end
     local function resolved(value, source)
@@ -320,18 +320,30 @@ function Core.resolveVelocity(history, raw, fitted, zero)
         return value, source
     end
     if not Core.finiteVector(raw) or raw.Magnitude > 180 then return resolved(fitted, 'history-fallback') end
-    if raw:Dot(fitted) <= 0 then return resolved(raw, 'raw-transition') end
-    local rawError, fitError, count = 0, 0, 0
+    local horizontalTransition = raw.X * fitted.X + raw.Z * fitted.Z <= 0
+        or (raw.X * raw.X + raw.Z * raw.Z < 1 and fitted.X * fitted.X + fitted.Z * fitted.Z > 9)
+    local verticalTransition = raw.Y * fitted.Y < 0 or (math.abs(raw.Y) < 1 and math.abs(fitted.Y) > 3)
+    local rawXZ, fitXZ, rawY, fitY, count = 0, 0, 0, 0, 0
     for _, sample in ipairs(history) do
         local dt = last.t - sample.t
         if dt >= 0.035 and sample.raw and sample.fitted then
             local a = last.p - (sample.p + sample.raw * dt)
             local b = last.p - (sample.p + sample.fitted * dt)
-            rawError, fitError, count = rawError + a:Dot(a), fitError + b:Dot(b), count + 1
+            rawXZ, fitXZ = rawXZ + a.X * a.X + a.Z * a.Z, fitXZ + b.X * b.X + b.Z * b.Z
+            rawY, fitY, count = rawY + a.Y * a.Y, fitY + b.Y * b.Y, count + 1
         end
     end
-    if count >= 2 and fitError < rawError then return resolved(fitted, 'history-validated') end
-    return resolved(raw, 'raw-validated')
+    local horizontal = not horizontalTransition and count >= 2 and fitXZ < rawXZ and fitted or raw
+    local vertical = not verticalTransition and count >= 2 and fitY < rawY and fitted or raw
+    if last then
+        last.horizontalSource = horizontal == fitted and 'history-validated' or horizontalTransition and 'raw-transition' or 'raw-validated'
+        last.verticalSource = vertical == fitted and 'history-validated' or verticalTransition and 'raw-transition' or 'raw-validated'
+    end
+    if horizontal.X == raw.X and horizontal.Z == raw.Z and vertical.Y == raw.Y then
+        return resolved(raw, (horizontalTransition or verticalTransition) and 'raw-transition' or 'raw-validated')
+    end
+    if horizontal.X == fitted.X and horizontal.Z == fitted.Z and vertical.Y == fitted.Y then return resolved(fitted, 'history-validated') end
+    return resolved(newVector(horizontal.X, vertical.Y, horizontal.Z), 'split-validated')
 end
 
 -- Fit only measured replicated velocities. A stable slope is useful at a jump
@@ -413,14 +425,23 @@ function Core.motionTime(seconds, turnRate)
 end
 
 function Core.verticalLead(vertical, rawY, seconds, height, grounded, model)
-    if grounded then return 0 end
+    if grounded then return 0, 0, 'grounded' end
     local confidence = model and model.VerticalConfidence or 0
-    local correction = 0
+    local correction, mode = 0, 'resolved'
     if confidence >= 0.5 then
         vertical = rawY
-        correction = 0.5 * model.VerticalAcceleration * seconds * seconds * confidence
+        local acceleration = model.VerticalAcceleration * confidence
+        local duration = seconds
+        mode = 'measured-acceleration'
+        -- Remote landing interpolation can look like positive acceleration while
+        -- still falling. Stop at rest; a new ascent needs observed upward speed.
+        if rawY <= 0 and acceleration > 0 then
+            duration = math.min(seconds, -rawY / acceleration)
+            mode = 'braking-stop'
+        end
+        correction = vertical * duration + 0.5 * acceleration * duration * duration - vertical * seconds
     end
-    return Core.number(vertical * seconds + correction, 0, -height, height * 2), correction
+    return Core.number(vertical * seconds + correction, 0, -height, height * 2), correction, mode
 end
 
 -- State changes in the supplied config win; otherwise keep the running toggle.

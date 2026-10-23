@@ -701,6 +701,20 @@ end
 
 -- Rendering follows live part motion between 60 Hz selection updates.
 do
+    local cfg=Core.copy(Defaults);cfg['Silent Aim'].Enabled=false;cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg.ESP.VisibleCheck=false;cfg['2d-Box']['Silent Aim'].Visible=true;cfg['2d-Box']['Silent Aim']['Predicted Position']=true
+    cfg['Silent Aim'].Prediction.Auto=false;cfg['Silent Aim'].Prediction.Value=.1
+    cfg['Silent Aim'].EndMath.VelocityHistory=false;enemyRoot.AssemblyLinearVelocity=V.new(100,0,0)
+    local rt=loadRuntime(cfg);step(.04)
+    local box
+    for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then box=d end end
+    assert(box and not rt.Targets['Silent Aim'],'Unselected ESP still has its predicted box')
+    assert(math.abs(box.Position.X+box.Size.X/2-(960+3.75*1000/50))<1e-6,'Unselected boxes use the permanent fast-motion bound instead of raw unlimited lead')
+    rt:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- Rendering follows live part motion between 60 Hz selection updates.
+do
     local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
     cfg['Silent Aim'].EndMath.Visualizer=true;cfg['Silent Aim'].Prediction.Enabled=false
     cfg['Silent Aim'].Target.Closest.Enabled=false;cfg.ESP.VisibleCheck=false
@@ -827,6 +841,24 @@ do
     rt.Config['Silent Aim'].Mode='Target';rt.Locks['Silent Aim']=enemy.UserId;step(.04)
     assert(rt.Targets['Silent Aim']==nil,'Explicit target lock must not silently switch players')
     rt:Destroy('test');secondChar:Destroy();second:Destroy();enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- Live-observed adapter names, fresh cursor precedence, and per-feature prediction.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+    local rt=loadRuntime(cfg);rt.Network.RTT=.2;rt.Network.DataRTT=.2;rt.Network.NextSample=clock+10
+    enemyRoot.AssemblyLinearVelocity=V.new(22,0,0);step(.04)
+    local context=rt.AutoPrediction.Features['Silent Aim'];assert(context and context.Target==enemy.UserId and context.Ballistics=='hitscan' and context.TravelSeconds==0)
+    assert(context.BulletSpeed==nil,'Hitscan never invents a finite projectile speed')
+    local refreshes=rt.AutoPrediction.Refreshes;rt.Network.RTT=.3;rt.Network.DataRTT=.3;step(.2)
+    assert(rt.AutoPrediction.Refreshes==refreshes and math.abs(rt.AimTrace['Silent Aim'].BaseLeadTime-.2)<1e-8,'Active estimates stay coherent between half-second refreshes')
+    step(.31);step(.02)
+    assert(rt.AutoPrediction.Refreshes==refreshes+1 and math.abs(rt.AimTrace['Silent Aim'].BaseLeadTime-.3)<1e-8,'Auto prediction adopts refreshed estimates after half a second')
+    enemyRoot.AssemblyLinearVelocity=V.new();step(.02)
+    assert(rt.AimTrace['Silent Aim'].HorizontalLeadTime==rt.AimTrace['Silent Aim'].LeadTime and rt.Points['Silent Aim'].X==enemyRoot.Position.X,'Stops remain immediate between estimate refreshes')
+    rt.Config['Silent Aim'].Enabled=false;step(.04);assert(rt.AutoPrediction.Features['Silent Aim']==nil,'No active target means no retained target estimate')
+    rt:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
 end
 
 -- Live-observed adapter names, fresh cursor precedence, and per-feature prediction.

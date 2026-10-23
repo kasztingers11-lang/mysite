@@ -94,6 +94,7 @@ local function loadAsset(name, prefix, expectedBytes, sourceBase)
     if type(isfile) == 'function' and type(readfile) == 'function' then
         local ok, data = pcall(function()
             if isfile(path) then return readfile(path) end
+            return nil
         end)
         valid = ok and type(data) == 'string' and #data == expectedBytes
             and data:sub(1, #prefix) == prefix

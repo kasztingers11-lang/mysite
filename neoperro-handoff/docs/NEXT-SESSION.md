@@ -1,49 +1,34 @@
-# Continue from neoperro 1.3.8
+# Continue from 1.3.9
 
-Use repair/neoperro-evidence, repository-root sources and generated bundles.
-Main and the handoff snapshot/ZIP are older. Preserve local edits. Read the latest
-SESSION-2026-10-23 section and repair log before treating older notes as current.
+Use repair/neoperro-evidence and repository-root sources. Main and historical
+snapshot/ZIP remain older. Preserve local edits and confirmed aim restoration,
+native client pellet style, Macro Abuse, whitelist and intro behavior.
 
-The latest request is implemented in source: profiles now affect standalone ESP;
-visual projection is uncapped and subpixel; activation holds recover physically;
-table uses Activation and Triggerbot check with legacy migration; camera/muzzle
-geometry is shared; prediction adds qualified vertical acceleration and validated
-turn shortening. Confirmed aim restoration, native pellet style, Macro Abuse and
-intro remain intact. The user declined an alt for this continuation.
+Implemented: shared forecast for all aim/box paths; XZ/Y resolver separation;
+bounded speed/turn response; measured jump acceleration with braking-to-rest for
+decelerating falls; active Auto target/weapon/ping estimates every 0.5 seconds.
+Hitscan has zero travel time; do not invent projectile speed. Manual Value stays
+the baseline and no Dynamic switch exists. Auto Y ignores JumpOffset.
 
-## Current evidence
+Latest actual evidence is in SESSION-2026-10-23. Final remote capture: 15,576
+forecasts per feature, zero falling-upward/grounded-lead violations at ~200 ms
+Data Ping. Native shot results did not establish reliable damage. Local shared
+Q/RMB fixtures passed and estimates refreshed in .500-.516 seconds. Predicted
+visual stress in a populated server rendered on every frame at ~239 FPS.
+Both bundles pass REAL analysis with zero errors/warnings; Lua regressions pass.
+Mocks do not prove Roblox compatibility.
 
-- Both Lua suites, generated/config syntax and diff checks pass.
-- Local engine fixtures: profiles at four distances; native Q/RMB target selection
-  and release; ~240 Hz draw updates; native parallax accepted, muzzle wall rejected.
-- One native local jump improved vertical future-position error at 65/120 ms.
-- Turn replay slightly worsened mean error and improved the 120 ms tail; do not
-  present it as a universal prediction improvement.
-- No actual-player shots or damage measured in this continuation.
-- Full-bundle analyzer still has dynamic/optional-state findings. Mock tests do not
-  establish Roblox compatibility.
+Next authorized work: move selection/Triggerbot checks from their 60 Hz schedule
+to the client frame loop for 240 FPS responsiveness. Keep velocity fitting and
+network/estimate sampling independently paced; measure populated-server cost and
+preserve firing/cleanup semantics. No fixed FPS guarantee.
 
-## Remaining validation, in order
+Still uncertain: controlled remote damage and shot-time eligibility transitions,
+broad third-person weapon/obstacle cases, verified macro motion and calibration
+across latency/replication states. Earlier public firing consumed two Revolver
+rounds without observed target health loss; a DB send without ammo consumption
+was not a confirmed shot. Focus loss/absent targets must never be counted as passes.
+Key system, anti-tamper and webhook logging remain later work.
 
-1. With a second controlled player available, test native third-person firing:
-   camera offset/behind, muzzle clear/camera blocked, muzzle blocked, different
-   weapons and final predicted-point alignment. Keep 2.2 studs and 120 pixels.
-   Do not loosen limits to manufacture passes.
-2. Remote rising/apex/falling/landing at both ordinary and higher ping. Capture
-   target/part, raw/history/resolved velocities, acceleration/confidence, timing,
-   final point, ground support, camera/muzzle, submitted MOUSE, ammo and health.
-   Keep selected target, sent coordinates and observed damage separate.
-3. Compare turn guard and fast-motion bounds on varied strafe/macro recordings.
-   Keep manual baseline unchanged, dynamic behavior always on, no extra switch.
-   Do not infer projectile speed from native tracer duration in this hitscan game.
-4. User's intermittent AntiCurve reproduction, broad gun profile boundaries,
-   native Triggerbot cadence/reload/swap/respawn and populated-server render cost.
-   Drawing every frame does not guarantee 144 FPS on all devices.
-5. Further repository consolidation only after preserving useful references and
-   evidence. Historical snapshot/ZIP remain clearly labeled. Anti-tamper, key
-   system and Discord logging are later work, not part of this repair.
-
-Before live work verify REAL injection, current client/runtime, diagnostics and
-console. Use the rebuilt full bundle and stable live-reload label; stop/restore
-owned input on focus loss. Temporary local fixtures must always clean themselves
-and must be described as fixtures. Never print/save executor credentials.
+Before live execution inspect REAL health, diagnostics and console; use the full
+bundle with the stable live-reload label. Never print/save executor credentials.

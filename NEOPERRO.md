@@ -1,4 +1,4 @@
-# neoperro 1.3.8 settings and development
+# neoperro 1.3.9 settings and development
 
 Edit the table in neoperro.lua, then execute the entire file. The loader at its
 bottom fetches this repair branch. neoperro-full.lua is the equivalent bundle
@@ -36,8 +36,8 @@ Legacy Keybind Mode and Work With TB names migrate when the new names are absent
 
 | Section | Behavior |
 | --- | --- |
-| Prediction | Separate Enabled, Auto and Value in all three features. Auto ignores Value and uses the larger overlapping RTT estimate, not their sum. Manual Value remains its baseline. Bounded horizontal speed response is always on; no Dynamic switch. |
-| Movement | Silent permanently bounds fast horizontal lead. Turn shortening requires recent forecast evidence; it does not add sideways acceleration. Stable measured vertical slopes can compensate jump acceleration. No projectile speed is invented for hitscan. |
+| Prediction | Separate Enabled, Auto and Value in all three features. Active target/weapon/ping estimates refresh every 0.5 seconds, immediately on target/weapon changes; velocity response stays fast. Auto ignores Value and uses the larger overlapping RTT estimate, not their sum. Manual Value remains its baseline. Bounded horizontal speed response is always on; no Dynamic switch. |
+| Movement | Every prediction path bounds fast horizontal lead. Turn shortening requires recent forecast evidence; it does not add sideways acceleration. Stable measured vertical slopes can compensate jump acceleration. No projectile speed is invented for hitscan. |
 | Closest | Part compares part centers. Point compares allowed part geometry against the forward cursor ray. Center permits local Y; All permits XYZ. Reduce=0 permits edges; 1 collapses to center. Sharpness is frame-time aware and clamped within the selected part. |
 | Closest.Raycast | A real character/accessory surface under the cursor bypasses Reduce and Sharpness before prediction. Otherwise Part/Point behavior applies. Tool surfaces are excluded. |
 | Y-Axis | Silent only. Auto ignores JumpOffset, uses measured vertical motion and ground support, and bounds lead by part height. Custom scales positive vertical lead with JumpOffset and stays separate. GroundShotCheck is independent. |
@@ -61,8 +61,7 @@ Roblox player. One local native jump supports the measured vertical model but
 does not calibrate remote replication, server acceptance or 200 ms combat.
 Turn replay slightly increased mean error while reducing the 120 ms tail;
 it is a conservative guard, not proof of generally better prediction.
-Earlier airborne shots had mixed damage results. Full-file analysis still has
-dynamic/optional-state type findings despite passing syntax/runtime mocks.
+Earlier airborne shots had mixed damage results. Full and runtime bundles now pass REAL analysis with zero errors/warnings.
 
 No FPS or hit-rate guarantee is made. No anti-tamper, key system or webhook
 logging is included in this repair.

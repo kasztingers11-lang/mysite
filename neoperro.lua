@@ -1,6 +1,8 @@
 -- neoperro | edit the table, then execute the whole file.
 -- Recommended starting point: Auto prediction, Closest Method='Part', FOV-off Triggerbot.
 -- Prediction Value is the manual baseline; speed adjustment is always built in.
+-- Auto estimates refresh every 0.5s on an active target; motion stays responsive between refreshes.
+-- Supported guns use hitscan: no invented bullet travel time or tracer-speed estimate.
 -- Keybind = {keyboard key, mouse button, 'Keyboard' or 'Mouse'}; entry 3 chooses the device.
 -- P: Silent toggle; M: Assist toggle; hold Q: Assist; V: TB toggle; hold RMB: TB; E: unload.
 -- Auto + Activation.Holding=false runs continuously; true requires the activation input.
