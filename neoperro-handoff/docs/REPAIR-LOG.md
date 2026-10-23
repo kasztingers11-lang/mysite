@@ -1,3 +1,33 @@
+# 1.3.12 accepted table integration
+
+Integrated the user's reordered, aligned and comment-free table. Canonical
+names: Method, Closest.Selection, Unlock Method and DelayMethod. Resolver is
+global; Anti-AimViewer and Client Bullets sit above per-feature settings and
+retain the shared shot/restore/native-pellet paths. Y-Axis switches now apply
+to each feature, with Offset for Custom; Auto ignores it. GroundShotCheck
+is a Silent/Assist/TB array in Checks. Old names migrate with canonical precedence.
+
+Removed Filled, Transparency, Predicted Position and Assist Ignore controls.
+Boxes stay unfilled, fully opaque and on actual character positions. Removed
+ESP and box distance caps completely, so old values cannot reinstate a cap.
+Prediction and weapon profile ranges remain separate from these visual controls.
+
+Mocks pass: canonical/legacy migration and precedence, all-feature Resolver,
+Y-Axis/ground-check independence, fixed visuals despite legacy/live mutation,
+one-million-stud on-screen ESP, and global Client Bullets/aim restoration for
+Manual, Triggerbot and Prefire with Silent disabled, including both switches
+off. Native pellet style/spread regression coverage is preserved.
+
+Both generated bundles analyze with zero errors/warnings. REAL client rejoined
+to generation 3; first game-info call timed out during that transition, then
+recovered. Full 1.3.12 live-reload succeeded. Read-only state assertions passed:
+alive, shared/global settings, removed fields absent, three ground columns,
+33,522 aim updates, six FOV Drawing objects, zero remote records and zero
+activations. Console problems were empty. This empty-server startup check
+does not establish remote visuals, shot acceptance or hit accuracy.
+
+---
+
 # 1.3.11 resolver and table cleanup
 
 Silent Aim now has Resolver.Enabled only; TrueVelocity is internal. Sampled

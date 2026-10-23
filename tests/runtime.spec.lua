@@ -284,16 +284,16 @@ assert(second.Targets['Silent Aim']==nil,'Cursor is outside the small player box
 second.Config['Gun Specifications'].Enabled=true;step(0.04)
 assert(second.Targets['Silent Aim']==enemy,'Weapon profile changes the selection box')
 second.Config['Gun Specifications'].Enabled=false
-second.Config['Silent Aim'].Fov.Mode='2d-Circle';step(0.04)
+second.Config['Silent Aim'].Fov.Method='2d-Circle';step(0.04)
 assert(second.Targets['Silent Aim']==enemy,'Circle radius is independent of box width')
-second.Config['Silent Aim'].Fov.Mode='2d-Box';second.Config['2d-Box']['Silent Aim'].Size.Width=5
-second.Config['Silent Aim'].Target.Closest.Method='Point'
+second.Config['Silent Aim'].Fov.Method='2d-Box';second.Config['2d-Box']['Silent Aim'].Size.Width=5
+second.Config['Silent Aim'].Target.Closest.Selection='Point'
 second.Config['Silent Aim'].Target.Closest.Raycast=true
 second.Config['Silent Aim'].Target.Closest.Reduce.Center=1
 rayHit={Instance=enemyTorso,Position=V.new(0.3,0.7,-49.5)};step(0.04)
 assert(second.Points['Silent Aim']==rayHit.Position,'Raycast bypasses Reduce and Sharpness')
 rayHit=nil;second.Config['Silent Aim'].Target.Closest.Raycast=false
-second.Config['Silent Aim'].Target.Closest.Method='Part'
+second.Config['Silent Aim'].Target.Closest.Selection='Part'
 moveEnemy(0,0,-50)
 
 -- Stable standalone ESP; colors apply only while whitelist is enabled.
@@ -345,11 +345,11 @@ end
 
 -- Aim Assist Auto searches continuously only during its hold input.
 do
-    local cfg=Core.copy(Defaults);cfg.Whitelist.Enabled=true;cfg.Whitelist.Mode='Friend'
+    local cfg=Core.copy(Defaults);cfg.Whitelist.Enabled=true;cfg.Whitelist.Method='Friend'
     local old=loadRuntime(cfg);old.WhiteMode='Target';old.Whitelist={enemy.UserId};old.Version='1.3.4'
     local current=loadRuntime(cfg)
     assert(current.WhiteMode=='Target' and current.Whitelist[1]==enemy.UserId,'An unchanged configuration preserves valid whitelist state across runtime versions')
-    cfg.Whitelist.Mode='Target'
+    cfg.Whitelist.Method='Target'
     current=loadRuntime(cfg)
     assert(current.WhiteMode=='Target','An explicit configuration mode still wins')
     current:Destroy('test');clearInput()
@@ -443,7 +443,7 @@ end
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
     local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false
-    s.Target.Closest.Method='Point';s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
+    s.Target.Closest.Selection='Point';s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
     moveEnemy(2,0,-50)
     local raycast=World.Raycast
     World.Raycast=function(self,origin,direction,params)
@@ -462,13 +462,13 @@ end
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
     local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false
-    s.Target.Closest.Raycast=false;s.Target.Closest.Method='Part';s.Target.Closest.Sharpness=1
+    s.Target.Closest.Raycast=false;s.Target.Closest.Selection='Part';s.Target.Closest.Sharpness=1
     s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0
     moveEnemy(2,0,-50)
     local leg=obj('Part','LeftUpperLeg',enemyChar);leg.Size=V.new(2,8,1);leg.Position=V.new(1.5,4,-50);leg.CFrame=CF.new(leg.Position)
     local rt=loadRuntime(cfg);step(.04)
     assert(rt.AimTrace['Silent Aim'].Part=='UpperTorso','Part retains nearest-center semantics')
-    rt.Config['Silent Aim'].Target.Closest.Method='Point';step(.04)
+    rt.Config['Silent Aim'].Target.Closest.Selection='Point';step(.04)
     assert(rt.AimTrace['Silent Aim'].Part=='LeftUpperLeg','Point compares nearest allowed points, not only part centers')
     local p=rt.AimTrace['Silent Aim'].BasePoint
     assert(p.X>=.5 and p.X<=2.5 and p.Y>=0 and p.Y<=8,'The selected point remains in the real part')
@@ -491,7 +491,7 @@ end
 -- Expanded body tolerance does not resize the target and stops outside its margin.
 do
     local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
-    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Fov.Mode='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Visible=true
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Fov.Method='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Visible=true
     cfg['Silent Aim'].Fov['2d-Circle'].Size=75;cfg['Silent Aim'].EndMath={Visualizer=true}
     local rt=loadRuntime(cfg);step(.04)
     local outline,circle,halo,dot=false,false,false,false
@@ -658,7 +658,7 @@ do
     local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
     cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Prediction.Enabled=false
     cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Silent Aim'].AntiCurve.Enabled=true
-    cfg['Silent Aim'].AntiCurve.Mode='3d-angles'
+    cfg['Silent Aim'].AntiCurve.Method='3d-angles'
     local originalHit=mouse.Hit;mouse.Hit=CF.new(0,0,-5000)
     local rt=loadRuntime(cfg);step(.04)
     assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveDistance<.01,'Background depth cannot manufacture a lateral curve')
@@ -669,7 +669,7 @@ do
     assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveLimit==math.huge,'Unlimited only removes the distance threshold')
     rt.Config['Silent Aim'].AntiCurve['3d-angles'].Max=.000000001;moveEnemy(.000001,0,-50);step(.04)
     assert(not rt.Points['Silent Aim'],'Sub-nanostud tolerance is supported without an old fixed cap')
-    rt.Config['Silent Aim'].AntiCurve['3d-angles'].Max=math.huge;rt.Config['Silent Aim'].Mode='Target';rt.Locks['Silent Aim']=enemy.UserId
+    rt.Config['Silent Aim'].AntiCurve['3d-angles'].Max=math.huge;rt.Config['Silent Aim'].Method='Target';rt.Locks['Silent Aim']=enemy.UserId
     moveEnemy(0,0,50);step(.04)
     assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='anti-curve-direction','Unlimited cannot create a missing forward alignment')
     rt:Destroy('test');mouse.Hit=originalHit;moveEnemy(0,0,-50)
@@ -691,7 +691,7 @@ do
     assert(rt.Points['Silent Aim'] and not rt.Points['Aim Assist'],'Firing uses a clear muzzle while assistance respects its camera wall')
     assert(rt.AimTrace['Silent Aim'].AntiCurveCameraDistance>2.2 and rt.AimTrace['Silent Aim'].AntiCurveMuzzleDistance<.01)
     assert(rt.AimTrace['Silent Aim'].AntiCurveReference=='muzzle-to-mouse-ray')
-    rt.Config['Silent Aim'].AntiCurve.Mode='Endmath';rt.Config['Silent Aim'].AntiCurve.Endmath.Radius=10;step(.04)
+    rt.Config['Silent Aim'].AntiCurve.Method='Endmath';rt.Config['Silent Aim'].AntiCurve.Endmath.Radius=10;step(.04)
     assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveCameraPixels>10,'Pixel mode also accounts for native muzzle alignment')
     rt.Config.Triggerbot.Enabled=true;rt.Toggles.Triggerbot=true;rt.Config.Triggerbot.Fov.Character=1
     World.Raycast=function(self,origin,direction,params)
@@ -715,8 +715,9 @@ do
     local rt=loadRuntime(cfg);step(.04)
     local box
     for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then box=d end end
-    assert(box and not rt.Targets['Silent Aim'],'Unselected ESP still has its predicted box')
-    assert(math.abs(box.Position.X+box.Size.X/2-(960+3.75*1000/50))<1e-6,'Unselected boxes use the permanent fast-motion bound instead of raw unlimited lead')
+    assert(box and not rt.Targets['Silent Aim'],'ESP remains available independently of selection')
+    assert(math.abs(box.Position.X+box.Size.X/2-960)<1e-6,'Removed predicted-position input cannot move the visible box off the actual character')
+    assert(rt:Forecast(enemy,'Silent Aim').X>enemyRoot.Position.X,'Disabling predicted box position does not disable shot prediction')
     rt:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
 end
 
@@ -748,21 +749,28 @@ do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
     local silent=cfg['Silent Aim'];silent.Ignore=true;silent.Target.Closest.Enabled=false
     silent.EndMath={VelocityHistory=false,WallCheck=false,Visualizer=true}
-    silent.AntiCurve.Mode='endmath';silent.AntiCurve.endmath={Radius=91,WallCheck=true};silent.AntiCurve.Endmath=nil
+    silent.AntiCurve.Method='endmath';silent.AntiCurve.endmath={Radius=91,WallCheck=true};silent.AntiCurve.Endmath=nil
     silent.Prediction.Auto=false;cfg['Y-Axis'].Enabled=true
     local rt=loadRuntime(cfg)
-    assert(rt.Config['Silent Aim'].EndMath==nil and rt.Config['Silent Aim'].Resolver.Method==nil)
-    assert(rt.Config['Silent Aim'].AntiCurve.Mode=='Endmath' and rt.Config['Silent Aim'].AntiCurve.Endmath.Radius==91)
+    assert(rt.Config['Silent Aim'].EndMath==nil and rt.Config.Resolver.Method==nil)
+    assert(rt.Config['Silent Aim'].AntiCurve.Method=='Endmath' and rt.Config['Silent Aim'].AntiCurve.Endmath.Radius==91)
     enemyHum.FloorMaterial=Enum.Material.Air;enemyRoot.AssemblyLinearVelocity=V.new()
     for i=0,7 do moveEnemy(i*.44,3-i*.3,-50-i*.16);step(.02) end
     local evidence=rt.AimTrace['Silent Aim']
     assert(evidence.Resolver=='TrueVelocity' and evidence.VelocitySource=='true-velocity')
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do
+        local _,forecast=rt:Forecast(enemy,feature,'UpperTorso')
+        assert(forecast.Resolver=='TrueVelocity' and forecast.VelocitySource=='true-velocity','The shared resolver applies to every prediction feature')
+    end
     assert(math.abs(evidence.ResolvedVelocity.X-22)<1e-6 and math.abs(evidence.ResolvedVelocity.Y+15)<1e-6 and math.abs(evidence.ResolvedVelocity.Z+8)<1e-6,'Persistent zero replicated velocity cannot hide coherent XYZ movement')
     assert(rt.Points['Silent Aim'].X>enemyRoot.Position.X and rt.Points['Silent Aim'].Y<enemyRoot.Position.Y,'Auto Y retains the measured falling correction')
-    rt.Config['Silent Aim'].Resolver.Enabled=false
+    rt.Config.Resolver.Enabled=false
     for _,callback in pairs(renders)do callback(1/240)end
     assert(rt.Points['Silent Aim']==enemyRoot.Position and rt.AimTrace['Silent Aim'].VelocitySource=='raw','Resolver toggle changes the next render without restarting')
-    rt.Config['Silent Aim'].Resolver.Enabled=true
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do
+        local _,forecast=rt:Forecast(enemy,feature,'UpperTorso');assert(forecast.Resolver=='Disabled' and forecast.VelocitySource=='raw')
+    end
+    rt.Config.Resolver.Enabled=true
     for _,callback in pairs(renders)do callback(1/240)end
     assert(rt.AimTrace['Silent Aim'].VelocitySource=='true-velocity')
     rt.Config.Checks.Wall[1]=false;rt.Config['Silent Aim'].EndMath={WallCheck=false}
@@ -771,20 +779,112 @@ do
     rt:Destroy('test');muzzleBlocked=false;handle.Position=V.new();enemyHum.FloorMaterial=Enum.Material.Plastic;moveEnemy(0,0,-50)
 end
 
+-- Global aim restoration and native client bullets cover every firing source with Silent disabled.
+do
+    local oldHit,oldAmmo=mouse.Hit,ammo.Value;mouse.Hit=CF.new(12,1,-50)
+    local enemyGun=obj('Tool','[Revolver]',enemyChar);local enemyAmmo=obj('IntValue','Ammo',enemyGun)
+    for _,source in ipairs({'Manual','Triggerbot','Prefire'})do
+        for _,globalEnabled in ipairs({true,false})do
+            ammo.Value=6;enemyAmmo.Value=6
+            local cfg=Core.copy(Defaults);cfg['Silent Aim'].Enabled=false
+            cfg.Triggerbot.Enabled=source=='Triggerbot';cfg.Triggerbot.Fov.Enabled=true;cfg.Triggerbot.Prediction.Enabled=false
+            cfg.Misc.Prefire.Enabled=source=='Prefire'
+            cfg['Anti-AimViewer'].Enabled=globalEnabled;cfg['Client Bullets'].Enabled=globalEnabled
+            local rt=loadRuntime(cfg);step(.04)
+            if source=='Manual' then tool.Activated:Fire()
+            elseif source=='Triggerbot' then key('MouseButton2',true);step(.04)
+            else key('C',true);enemyAmmo.Value=5;step(.04);step(.26) end
+            assert(rt.LastShot and (source=='Manual' or rt.FiringSource==source),'Each source records its own shot without Silent Aim')
+            assert((rt.LastShot.point~=nil)==globalEnabled,'Client Bullets uses its global switch for every source')
+            if source~='Manual' then assert((rt.Stats.AimRestores>0)==globalEnabled,'Every predicted firing source obeys global aim restoration')end
+            local a=obj('Attachment','Start');a.WorldPosition=rt.LastShot.origin
+            local b=obj('Attachment','End');b.Position=V.new();b.WorldPosition=rt.LastShot.serverPoint+V.new(1,.2,-2)
+            local before=b.WorldPosition
+            local beam=obj('Beam','gb');beam.Color='native-yellow';beam.Width0=.002;beam.Width1=.1;beam.Texture='native-texture';beam.Attachment0=a;beam.Attachment1=b;beam.Parent=World
+            local expected=globalEnabled and Core.redirectTracer(a.WorldPosition,before,rt.LastShot.serverPoint,mouse.Hit.Position,V.new) or before
+            assert((b.WorldPosition-expected).Magnitude<1e-6,'Global Client Bullets only rotates this client\'s native ray')
+            assert(beam.Color=='native-yellow' and beam.Width0==.002 and beam.Width1==.1 and beam.Texture=='native-texture')
+            rt:Destroy('test');clearInput();beam:Destroy();a:Destroy();b:Destroy();camera.CFrame=CF.new()
+        end
+    end
+    enemyGun:Destroy();mouse.Hit=oldHit;ammo.Value=oldAmmo
+end
+
+-- Fixed rendering controls ignore old values and live mutation; distance has no configurable cap.
+do
+    local cfg=Core.copy(Defaults);cfg['Silent Aim'].Enabled=false;cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg.ESP.MaxDistance=0;cfg.ESP.VisibleCheck=false
+    local style=cfg['2d-Box']['Silent Aim'];style['Max Distance']=0;style.Filled=true;style.Transparency=0;style['Predicted Position']=true
+    moveEnemy(0,0,-1000000)
+    local rt=loadRuntime(cfg);step(.04)
+    local visual=rt.Records[enemy].visuals['Silent Aim'].box
+    assert(visual and rt.Config.ESP.MaxDistance==nil and rt.Config['2d-Box']['Silent Aim'].Filled==nil)
+    local function checkBox()
+        local found=false
+        for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible then
+            assert(d.Filled==false and d.Transparency==1,'Boxes remain unfilled and fully opaque')
+            found=true
+        end end
+        assert(found,'An on-screen distant character stays visible without a distance limit')
+    end
+    checkBox()
+    rt.Config.ESP.MaxDistance=0;rt.Config['2d-Box']['Silent Aim']['Max Distance']=0
+    rt.Config['2d-Box']['Silent Aim'].Filled=true;rt.Config['2d-Box']['Silent Aim'].Transparency=0
+    rt.Config['2d-Box']['Silent Aim']['Predicted Position']=true;step(.04);checkBox()
+    rt:Destroy('test');moveEnemy(0,0,-50)
+end
+
+-- Assist cannot acquire the removed FOV-bypass option through an old or mutated table.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Aim Assist'].Ignore=true
+    cfg['Silent Aim'].Prediction.Enabled=false;cfg['Aim Assist'].Prediction.Enabled=false
+    moveEnemy(20,0,-50)
+    local rt=loadRuntime(cfg);key('Q',true);step(.04)
+    assert(rt.Targets['Silent Aim']==enemy and not rt.Targets['Aim Assist'] and rt.Config['Aim Assist'].Ignore==nil)
+    rt.Config['Aim Assist'].Ignore=true;step(.04);assert(not rt.Targets['Aim Assist'],'Assist FOV remains enforced after live mutation')
+    rt:Destroy('test');clearInput();camera.CFrame=CF.new();moveEnemy(0,0,-50)
+end
+
+-- Shared Y settings and per-feature ground checks use the reordered table.
+do
+    local cfg=Core.copy(Defaults);cfg.Resolver.Enabled=false
+    cfg['Y-Axis'].Enabled=true;cfg['Y-Axis'].Method='Custom';cfg['Y-Axis'].Offset=2
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do cfg[feature].Prediction.Auto=false;cfg[feature].Prediction.Value=.1 end
+    local rt=loadRuntime(cfg);enemyHum.FloorMaterial=Enum.Material.Air;enemyRoot.AssemblyLinearVelocity=V.new(0,10,0);step(.04)
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local point,evidence=rt:Forecast(enemy,feature,'UpperTorso')
+        assert(math.abs(point.Y-2)<1e-6 and evidence.YMethod=='Custom','Shared Custom offset applies to each enabled feature')
+    end
+    rt.Config['Y-Axis']['Aim Assist']=false
+    local point,evidence=rt:Forecast(enemy,'Aim Assist','UpperTorso');assert(math.abs(point.Y-1)<1e-6 and evidence.YMethod=='Disabled')
+    rt.Config['Y-Axis']['Aim Assist']=true;rt.Config['Y-Axis'].Method='Auto';rt.Config['Y-Axis'].Offset=5
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        point,evidence=rt:Forecast(enemy,feature,'UpperTorso');assert(math.abs(point.Y-1)<1e-6 and evidence.YMethod=='Auto','Auto ignores Custom Offset for every feature')
+    end
+    rt.Config['Y-Axis'].Enabled=false;moveEnemy(0,3,-50);enemyRoot.AssemblyLinearVelocity=V.new(0,-30,0);groundY=0;step(.04)
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do point=rt:Forecast(enemy,feature,'UpperTorso');assert(point.Y==3,'Each shared ground check prevents the predicted point from falling through support')end
+    rt.Config.Checks.GroundShotCheck[2]=false
+    point=rt:Forecast(enemy,'Aim Assist','UpperTorso');assert(point.Y<3)
+    point=rt:Forecast(enemy,'Silent Aim','UpperTorso');assert(point.Y==3)
+    point=rt:Forecast(enemy,'Triggerbot','UpperTorso');assert(point.Y==3,'Ground-check columns remain independent')
+    rt:Destroy('test');groundY=nil;enemyHum.FloorMaterial=Enum.Material.Plastic;enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50)
+end
+
 -- Prediction and the barrel-alignment filters.
 local modes=Core.copy(Defaults);modes['Silent Aim'].Ignore=true;
 modes['Silent Aim'].Prediction.Auto=false
 modes['Silent Aim'].Target.Closest.Enabled=false
-modes['Y-Axis'].Enabled=true;modes['Y-Axis'].Mode='Custom';modes['Y-Axis'].JumpOffset=2
+modes['Y-Axis'].Enabled=true;modes['Y-Axis'].Method='Custom';modes['Y-Axis'].Offset=2
 enemyRoot.AssemblyLinearVelocity=V.new(0,10,0)
 local filtered=loadRuntime(modes);step(0.04)
 assert(math.abs(filtered.Points['Silent Aim'].Y-2.56)<1e-6)
-filtered.Config['Y-Axis'].Mode='Auto';step(0.04)
+filtered.Config['Y-Axis'].Method='Auto';step(0.04)
 assert(math.abs(filtered.Points['Silent Aim'].Y-1.28)<1e-6,'Rising motion is not erased by a stale floor material')
 enemyRoot.AssemblyLinearVelocity=V.new();step(0.04);assert(filtered.Points['Silent Aim'].Y==0)
 filtered.Config['Y-Axis'].Enabled=false
 filtered.Config['Silent Aim'].AntiCurve.Enabled=true
-filtered.Config['Silent Aim'].AntiCurve.Mode='Endmath'
+filtered.Config['Silent Aim'].AntiCurve.Method='Endmath'
 filtered.Config['Silent Aim'].AntiCurve.Endmath.Radius=1
 enemyRoot.AssemblyLinearVelocity=V.new(100,0,0);step(0.04)
 assert(filtered.Points['Silent Aim']==nil,'Endmath rejects outside pixel radius instead of clamping prediction')
@@ -794,7 +894,7 @@ assert(acceptedLead>0 and filtered.AimTrace['Silent Aim'].FastMotionLimited,'Fas
 filtered.Config['Silent Aim'].AntiCurve.Enabled=false;step(.04)
 assert(math.abs(filtered.Points['Silent Aim'].X-acceptedLead)<1e-6,'AntiCurve never clamps the final guarded prediction')
 filtered.Config['Silent Aim'].AntiCurve.Enabled=true
-filtered.Config['Silent Aim'].AntiCurve.Mode='3d-angles';step(0.04)
+filtered.Config['Silent Aim'].AntiCurve.Method='3d-angles';step(0.04)
 assert(filtered.Points['Silent Aim']==nil,'Reject world-space mouse-to-target distance')
 filtered.Config['Silent Aim'].AntiCurve.Enabled=false
 filtered.Config.Whitelist.Enabled=true;filtered.WhiteMode='Friend';filtered.Whitelist={2};step(0.04)
@@ -808,7 +908,7 @@ do
     cfg['Silent Aim'].Target.Closest.Enabled=false
 
     cfg['Silent Aim'].Prediction.Auto=false;cfg['Silent Aim'].Prediction.Value=.1
-    cfg['Silent Aim'].Fov.Mode='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Size=10
+    cfg['Silent Aim'].Fov.Method='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Size=10
     moveEnemy(2,0,-50);enemyRoot.AssemblyLinearVelocity=V.new(-20,0,0)
     local rt=loadRuntime(cfg);step(.04)
     assert(rt.Targets['Silent Aim']==enemy,'A predicted point entering FOV remains eligible')
@@ -852,7 +952,7 @@ do
     local rival=obj('Player','NearerTriggerCandidate',Players);rival.UserId=78;rival.DisplayName='Nearer'
     local rivalChar=character(rival,-50)
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
-    cfg['Silent Aim'].Mode='Target';cfg['Silent Aim'].Ignore=true
+    cfg['Silent Aim'].Method='Target';cfg['Silent Aim'].Ignore=true
     cfg.Triggerbot.TargetOnly=true;cfg.Triggerbot.Fov.Enabled=true;cfg.Triggerbot.Prediction.Enabled=false
     local wasEnabled=tool.Enabled;tool.Enabled=false
     moveEnemy(1,0,-50)
@@ -872,12 +972,12 @@ do
     cfg['Silent Aim'].Prediction.Auto=false
 
     cfg['Silent Aim'].AntiCurve.Enabled=true
-    cfg['Silent Aim'].AntiCurve.Mode='Endmath'
+    cfg['Silent Aim'].AntiCurve.Method='Endmath'
     cfg['Silent Aim'].AntiCurve.Endmath.Radius=50
     enemyRoot.AssemblyLinearVelocity=V.new(100,0,0)
     local rt=loadRuntime(cfg);step(.04)
     assert(rt.Targets['Silent Aim']==second,'Auto must try the next candidate after a final filter rejects the nearest')
-    rt.Config['Silent Aim'].Mode='Target';rt.Locks['Silent Aim']=enemy.UserId;step(.04)
+    rt.Config['Silent Aim'].Method='Target';rt.Locks['Silent Aim']=enemy.UserId;step(.04)
     assert(rt.Targets['Silent Aim']==nil,'Explicit target lock must not silently switch players')
     rt:Destroy('test');secondChar:Destroy();second:Destroy();enemyRoot.AssemblyLinearVelocity=V.new()
 end
@@ -924,9 +1024,9 @@ do
     enemyRoot.AssemblyLinearVelocity=V.new(0,1,0);step(.04)
     assert(rt.Points['Silent Aim'].Y==3,'Grounded Auto does not invent upward movement')
     enemyRoot.AssemblyLinearVelocity=V.new(0,-30,0)
-    rt.Config['Y-Axis'].JumpOffset=5;step(.04)
-    assert(rt.Points['Silent Aim'].Y==3,'Auto ignores JumpOffset')
-    groundY=nil;rt.Config['Silent Aim'].GroundShotCheck=false
+    rt.Config['Y-Axis'].Offset=5;step(.04)
+    assert(rt.Points['Silent Aim'].Y==3,'Auto ignores Offset')
+    groundY=nil;rt.Config.Checks.GroundShotCheck[1]=false
     rt.Config['Y-Axis'].Enabled=false;enemyRoot.AssemblyLinearVelocity=V.new(10,0,0)
     rt.Config['Silent Aim'].Prediction.Enabled=false;step(.04)
     assert(rt.Points['Silent Aim'].X==0,'Disabled prediction adds no lead')

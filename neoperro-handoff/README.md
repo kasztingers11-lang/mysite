@@ -1,7 +1,7 @@
 # neoperro - current repair handoff
 
-Current runtime: **1.3.11**, branch **repair/neoperro-evidence**. Main is older.
-Use the repository-root `neoperro.lua` (commented table plus repair-branch loader)
+Current runtime: **1.3.12**, branch **repair/neoperro-evidence**. Main is older.
+Use the repository-root `neoperro.lua` (editable table plus repair-branch loader)
 or `neoperro-full.lua` (full bundle). Preserve local edits before switching branches.
 
 ## Read first
@@ -30,5 +30,5 @@ Never store executor credentials. Keep supported game IDs internal to runtime.
 
 Latest feedback repairs and evidence: [session 2026-10-23](docs/SESSION-2026-10-23.md).
 
-Pending table review: [comparison](reviews/table-comparison.md) and
-[aligned proposal](reviews/table-proposal.lua). These are drafts, not runtime defaults.
+Historical table review: [comparison](reviews/table-comparison.md) and
+[aligned proposal](reviews/table-proposal.lua). These snapshots precede the accepted 1.3.12 integration; use the root config.

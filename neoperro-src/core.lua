@@ -26,6 +26,66 @@ function Core.merge(defaults, supplied)
     return result
 end
 
+function Core.normalizeConfig(supplied)
+    local result = Core.copy(supplied)
+    local function alias(value, old, new)
+        if value[new] == nil then value[new] = value[old] end
+        value[old] = nil
+    end
+    local function names(value)
+        if type(value) ~= 'table' then return end
+        alias(value, 'Mode', 'Method')
+        alias(value, 'DelayMode', 'DelayMethod')
+        alias(value, 'Unlock Mode', 'Unlock Method')
+        for _, child in pairs(value) do names(child) end
+    end
+    names(result)
+    for _, name in ipairs({'Silent Aim', 'Aim Assist'}) do
+        local feature = result[name]
+        if type(feature) == 'table' then
+            alias(feature, 'Keybind Mode', 'Activation')
+            local closest = feature.Target and feature.Target.Closest
+            if type(closest) == 'table' then alias(closest, 'Method', 'Selection') end
+        end
+    end
+    local silent = result['Silent Aim']
+    if type(silent) == 'table' then
+        silent.EndMath = nil
+        if result.Resolver == nil then result.Resolver = silent.Resolver end
+        silent.Resolver = nil
+        if silent.GroundShotCheck ~= nil then
+            if result.Checks == nil then result.Checks = {} end
+            if type(result.Checks) == 'table' and result.Checks.GroundShotCheck == nil then
+                result.Checks.GroundShotCheck = {silent.GroundShotCheck, true, true}
+            end
+            silent.GroundShotCheck = nil
+        end
+        local anti = silent.AntiCurve
+        if type(anti) == 'table' then
+            alias(anti, 'endmath', 'Endmath')
+            if anti.Method == 'endmath' then anti.Method = 'Endmath' end
+        end
+    end
+    if type(result.Resolver) == 'table' then result.Resolver.Method = nil end
+    local assist, y = result['Aim Assist'], result['Y-Axis']
+    if type(assist) == 'table' then assist.Ignore = nil end
+    if type(y) == 'table' then
+        alias(y, 'JumpOffset', 'Offset')
+        alias(y, 'AimAssist', 'Aim Assist')
+    end
+    if type(result.ESP) == 'table' then result.ESP.MaxDistance = nil end
+    if type(result['2d-Box']) == 'table' then
+        for _, style in pairs(result['2d-Box']) do
+            if type(style) == 'table' then
+                style.Filled, style.Transparency, style['Predicted Position'], style['Max Distance'] = nil, nil, nil, nil
+            end
+        end
+    end
+    local macro = result.Misc and result.Misc['Macro Abuse']
+    if type(macro) == 'table' then alias(macro, 'Work With TB', 'Triggerbot check') end
+    return result
+end
+
 function Core.equal(a, b)
     if type(a) ~= type(b) then return false end
     if type(a) ~= 'table' then return a == b end
@@ -169,7 +229,7 @@ function Core.delay(config, distance, random)
     if config.SmartDelay then
         return Core.number(config.Delay, 0.1, 0.01, 10) + math.min(distance / 2000, 0.15)
     end
-    if config.DelayMode == 'Random' then
+    if config.DelayMethod == 'Random' then
         local range = type(config.RandomDelay) == 'table' and config.RandomDelay or {}
         local low = Core.number(range[1], 0.1, 0.01, 10)
         local high = Core.number(range[2], 0.12, 0.01, 10)

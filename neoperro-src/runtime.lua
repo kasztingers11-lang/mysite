@@ -7,28 +7,7 @@ local supported = {
 }
 assert(supported[game.PlaceId], '[neoperro] This place is not supported.')
 assert(type(environment.neoperro) == 'table', '[neoperro] Put the configuration above the runtime.')
-local suppliedConfig = Core.copy(environment.neoperro)
-for _, name in ipairs({'Silent Aim', 'Aim Assist'}) do
-    local feature = suppliedConfig[name]
-    if type(feature) == 'table' and feature.Activation == nil then feature.Activation = feature['Keybind Mode'] end
-    if type(feature) == 'table' then feature['Keybind Mode'] = nil end
-end
-local suppliedSilent = suppliedConfig['Silent Aim']
-if type(suppliedSilent) == 'table' then
-    suppliedSilent.EndMath = nil
-    if type(suppliedSilent.Resolver) == 'table' then suppliedSilent.Resolver.Method = nil end
-    local anti = suppliedSilent.AntiCurve
-    if type(anti) == 'table' then
-        if anti.Endmath == nil then anti.Endmath = anti.endmath end
-        anti.endmath = nil
-        if anti.Mode == 'endmath' then anti.Mode = 'Endmath' end
-    end
-end
-local suppliedMacro = suppliedConfig.Misc and suppliedConfig.Misc['Macro Abuse']
-if type(suppliedMacro) == 'table' then
-    if suppliedMacro['Triggerbot check'] == nil then suppliedMacro['Triggerbot check'] = suppliedMacro['Work With TB'] end
-    suppliedMacro['Work With TB'] = nil
-end
+local suppliedConfig = Core.normalizeConfig(environment.neoperro)
 local config = Core.merge(Defaults, suppliedConfig)
 Core.validate(Defaults, config)
 local Players = game:GetService('Players')
@@ -51,11 +30,11 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.11', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.12', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
-    Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
-    InitialWhitelist = Core.ids(config.Whitelist.Players), InitialWhiteMode = config.Whitelist.Mode,
+    Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
+    InitialWhitelist = Core.ids(config.Whitelist.Players), InitialWhiteMode = config.Whitelist.Method,
     Epoch = 0, Visuals = {}, Focused = true,
     Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, AimSendSkipped = 0, AimRestores = 0, AimRestoreErrors = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
     AimTrace = {}, Trace = {Events = {}, Sequence = 0, Until = 0, Limit = 128},
@@ -418,7 +397,7 @@ local function targetPart(record, feature)
     for _, part in ipairs(record.character:GetChildren()) do
         if bodyPart(part, record.character) then
             local point = part.Position
-            if target.Closest.Method == 'Point' then
+            if target.Closest.Selection == 'Point' then
                 local localPoint = closestLocal(part, target.Closest)
                 point = part.CFrame:PointToWorldSpace(localPoint)
             end
@@ -453,7 +432,7 @@ local function valid(record, feature, part, skipWall)
     return true
 end
 
-local function velocity(record, feature)
+local function velocity(record)
     local raw = record.root.AssemblyLinearVelocity
     if not Core.finiteVector(raw) then raw = zero end
     local last = record.history[#record.history]
@@ -467,18 +446,15 @@ local function velocity(record, feature)
         record.velocityRaw = raw
         record.motion = Core.motion(record.history, record.root.AssemblyLinearVelocity)
     end
-    if feature == 'Silent Aim' then
-        if not config['Silent Aim'].Resolver.Enabled then return Core.limit(raw, 180) end
-        return record.trueVelocity
-    end
-    return record.resolvedVelocity
+    if not config.Resolver.Enabled then return Core.limit(raw, 180) end
+    return record.trueVelocity
 end
 
 local function prediction(record, feature, point)
     local origin = muzzle()
     -- Projectile travel is intentionally absent until the actual weapon controller
     -- establishes a speed. Visual tracer duration is not ballistic flight time.
-    local vel = velocity(record, feature)
+    local vel = velocity(record)
     -- Point and replicated velocity are read live. History sampler age is not
     -- replication age; adding it again caused shot-time lead spikes between ticks.
     local context = state.AutoPrediction.Features[feature]
@@ -512,28 +488,29 @@ end
 
 -- Shared forecast for selection, shot coordinates and unselected predicted boxes.
 local function leadOffset(record, feature, part, point, evidence)
-    local settings, raw = config[feature], record.root.AssemblyLinearVelocity
+    local raw = record.root.AssemblyLinearVelocity
     local leadTime, predictionSource, speedFactor, baseLeadTime = prediction(record, feature, point)
-    local vel, motion = velocity(record, feature), record.motion or {}
+    local vel, motion = velocity(record), record.motion or {}
     baseLeadTime = baseLeadTime or leadTime
     local turnTime = Core.motionTime(leadTime, motion.TurnRate)
     local horizontalTime, limited = Core.fastLeadTime(turnTime, Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed)
     local lead = Vector3.new(vel.X * horizontalTime, vel.Y * baseLeadTime, vel.Z * horizontalTime)
     local beforeY, airborne = lead.Y, record.humanoid.FloorMaterial == Enum.Material.Air
     local ySettings = config['Y-Axis']
-    local useY = feature == 'Silent Aim' and ySettings.Enabled and ySettings.SilentAim
+    local useY = ySettings.Enabled and ySettings[feature == 'Silent Aim' and 'SilentAim' or feature]
+    local groundCheck = config.Checks.GroundShotCheck[checkIndices[feature]] == true
     local minY, supportedGround
     local needsGround = lead.Y ~= 0 or raw.Y ~= 0 or (motion.VerticalConfidence or 0) >= 0.5
-    if needsGround and (feature ~= 'Silent Aim' or settings.GroundShotCheck or (useY and ySettings.Mode == 'Auto')) then
+    if needsGround and (groundCheck or (useY and ySettings.Method == 'Auto')) then
         minY, supportedGround = support(record, point, lead, part.Size.Y)
     end
     local vertical, source, correction, accelerationMode
     local verticalRaw = raw.Y
-    if feature == 'Silent Aim' and settings.Resolver.Enabled and record.trueVelocitySource == 'true-velocity'
+    if config.Resolver.Enabled and record.trueVelocitySource == 'true-velocity'
         and vel.Y ~= record.resolvedVelocity.Y then verticalRaw = vel.Y end
-    if useY and ySettings.Mode == 'Custom' then
-        if vel.Y > 0 then lead = Vector3.new(lead.X, lead.Y * Core.number(ySettings.JumpOffset, 1, 0, 5), lead.Z) end
-    elseif useY or feature ~= 'Silent Aim' then
+    if useY and ySettings.Method == 'Custom' then
+        if vel.Y > 0 then lead = Vector3.new(lead.X, lead.Y * Core.number(ySettings.Offset, 1, 0, 5), lead.Z) end
+    elseif useY then
         local grounded = supportedGround or (not airborne and math.abs(raw.Y) < 3)
         vertical, source = Core.autoVertical(vel.Y, verticalRaw)
         local y
@@ -541,7 +518,7 @@ local function leadOffset(record, feature, part, point, evidence)
         lead = Vector3.new(lead.X, y, lead.Z)
     end
     local groundCorrected
-    if (feature ~= 'Silent Aim' or settings.GroundShotCheck) and lead.Y < 0 and minY and point.Y + lead.Y < minY then
+    if groundCheck and lead.Y < 0 and minY and point.Y + lead.Y < minY then
         groundCorrected = true
         lead = Vector3.new(lead.X, math.min(point.Y, minY) - point.Y, lead.Z)
     end
@@ -549,9 +526,8 @@ local function leadOffset(record, feature, part, point, evidence)
         evidence.Part, evidence.PartPosition, evidence.BasePoint = part.Name, vectorData(part.Position), vectorData(point)
         evidence.RawVelocity, evidence.SampledVelocity = vectorData(raw), vectorData(record.sampledVelocity)
         evidence.ResolvedVelocity = vectorData(vel)
-        evidence.VelocitySource = feature ~= 'Silent Aim' and record.velocitySource
-            or settings.Resolver.Enabled and record.trueVelocitySource or 'raw'
-        evidence.Resolver = feature == 'Silent Aim' and (settings.Resolver.Enabled and 'TrueVelocity' or 'Disabled') or 'Adaptive'
+        evidence.VelocitySource = config.Resolver.Enabled and record.trueVelocitySource or 'raw'
+        evidence.Resolver = config.Resolver.Enabled and 'TrueVelocity' or 'Disabled'
         evidence.PredictionSource, evidence.SpeedFactor, evidence.LeadTime = predictionSource, speedFactor, leadTime
         evidence.BaseLeadTime, evidence.HorizontalLeadTime, evidence.FastMotionLimited = baseLeadTime, horizontalTime, limited
         evidence.TurnRate, evidence.TurnLeadTime = motion.TurnRate, turnTime
@@ -565,7 +541,7 @@ local function leadOffset(record, feature, part, point, evidence)
         evidence.HistoryAge = record.history[#record.history] and now() - record.history[#record.history].t
         evidence.Airborne, evidence.FloorMaterial, evidence.Health = airborne, record.humanoid.FloorMaterial.Name, record.humanoid.Health
         evidence.MuzzleOrigin, evidence.CameraOrigin = vectorData(muzzle()), vectorData(camera.CFrame.Position)
-        evidence.YMode = useY and ySettings.Mode or 'Disabled'
+        evidence.YMethod = useY and ySettings.Method or 'Disabled'
         evidence.GroundCorrected, evidence.GroundMinimumY, evidence.GroundedByGeometry = groundCorrected, minY, supportedGround
         evidence.LeadBeforeY = vectorData(Vector3.new(lead.X, beforeY, lead.Z))
         evidence.LeadAfterY, evidence.PredictedPoint = vectorData(lead), vectorData(point + lead)
@@ -587,26 +563,10 @@ function state:Forecast(player, feature, partName)
     return Core.finiteVector(point) and point or nil, evidence
 end
 
-local function playerBox(record, feature, standalone, predictedOffset)
+local function playerBox(record, feature, standalone)
     if not record.root or not record.character then return nil end
     local style = config['2d-Box'][feature]
     local origin = record.root.Position
-    if not standalone and style['Predicted Position'] then
-        local cached = record.finalLead and record.finalLead[feature]
-        if not predictedOffset and cached and now() - cached.time < 0.05 then predictedOffset = cached.offset end
-        if not predictedOffset then
-            record.boxLead = record.boxLead or {}
-            local forecast = record.boxLead[feature]
-            if not forecast or now() - forecast.time >= 1 / 60 then
-                forecast = {offset = leadOffset(record, feature, record.root, origin), time = now()}
-                record.boxLead[feature] = forecast
-            end
-            predictedOffset = forecast.offset
-        end
-        origin = origin + predictedOffset
-    end
-    local distance = (origin - (localRoot and localRoot.Position or camera.CFrame.Position)).Magnitude
-    if distance > Core.number(standalone and config.ESP.MaxDistance or style['Max Distance'], 5050, 0, 100000) then return nil end
     local projected = camera:WorldToViewportPoint(origin)
     local width, height = Core.number(style.Size.Width, 5, 0.1, 100), Core.number(style.Size.Height, 4.3, 0.1, 100)
     if standalone then width, height = 6, 6 end
@@ -631,16 +591,16 @@ local function playerBox(record, feature, standalone, predictedOffset)
     return Vector2.new(x, y), Vector2.new(w, h)
 end
 
-local function inFov(record, feature, part, predictedPoint, basePoint)
+local function inFov(record, feature, part, predictedPoint)
     local settings = config[feature]
-    if settings.Ignore then return true end
-    if settings.Fov.Mode == '2d-Circle' then
+    if feature == 'Silent Aim' and settings.Ignore then return true end
+    if settings.Fov.Method == '2d-Circle' then
         local p, onScreen = camera:WorldToViewportPoint(predictedPoint or part.Position)
         if not onScreen or p.Z <= 0 then return false end
         return Core.fov(p.X - cursor.X, p.Y - cursor.Y, '2d-Circle', 0, 0,
             Core.number(settings.Fov['2d-Circle'].Size, 50, 1, 10000))
     end
-    local position, size = playerBox(record, feature, false, predictedPoint and (predictedPoint - (basePoint or part.Position)))
+    local position, size = playerBox(record, feature, false)
     return position ~= nil and cursor.X >= position.X and cursor.X <= position.X+size.X
         and cursor.Y >= position.Y and cursor.Y <= position.Y+size.Y
 end
@@ -652,7 +612,7 @@ local function nearest(feature, assignment, resolve)
         local part = assignment and partFor(record, 'HumanoidRootPart') or targetPart(record, feature)
         if part and (assignment or (valid(record, feature, part, true))) then
             local projected, onScreen = camera:WorldToViewportPoint(part.Position)
-            if projected.Z > 0 and (onScreen or (not assignment and config[feature].Ignore)) then
+            if projected.Z > 0 and (onScreen or (not assignment and feature == 'Silent Aim' and config[feature].Ignore)) then
                 local distance = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
                 if not assignment or distance <= 150 then choices[#choices + 1] = {record = record, part = part, distance = distance} end
             end
@@ -698,7 +658,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         point = exact.Position
         evidence.PointSource, evidence.SurfacePart = 'cursor-surface', exact.Instance.Name
         if record.pointState then record.pointState[feature] = nil end
-    elseif closest.Enabled and closest.Method == 'Point' then
+    elseif closest.Enabled and closest.Selection == 'Point' then
         evidence.PointSource = 'closest-point'
         local localPoint, half = closestLocal(part, closest)
         record.pointState = record.pointState or {}
@@ -720,11 +680,9 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
     local rawMousePoint = mouse.Hit.Position
     evidence.RawMousePoint = vectorData(rawMousePoint)
     point = point + lead
-    record.finalLead = record.finalLead or {}
-    record.finalLead[feature] = {offset = lead, time = now()}
     if not Core.finiteVector(point) then return reject('nonfinite') end
     evidence.WallOrigin = vectorData(feature == 'Aim Assist' and camera.CFrame.Position or muzzle())
-    if (feature ~= 'Triggerbot' or settings.Fov.Enabled) and not inFov(record, feature, part, point, basePoint) then return reject('fov') end
+    if (feature ~= 'Triggerbot' or settings.Fov.Enabled) and not inFov(record, feature, part, point) then return reject('fov') end
     if config.Checks.Wall[checkIndices[feature]] and not firingVisible(point, record.character, feature) then return reject('predicted-wall') end
     -- Final Silent settings never reject camera assistance or independent trigger candidates.
     local anti = feature == 'Silent Aim' and settings.AntiCurve
@@ -736,7 +694,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         evidence.AntiCurveCameraDistance, evidence.AntiCurveMuzzleDistance = cameraGap, nativeGap
         evidence.NativeAimOrigin = nativeRay and vectorData(nativeRay.Origin)
         evidence.NativeAimDirection = nativeRay and vectorData(nativeRay.Direction)
-        if anti.Mode == 'Endmath' then
+        if anti.Method == 'Endmath' then
             local projected, onScreen = camera:WorldToViewportPoint(point)
             evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'pixels', Core.curveLimit(anti.Endmath.Radius, 120)
             local screenGap = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
@@ -751,7 +709,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
             if not onScreen or projected.Z <= 0 or
                 evidence.AntiCurveDistance > evidence.AntiCurveLimit then return reject('anti-curve-pixels') end
             if anti.Endmath.WallCheck and not visible(point, record.character, muzzle(), true) then return reject('anti-curve-wall') end
-        elseif anti.Mode == '3d-angles' then
+        elseif anti.Method == '3d-angles' then
             evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'studs', Core.curveLimit(anti['3d-angles'].Max, 2.2)
             local useMuzzle = nativeGap and nativeGap < (cameraGap or math.huge)
             evidence.AntiCurveReference = useMuzzle and 'muzzle-to-mouse-ray' or 'forward-cursor-ray'
@@ -784,7 +742,7 @@ end
 
 local function selectTarget(feature)
     if not enabled(feature) or typing() then return nil end
-    if config[feature].Mode == 'Auto' then
+    if config[feature].Method == 'Auto' then
         if config[feature].Activation.Holding and not holding('target:' .. feature, config[feature].Activation.Keybind) then return nil end
         -- A rejected final prediction must not starve another eligible candidate.
         return nearest(feature, false, aimPoint)
@@ -821,7 +779,7 @@ local function refreshAutoPrediction(time)
             state.AutoPrediction.Features[feature] = nil
         elseif not context or context.Target ~= player.UserId or context.ToolEpoch ~= state.ToolEpoch or time >= context.NextSample then
             local point = state.Points[feature] or record.root.Position
-            local vel = velocity(record, feature)
+            local vel = velocity(record)
             local speed = Vector3.new(vel.X, 0, vel.Z).Magnitude
             local raw = record.root.AssemblyLinearVelocity
             local origin = muzzle()
@@ -1181,7 +1139,7 @@ local function bindOpponent(record, character)
     record.character, record.root, record.humanoid, record.history = character, nil, nil, {}
     record.sampledVelocity, record.velocityAt = nil, nil
     record.bounds, record.boundsAt, record.visibilityAt = nil, nil, nil
-    record.pointState, record.finalLead = {}, {}
+    record.pointState = {}
     record.lastAmmo, record.ammoTool = nil, nil
     local function added(item)
         if item.Name == 'HumanoidRootPart' and item:IsA('BasePart') then record.root = item end
@@ -1391,7 +1349,7 @@ local function drawFov()
     for name, shapes in pairs(fovVisuals) do
         local fov = config[name].Fov
         local circle = fov['2d-Circle']
-        local show = enabled(name) and (name ~= 'Triggerbot' or fov.Enabled) and fov.Mode == '2d-Circle' and circle.Visible == true
+        local show = enabled(name) and (name ~= 'Triggerbot' or fov.Enabled) and fov.Method == '2d-Circle' and circle.Visible == true
         local radius = Core.number(circle.Size, 50, 1, 10000)
         shapes.outline:Set({Visible = show, Position = cursor, Radius = radius, Filled = false,
             Thickness = 3, Color = Color3.new(0, 0, 0), Transparency = 0.8})
@@ -1420,7 +1378,6 @@ local function drawPlayers(time)
                 local show = exists and enabled('ESP') and (style.Visible or standalone)
                 if dead and (config.ESP.DeadCheck or config.Checks.Dead[checkIndices[feature]]) then show = false end
                 if knocked and config.ESP.KnockedCheck then show = false end
-                if show then show = (record.root.Position - camera.CFrame.Position).Magnitude <= Core.number(config.ESP.MaxDistance, 5050, 0, 100000) end
                 if show and config.ESP.VisibleCheck then
                     if time >= (record.visibilityAt or 0) then
                         record.espVisible, record.visibilityAt = visible(record.root.Position, record.character), time + 0.08
@@ -1433,17 +1390,16 @@ local function drawPlayers(time)
                 local v = record.visuals[feature]
                 if position then
                     if not v then v = {outline = visual('Square'), box = visual('Square'), name = visual('Text')}; record.visuals[feature] = v end
-                    local opacity = Core.number(style.Transparency, 1, 0, 1)
                     local foreground = assignedColor(record.player.UserId, color(style.Color.Box[1]))
                     size = Vector2.new(math.max(1, size.X), math.max(1, size.Y))
                     v.outline:Set({Visible = true, Position = position, Size = size, Thickness = 3, Filled = false,
-                        Color = color(style.Color.Box[2]), Transparency = opacity})
-                    v.box:Set({Visible = true, Position = position, Size = size, Filled = style.Filled == true,
-                        Color = foreground, Transparency = opacity})
+                        Color = color(style.Color.Box[2]), Transparency = 1})
+                    v.box:Set({Visible = true, Position = position, Size = size, Filled = false,
+                        Color = foreground, Transparency = 1})
                     local name = style.Name[2] == 'Name' and record.player.Name
                         or (style.Name[2] == 'UserId' and tostring(record.player.UserId) or record.player.DisplayName)
                     v.name:Set({Visible = config.ESP.Names and style.Name[1], Text = name,
-                        Position = Vector2.new(position.X + size.X / 2, position.Y - 17), Color = foreground, Transparency = opacity})
+                        Position = Vector2.new(position.X + size.X / 2, position.Y - 17), Color = foreground, Transparency = 1})
                 elseif v then for _, object in pairs(v) do object:Set({Visible = false}) end end
             end
         end)
@@ -1478,13 +1434,13 @@ local function inputChanged(input, began, processed)
             state.Held['target:' .. name] = began
             if not began and mode.Holding then state.Points[name], state.Targets[name] = nil, nil end
         end
-        if config[name].Mode == 'Target' and inputMatches(input, mode) then
+        if config[name].Method == 'Target' and inputMatches(input, mode) then
             if mode.Holding then
                 state.Held['target:' .. name] = began
                 if not began then state.Locks[name] = nil end
             end
             if began then
-                if not mode.Holding and mode['Unlock Mode'] == 'Normal' and state.Locks[name] then state.Locks[name] = nil
+                if not mode.Holding and mode['Unlock Method'] == 'Normal' and state.Locks[name] then state.Locks[name] = nil
                 else local record = nearest(name); state.Locks[name] = record and record.player.UserId or nil end
             end
         end

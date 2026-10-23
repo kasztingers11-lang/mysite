@@ -36,8 +36,8 @@ assert(#ids == 4 and ids[1] == 42 and ids[4] == 3)
 assert(not Core.whitelisted(true, 'Friend', ids, 42))
 assert(Core.whitelisted(true, 'Target', ids, 42))
 assert(Core.whitelisted(false, 'Target', {}, 42))
-near(Core.delay({DelayMode = 'Random', RandomDelay = {0.12, 0.1}}, 0, 0.5), 0.11)
-near(Core.delay({DelayMode = 'Normal', Delay = 0.2}, 100, 0.5), 0.2)
+near(Core.delay({DelayMethod = 'Random', RandomDelay = {0.12, 0.1}}, 0, 0.5), 0.11)
+near(Core.delay({DelayMethod = 'Normal', Delay = 0.2}, 100, 0.5), 0.2)
 assert(Core.delay({SmartDelay = true, Delay = 0.1}, 200, 0) > 0.1)
 
 local V = {}
@@ -147,7 +147,37 @@ do
 end
 Core.validate(defaults, defaults)
 assert(defaults.EndMath==nil and defaults['Silent Aim'].EndMath==nil)
-assert(defaults['Silent Aim'].Resolver.Enabled and defaults['Silent Aim'].Resolver.Method==nil)
+assert(defaults.Resolver.Enabled and defaults.Resolver.Method==nil)
+assert(defaults['Silent Aim'].Resolver==nil and defaults['Silent Aim'].GroundShotCheck==nil)
+assert(defaults['Aim Assist'].Ignore==nil and defaults.ESP.MaxDistance==nil)
+for _,style in pairs(defaults['2d-Box']) do
+    assert(style.Filled==nil and style.Transparency==nil and style['Predicted Position']==nil and style['Max Distance']==nil)
+end
+do
+    local legacy={
+        ['Silent Aim']={Mode='Target',Resolver={Enabled=false},GroundShotCheck=false,
+            Target={Closest={Method='Point'}},['Keybind Mode']={['Unlock Mode']='Normal'},
+            AntiCurve={Mode='endmath',endmath={Radius=9}}},
+        ['Aim Assist']={Ignore=true,Mode='Auto'},['Y-Axis']={JumpOffset=2},
+        Triggerbot={DelayMode='Normal'},Whitelist={Mode='Target'},ESP={MaxDistance=1},
+        ['2d-Box']={['Silent Aim']={Filled=true,Transparency=0,['Predicted Position']=true,['Max Distance']=1}},
+        Misc={['Macro Abuse']={['Work With TB']=true}},
+    }
+    local normalized=Core.normalizeConfig(legacy)
+    assert(normalized['Silent Aim'].Method=='Target' and normalized['Silent Aim'].Mode==nil)
+    assert(normalized['Silent Aim'].Target.Closest.Selection=='Point' and normalized['Silent Aim'].Target.Closest.Method==nil)
+    assert(normalized['Silent Aim'].Activation['Unlock Method']=='Normal')
+    assert(normalized.Resolver.Enabled==false and normalized.Checks.GroundShotCheck[1]==false and normalized.Checks.GroundShotCheck[2])
+    assert(normalized['Y-Axis'].Offset==2 and normalized.Triggerbot.DelayMethod=='Normal' and normalized.Whitelist.Method=='Target')
+    assert(normalized['Silent Aim'].AntiCurve.Method=='Endmath' and normalized['Silent Aim'].AntiCurve.Endmath.Radius==9)
+    assert(normalized['Aim Assist'].Ignore==nil and normalized.ESP.MaxDistance==nil and next(normalized['2d-Box']['Silent Aim'])==nil)
+    assert(normalized.Misc['Macro Abuse']['Triggerbot check'] and legacy['Silent Aim'].Mode=='Target','Migration must not mutate the supplied table')
+    legacy['Silent Aim'].Method='Auto';legacy.Resolver={Enabled=true};legacy.Checks={GroundShotCheck={true,false,false}}
+    legacy['Silent Aim'].Target.Closest.Selection='Part';legacy['Y-Axis'].Offset=3
+    normalized=Core.normalizeConfig(legacy)
+    assert(normalized['Silent Aim'].Method=='Auto' and normalized.Resolver.Enabled and normalized.Checks.GroundShotCheck[2]==false)
+    assert(normalized['Silent Aim'].Target.Closest.Selection=='Part' and normalized['Y-Axis'].Offset==3,'Canonical fields win when both spellings exist')
+end
 assert(defaults['Silent Aim'].AntiCurve.Endmath and defaults['Silent Aim'].AntiCurve.endmath==nil)
 assert(defaults.Prediction==nil and defaults.Triggerbot.Prediction.Value==0.121)
 for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do

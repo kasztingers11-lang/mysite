@@ -1,4 +1,7 @@
-# Pending table proposal — 2026-10-23
+# Historical table proposal — 2026-10-23
+
+Integrated with the user's follow-up decisions in 1.3.12. This document preserves
+the comparison before integration; see the root config for the current table.
 
 Comparison baseline: the complete comment-free table supplied after release 1.3.11,
 matching the current authoritative config semantically. Only table literals were

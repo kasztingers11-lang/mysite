@@ -1,4 +1,4 @@
-# neoperro 1.3.11 - testing build
+# neoperro 1.3.12 - testing build
 
 Use [neoperro.lua](neoperro.lua): edit the table and execute the whole file.
 Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
@@ -12,13 +12,13 @@ ascent. Horizontal/vertical resolver decisions are independent. Active Auto
 estimates refresh every half second; supported hitscan guns add zero flight time. The table uses **Activation** and **Triggerbot check**;
 older names migrate internally.
 
-Silent Aim now exposes only Resolver.Enabled; enabled always uses TrueVelocity.
-Coherent position history can correct persistent replicated-velocity mismatches
-without delaying a freshly changed velocity. Internal velocity sampling and the
-final Silent wall gate stay active. The old EndMath block and its point visualizer
-are removed; AntiCurve uses Endmath, accepting the older spelling on startup.
-Native Roblox Vector3 fixtures and Lua regressions pass. This new resolver has
-not been validated by controlled player damage or actual anti-aim opponents.
+The aligned, comment-free table now uses Method, Closest.Selection, Unlock Method
+and DelayMethod. Resolver, Anti-AimViewer and Client Bullets are global sections
+above the targeting features. Y-Axis has per-feature switches and Custom Offset;
+Auto ignores Offset. GroundShotCheck follows the shared three-column checks.
+ESP boxes are unfilled, fully opaque and centered on the actual character;
+prediction still affects shot points. ESP/box distance limits and Assist Ignore
+are removed internally, including legacy overrides. Old tables migrate at startup.
 
 Default controls: P Silent toggle, T Target selection, M Assist toggle, hold Q
 Assist, V Triggerbot toggle, hold RMB Triggerbot, Z ESP, E unload.
@@ -53,3 +53,8 @@ neoperro-intro/preview.lua. Rebuild with python build-neoperro.py and validate
 with python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua.
 The historical handoff snapshot/ZIP remains 1.2.0. Preserve local edits.
 No executor credentials belong in the repository.
+
+1.3.12 validation: regression suites and both REAL bundle analyzers pass. The full
+bundle loaded successfully in a rejoined empty Roblox server. Runtime schema
+checks passed with 33,522 aim updates, six FOV Drawing objects, zero remote
+records and zero activations. No new shots or populated-server visual test.

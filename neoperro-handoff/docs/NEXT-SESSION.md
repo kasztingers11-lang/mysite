@@ -1,21 +1,22 @@
-# Continue from 1.3.11
+# Continue from 1.3.12
 
 Use repair/neoperro-evidence and repository-root sources. Main and historical
 snapshot/ZIP are older. Preserve local edits and user-confirmed aim restoration,
 native client pellet style, Macro Abuse, whitelist and session-once intro.
 
-Latest: Silent Resolver.Enabled always selects TrueVelocity; no Method setting.
-Position history can correct persistent XYZ velocity mismatches after confidence
-checks while fresh transitions keep immediate response. Sampling/final Silent
-wall checks are internal; EndMath settings and its visualizer are removed.
-AntiCurve uses Endmath and migrates the old spelling during startup. The complete
-comment-free table was pasted for the user; their reorganized replacement is pending.
-No obfuscation, key system or anti-tamper was added.
+Latest: the user's accepted table is integrated with renamed Method/Selection
+fields, global Resolver/Anti-AimViewer/Client Bullets, shared Y-Axis feature
+flags and ground checks. Filled/transparency/predicted-box/Assist Ignore controls
+are removed. ESP/box distance is unlimited internally. Old tables migrate.
 
-Validation: Lua suites pass; full/runtime bundles have zero REAL analyzer findings.
-A no-input native Roblox Vector3 fixture passed 3 persistent XYZ mismatches,
-3 fresh transitions, irregular-motion rejection and teleport reset. The full
-new runtime was not live reloaded and no new firing/damage tests were performed.
+Lua suites and REAL analysis pass. Full 1.3.12 loaded in a rejoined empty server
+with canonical-state assertions and no console problems. Zero remote players
+and zero shots were available; broader firing/visual validation remains open.
+
+The user now requests protection/obfuscation artifacts for their FlowAuth project
+and supplied its public loader. Never store a real customer key or API secret.
+Prepare protected upload artifacts and the editable key/table/loader separately
+from public development sources. Public history already contains older source.
 
 Implemented: shared XYZ forecast for all features/boxes; separate XZ/Y resolution;
 speed/turn bounds; measured jump acceleration with braking-to-rest for decelerating
