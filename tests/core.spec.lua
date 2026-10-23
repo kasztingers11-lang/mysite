@@ -59,6 +59,38 @@ do
     near(p.X,1);near(p.Y,1);near(p.Z,1)
 end
 local history, zero = {}, V.new(0,0,0)
+do
+    local gap,p,t=Core.rayDistance(V.new(3,0,-50),zero,V.new(0,0,-10))
+    near(gap,3);near(p.Z,-50);near(t,5)
+    assert(Core.rayDistance(V.new(0,0,1),zero,V.new(0,0,-1))==nil)
+    assert(Core.rayDistance(zero,zero,zero)==nil)
+    local samples={}
+    for i=0,7 do
+        local time=i*.02
+        Core.sample(samples,V.new(22*time,40*time-100*time*time,0),time,V.new(22,40-200*time,0))
+    end
+    local raw=V.new(22,12,0)
+    local model=Core.motion(samples,raw)
+    near(model.VerticalAcceleration,-200);near(model.VerticalConfidence,1)
+    local lead,correction=Core.verticalLead(26,12,.1,4,false,model)
+    near(lead,.2);near(correction,-1)
+    near(Core.verticalLead(26,12,.1,4,true,model),0)
+    near(Core.motionTime(.121,model.TurnRate),.121)
+    samples[#samples].raw=V.new(22,150,0)
+    assert(Core.motion(samples,V.new(22,150,0)).VerticalConfidence==0,'A one-frame impulse is not a stable acceleration')
+    for i=1,#samples do samples[i].raw=V.new(22,0,0) end
+    model=Core.motion(samples,V.new(0,0,22))
+    assert(model.MeasuredTurnRate>0 and model.TurnRate==0,'An unvalidated turn cannot shorten the horizon')
+    near(Core.verticalLead(0,0,.1,4,false,model),0)
+    samples={}
+    for i=0,14 do
+        local t=i*.02;local angle=t*10;local raw=V.new(-22*math.sin(angle),0,22*math.cos(angle))
+        Core.sample(samples,V.new(2.2*math.cos(angle),0,2.2*math.sin(angle)),t,raw)
+        Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero),zero)
+        model=Core.motion(samples,raw)
+    end
+    assert(model.TurnValidated and Core.motionTime(.121,model.TurnRate)<.121,'Validated curved motion shortens extrapolation')
+end
 for i = 0, 7 do Core.sample(history, V.new(i * 16 / 30, 0, 0), i / 30) end
 near(Core.velocity(history, zero, zero).X, 16)
 assert(#history <= 8)

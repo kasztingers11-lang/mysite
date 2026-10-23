@@ -184,6 +184,17 @@ function Core.finiteVector(v)
         and math.abs(v.X) < 1e8 and math.abs(v.Y) < 1e8 and math.abs(v.Z) < 1e8
 end
 
+-- Distance to a forward ray, independent of direction length and surface depth.
+function Core.rayDistance(point, origin, direction)
+    if not (Core.finiteVector(point) and Core.finiteVector(origin) and Core.finiteVector(direction)) then return nil end
+    local lengthSquared = direction:Dot(direction)
+    if lengthSquared < 1e-10 then return nil end
+    local t = (point - origin):Dot(direction) / lengthSquared
+    if t < 0 then return nil end
+    local closest = origin + direction * t
+    return (point - closest).Magnitude, closest, t
+end
+
 -- Rotate a native pellet ray toward local mouse aim without merging endpoints.
 -- Native length, pairwise spread and all Beam styling remain independent.
 function Core.redirectTracer(origin, endpoint, serverPoint, mousePoint, newVector)
@@ -304,8 +315,12 @@ end
 function Core.resolveVelocity(history, raw, fitted, zero)
     local last = history[#history]
     if last then last.fitted = fitted end
-    if not Core.finiteVector(raw) or raw.Magnitude > 180 then return fitted, 'history-fallback' end
-    if raw:Dot(fitted) <= 0 then return raw, 'raw-transition' end
+    local function resolved(value, source)
+        if last then last.resolved = value end
+        return value, source
+    end
+    if not Core.finiteVector(raw) or raw.Magnitude > 180 then return resolved(fitted, 'history-fallback') end
+    if raw:Dot(fitted) <= 0 then return resolved(raw, 'raw-transition') end
     local rawError, fitError, count = 0, 0, 0
     for _, sample in ipairs(history) do
         local dt = last.t - sample.t
@@ -315,8 +330,97 @@ function Core.resolveVelocity(history, raw, fitted, zero)
             rawError, fitError, count = rawError + a:Dot(a), fitError + b:Dot(b), count + 1
         end
     end
-    if count >= 2 and fitError < rawError then return fitted, 'history-validated' end
-    return raw, 'raw-validated'
+    if count >= 2 and fitError < rawError then return resolved(fitted, 'history-validated') end
+    return resolved(raw, 'raw-validated')
+end
+
+-- Fit only measured replicated velocities. A stable slope is useful at a jump
+-- apex; sparse updates, a one-frame impulse and noisy slopes are not gravity.
+function Core.motion(history, raw)
+    local model = {VerticalAcceleration = 0, VerticalConfidence = 0, TurnRate = 0}
+    if #history < 4 or not Core.finiteVector(raw) or raw.Magnitude > 180 then return model end
+    local last, first = history[#history], history[1]
+    local span = last.t - first.t
+    if span < 0.05 or span > 0.2 then return model end
+    local count, timeMean, meanY, changes = 0, 0, 0, 0
+    local prior
+    for _, sample in ipairs(history) do
+        if not sample.raw then return model end
+        if prior and math.abs(sample.raw.Y - prior.Y) > 0.25 then changes = changes + 1 end
+        prior = sample.raw
+        count, timeMean, meanY = count + 1, timeMean + sample.t, meanY + sample.raw.Y
+    end
+    timeMean, meanY = timeMean / count, meanY / count
+    local numerator, denominator = 0, 0
+    for _, sample in ipairs(history) do
+        local dt = sample.t - timeMean
+        numerator, denominator = numerator + dt * (sample.raw.Y - meanY), denominator + dt * dt
+    end
+    if denominator < 1e-7 then return model end
+    local acceleration, errorSum = numerator / denominator, 0
+    for _, sample in ipairs(history) do
+        local error = sample.raw.Y - (meanY + acceleration * (sample.t - timeMean))
+        errorSum = errorSum + error * error
+    end
+    local tolerance = math.max(2.5, math.abs(acceleration) * span * 0.2)
+    local rms = math.sqrt(errorSum / count)
+    local endpointError = math.abs(raw.Y - (meanY + acceleration * (last.t - timeMean)))
+    if changes >= 3 and math.abs(acceleration) >= 5 and math.abs(acceleration) <= 600 and
+        rms < tolerance and endpointError < tolerance then
+        model.VerticalAcceleration = acceleration
+        model.VerticalConfidence = 1 - math.max(rms, endpointError) / tolerance
+    end
+    local speed = math.sqrt(raw.X * raw.X + raw.Z * raw.Z)
+    if speed >= 3 then
+        for i = #history - 1, 1, -1 do
+            local sample = history[i]
+            local dt = last.t - sample.t
+            if dt >= 0.05 then
+                local old = sample.raw
+                local oldSpeed = math.sqrt(old.X * old.X + old.Z * old.Z)
+                if oldSpeed >= 3 then
+                    local dot = Core.number((raw.X * old.X + raw.Z * old.Z) / (speed * oldSpeed), 1, -1, 1)
+                    model.TurnRate = math.acos(dot) / dt
+                end
+                break
+            end
+        end
+    end
+    last.turnRate = model.TurnRate
+    model.MeasuredTurnRate = model.TurnRate
+    local straightError, turnError, forecasts = 0, 0, 0
+    for _, sample in ipairs(history) do
+        local dt = last.t - sample.t
+        local velocity = sample.resolved or sample.raw
+        if dt >= 0.035 and sample.turnRate and sample.turnRate > 0 and velocity then
+            local time = Core.motionTime(dt, sample.turnRate)
+            local straight, turned = last.p - sample.p - velocity * dt, last.p - sample.p - velocity * time
+            straightError = straightError + straight.X * straight.X + straight.Z * straight.Z
+            turnError = turnError + turned.X * turned.X + turned.Z * turned.Z
+            forecasts = forecasts + 1
+        end
+    end
+    model.TurnValidated = forecasts >= 2 and turnError < straightError
+    if not model.TurnValidated then model.TurnRate = 0 end
+    return model
+end
+
+function Core.motionTime(seconds, turnRate)
+    local angle = math.min(math.pi / 2, seconds * Core.number(turnRate, 0, 0, 100))
+    if angle < 1e-5 then return seconds end
+    -- The forward component of a constant-rate turn is sin(angle)/rate.
+    return seconds * math.sin(angle) / angle
+end
+
+function Core.verticalLead(vertical, rawY, seconds, height, grounded, model)
+    if grounded then return 0 end
+    local confidence = model and model.VerticalConfidence or 0
+    local correction = 0
+    if confidence >= 0.5 then
+        vertical = rawY
+        correction = 0.5 * model.VerticalAcceleration * seconds * seconds * confidence
+    end
+    return Core.number(vertical * seconds + correction, 0, -height, height * 2), correction
 end
 
 -- State changes in the supplied config win; otherwise keep the running toggle.

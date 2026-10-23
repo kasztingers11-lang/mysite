@@ -1,353 +1,303 @@
--- neoperro
--- Edit this table and execute neoperro.lua again to apply it.
--- Keybind format: {keyboard key, mouse button, active device}.
--- Use 'Keyboard' or 'Mouse' as the third value. Only that device is active.
--- Shared keybinds are allowed. The runtime will dispatch each enabled matching action.
--- Panic takes priority over other actions sharing its key.
--- Re-execution will replace the old instance and retain valid targets, toggles and whitelist state.
--- Supported place IDs and intro behavior belong inside the script, not this table.
+-- neoperro | edit the table, then execute the whole file.
+-- Recommended starting point: Auto prediction, Closest Method='Part', FOV-off Triggerbot.
+-- Prediction Value is the manual baseline; speed adjustment is always built in.
+-- Keybind = {keyboard key, mouse button, 'Keyboard' or 'Mouse'}; entry 3 chooses the device.
+-- P: Silent toggle; M: Assist toggle; hold Q: Assist; V: TB toggle; hold RMB: TB; E: unload.
+-- Auto + Activation.Holding=false runs continuously; true requires the activation input.
+-- In Target mode, Activation selects/holds the target. Re-execution retains valid toggles.
 
 getgenv()['neoperro'] = {
 
-    -- Send target coordinates only for the shot, then restore ordinary aim. Continuous MOUSE updates pass through.
-    ['Anti-AimViewer'] = {
-        ['Enabled'] = true;
-    };
-
-    -- Silent Aim vertical compensation. Aim Assist has no Y-Axis modifier.
-    ['Y-Axis'] = {
-        ['Enabled'] = false; -- Enable vertical compensation.
-        ['Mode'] = 'Auto'; -- Auto ignores JumpOffset; Custom uses it without automatic adjustment.
-        ['JumpOffset'] = 1.0; -- Custom only: 1 = unchanged, below 1 = less upward lead, above 1 = more.
-        ['SilentAim'] = true; -- Apply the Y-Axis section to Silent Aim.
-    };
-
-    -- Order for every row: {Silent Aim, Aim Assist, Triggerbot}.
-    ['Checks'] = {
-        ['Dead']       = {true, true, true}; -- Reject dead targets.
-        ['Knocked']    = {true, true, true}; -- Reject knocked/incapacitated targets.
-        ['Wall']       = {true, true, true}; -- Require a clear visibility check.
-        ['ForceField'] = {true, true, false}; -- Reject targets with spawn protection.
-        ['Crew']       = {false, false, false}; -- Reject players in your crew.
-        ['Tool']       = {false, true, true}; -- Require an equipped weapon.
-    };
-
-    -- Calculates the aim point used by the firing integration.
+    -- Silent targeting and prediction.
     ['Silent Aim'] = {
         ['Enabled'] = true;
         ['Prediction'] = {
             ['Enabled'] = true;
-            ['Auto'] = true; -- Measured latency estimate; ignores Value. Not a hit guarantee.
-            ['Value'] = 0.128; -- Manual baseline seconds; ignored in Auto. Both modes always adjust XZ time by speed (0.75-1.25x); Y stays separate.
+            ['Auto']    = true;
+            ['Value']   = 0.128;
         };
-
-        ['GroundShotCheck'] = true; -- Bound downward prediction using actual ground/rig geometry.
-        ['Mode'] = 'Auto'; -- Auto = nearest eligible to cursor; Target = select with a keybind.
-        ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
-
+        ['GroundShotCheck'] = true;
+        ['Mode']            = 'Auto';
+        ['Ignore']          = false;
         ['Target'] = {
-            ['BasePart'] = 'UpperTorso'; -- Used when Closest is disabled; R6 falls back to Torso.
+            ['BasePart'] = 'UpperTorso';
             ['Closest'] = {
-                ['Enabled'] = true; -- Choose the body part nearest your crosshair.
-                ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
-                ['Method'] = 'Part'; -- Part = nearest center; Point = nearest allowed point to the cursor ray, across body parts.
-                ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
-                ['Sharpness'] = 0.7; -- Point response: 1 = immediate, 0.01 = slow.
+                ['Enabled']   = true;
+                ['Raycast']   = false;
+                ['Method']    = 'Part';
+                ['Axis']      = 'Center';
+                ['Sharpness'] = 0.7;
                 ['Reduce'] = {
-                    ['Center'] = 0.7; -- Keep this far from Y edges: 0 = edges, 1 = center.
-                    ['All'] = 0.7; -- Same reduction on all axes when Axis is All.
+                    ['Center'] = 0.7;
+                    ['All']    = 0.7;
                 };
             };
         };
-
         ['Fov'] = {
-            ['Mode'] = '2d-Box'; -- 2d-Box = box on each player; 2d-Circle = circle around crosshair.
-
+            ['Mode'] = '2d-Box';
             ['2d-Circle'] = {
-                ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
-                ['Size'] = 50; -- Circle radius in pixels.
-                ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
+                ['Visible'] = false;
+                ['Size']    = 50;
+                ['Color']   = {255, 255, 255};
             };
-
         };
-
-        -- Enable/disable this feature through its input.
         ['Toggle'] = {
             ['Enabled'] = true;
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
+            ['Holding'] = false;
             ['Keybind'] = {'P', 'MouseButton2', 'Keyboard'};
         };
-
-        -- Target selection controls, used when Mode is Target.
-        ['Keybind Mode'] = {
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
-            ['Unlock Mode'] = 'Repeat'; -- Repeat = select again on each press; clear if no eligible target.
-            ['Keybind'] = {'T', 'MouseButton2', 'Keyboard'};
+        ['Activation'] = {
+            ['Holding']     = false;
+            ['Unlock Mode'] = 'Repeat';
+            ['Keybind']     = {'T', 'MouseButton2', 'Keyboard'};
         };
-
-        -- Distance filters; disabled by default. Units are explicit interpretations of the screenshots.
         ['EndMath'] = {
-            ['VelocityHistory'] = true; -- Compare history/raw forecasts against received positions; teleport jumps reset history.
-            ['WallCheck'] = true; -- Silent-only final camera/muzzle visibility checks.
-            ['Visualizer'] = false; -- Display the final Silent Aim point.
+            ['VelocityHistory'] = true;
+            ['WallCheck']       = true;
+            ['Visualizer']      = false;
         };
         ['AntiCurve'] = {
             ['Enabled'] = false;
-            ['Mode'] = '3d-angles'; -- Select one distance filter, not a degree limit.
+            ['Mode']    = '3d-angles';
             ['3d-angles'] = {
-                ['Max'] = 2.2; -- Studs between ordinary Mouse.Hit and final target point.
+                ['Max'] = 2.2;
             };
             ['endmath'] = {
-                ['Radius'] = 120; -- Pixels from cursor to projected final point; reject, never clamp lead.
-                ['WallCheck'] = true; -- Final visibility from the actual muzzle.
+                ['Radius']    = 120;
+                ['WallCheck'] = true;
             };
         };
     };
 
-    -- Moves the camera toward the chosen aim point.
+    -- Camera/mouse assistance; hold its Activation input in Auto.
     ['Aim Assist'] = {
         ['Enabled'] = true;
         ['Prediction'] = {
             ['Enabled'] = true;
-            ['Auto'] = true; -- Same measured latency model, independently enabled.
-            ['Value'] = 0.121; -- Manual baseline seconds; ignored in Auto. Always speed-aware in XZ (0.75-1.25x); Y time stays separate.
+            ['Auto']    = true;
+            ['Value']   = 0.121;
         };
-        ['Mode'] = 'Auto'; -- Auto searches while its key is held; Target uses a selected player.
-        ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
-
-        ['Follow'] = 'Camera'; -- Camera / Mouse; Mouse requires mousemoverel and a focused game.
-        ['Smoothness'] = 0.0068; -- Strength referenced to 60 FPS; runtime will compensate for frame time.
-
+        ['Mode']   = 'Auto';
+        ['Ignore'] = false;
+        ['Follow']     = 'Camera';
+        ['Smoothness'] = 0.0068;
         ['Target'] = {
-            ['BasePart'] = 'UpperTorso'; -- Used when Closest is disabled; R6 falls back to Torso.
+            ['BasePart'] = 'UpperTorso';
             ['Closest'] = {
-                ['Enabled'] = true; -- Choose the body part nearest your crosshair.
-                ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
-                ['Method'] = 'Part'; -- Part = nearest center; Point = nearest allowed point to the cursor ray, across body parts.
-                ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
-                ['Sharpness'] = 0.65; -- Point response: 1 = immediate, 0.01 = slow.
+                ['Enabled']   = true;
+                ['Raycast']   = false;
+                ['Method']    = 'Part';
+                ['Axis']      = 'Center';
+                ['Sharpness'] = 0.65;
                 ['Reduce'] = {
-                    ['Center'] = 0.45; -- Keep this far from Y edges: 0 = edges, 1 = center.
-                    ['All'] = 0.45; -- Same reduction on all axes when Axis is All.
+                    ['Center'] = 0.45;
+                    ['All']    = 0.45;
                 };
             };
         };
-
         ['Fov'] = {
-            ['Mode'] = '2d-Box'; -- 2d-Box = box on each player; 2d-Circle = circle around crosshair.
-
+            ['Mode'] = '2d-Box';
             ['2d-Circle'] = {
-                ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
-                ['Size'] = 100; -- Circle radius in pixels.
-                ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
+                ['Visible'] = false;
+                ['Size']    = 100;
+                ['Color']   = {255, 255, 255};
             };
-
         };
-
-        -- Enable/disable this feature through its input.
         ['Toggle'] = {
             ['Enabled'] = true;
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
+            ['Holding'] = false;
             ['Keybind'] = {'M', 'MouseButton2', 'Keyboard'};
         };
-
-        -- In Auto, Holding makes this the search input. In Target, this selects a player.
-        ['Keybind Mode'] = {
-            ['Holding'] = true; -- Auto: hold to search continuously. Target: hold the selected target.
-            ['Unlock Mode'] = 'Normal'; -- Normal = lock on one press, unlock on the next.
-            ['Keybind'] = {'Q', 'MouseButton2', 'Keyboard'};
+        ['Activation'] = {
+            ['Holding']     = true;
+            ['Unlock Mode'] = 'Normal';
+            ['Keybind']     = {'Q', 'MouseButton2', 'Keyboard'};
         };
     };
 
-    -- Up to four assigned players. Store UserIds, not display names.
+    -- V arms/disarms; hold RMB. SmartDelay adds a distance-based hold, not a reaction delay.
+    ['Triggerbot'] = {
+        ['Enabled'] = true;
+        ['Prediction'] = {
+            ['Enabled'] = true;
+            ['Auto']    = true;
+            ['Value']   = 0.121;
+        };
+        ['TargetOnly'] = false;
+        ['Delay']       = 0.1;
+        ['RandomDelay'] = {0.1, 0.12};
+        ['SmartDelay']  = false;
+        ['DelayMode']   = 'Random';
+        ['Toggle'] = {
+            ['Enabled'] = true;
+            ['Holding'] = false;
+            ['Keybind'] = {'V', 'MouseButton2', 'Keyboard'};
+        };
+        ['Activation'] = {
+            ['Enabled'] = true;
+            ['Holding'] = true;
+            ['Keybind'] = {'Q', 'MouseButton2', 'Mouse'};
+        };
+        ['Fov'] = {
+            ['Enabled']   = false;
+            ['Character'] = 1.2; -- FOV off: 1 = native body/HB; 1.2 = 20% larger, 0.8 = 20% smaller. Local only.
+            ['Mode'] = '2d-Box';
+            ['2d-Circle'] = {
+                ['Visible'] = false;
+                ['Size']    = 50;
+                ['Color']   = {255, 255, 255};
+            };
+        };
+    };
+
+    -- Silent vertical behavior. Auto ignores JumpOffset.
+    ['Y-Axis'] = {
+        ['Enabled']    = false;
+        ['Mode']       = 'Auto';
+        ['JumpOffset'] = 1.0;
+        ['SilentAim']  = true;
+    };
+
+    -- Row order: Silent Aim, Aim Assist, Triggerbot.
+    ['Checks'] = {
+        ['Dead']       = {true, true, true};
+        ['Knocked']    = {true, true, true};
+        ['Wall']       = {true, true, true};
+        ['ForceField'] = {true, true, false};
+        ['Crew']       = {false, false, false};
+        ['Tool']       = {false, true, true};
+    };
+
+    -- Friend excludes assigned players; Target includes only them.
     ['Whitelist'] = {
         ['Enabled'] = false;
-        ['Mode'] = 'Friend'; -- Friend = ignore assigned players; Target = only assigned players.
-        ['Players'] = {}; -- Up to four numeric UserIds.
-
-        -- Add/remove the eligible player nearest your cursor.
+        ['Mode']    = 'Friend';
+        ['Players'] = {};
         ['AssignKey'] = {
             ['Keybind'] = {'R', 'MouseButton2', 'Keyboard'};
         };
     };
 
-    -- Recheck before pressing; one owned press/hold/release cycle, cancelled on target loss.
-    ['Triggerbot'] = {
-        ['Enabled'] = true;
-        ['Prediction'] = {
-            ['Enabled'] = true;
-            ['Auto'] = true; -- Independent from Silent Aim and Aim Assist.
-            ['Value'] = 0.121; -- Manual baseline seconds; ignored in Auto. Always speed-aware in XZ (0.75-1.25x); Y time stays separate.
+    -- Enable and equip a supported gun. Ranges are upper bounds; beyond Far uses general size.
+    ['Gun Specifications'] = {
+        ['Enabled'] = false;
+        ['Ranges'] = {
+            ['Close']  = 15;
+            ['Medium'] = 30;
+            ['Far']    = 90;
         };
+        ['Revolver'] = {
+            ['Close']  = {['BoxSize'] = {5.1, 5.1}};
+            ['Medium'] = {['BoxSize'] = {5.5, 5.5}};
+            ['Far']    = {['BoxSize'] = {5, 4.5}};
+        };
+        ['Double-Barrel SG'] = {
+            ['Close']  = {['BoxSize'] = {7, 6}};
+            ['Medium'] = {['BoxSize'] = {6, 5}};
+            ['Far']    = {['BoxSize'] = {5, 5}};
+        };
+        ['TacticalShotgun'] = {
+            ['Close']  = {['BoxSize'] = {7, 7}};
+            ['Medium'] = {['BoxSize'] = {6, 6}};
+            ['Far']    = {['BoxSize'] = {5, 5}};
+        };
+        ['Shotgun'] = {
+            ['Close']  = {['BoxSize'] = {7, 7}};
+            ['Medium'] = {['BoxSize'] = {6, 6}};
+            ['Far']    = {['BoxSize'] = {5, 5}};
+        };
+        ['Usp'] = {
+            ['Close']  = {['BoxSize'] = {5, 6}};
+            ['Medium'] = {['BoxSize'] = {5, 6}};
+            ['Far']    = {['BoxSize'] = {4, 5}};
+        };
+    };
 
-        ['TargetOnly'] = false; -- When true, require the Silent Aim target.
-
-        ['Delay'] = 0.1; -- Button hold duration in seconds, as in Looten; not a pre-shot wait.
-        ['RandomDelay'] = {0.1, 0.12}; -- Minimum and maximum delay in seconds.
-        ['SmartDelay'] = false; -- Distance-based timing; overrides DelayMode when enabled.
-        ['DelayMode'] = 'Random'; -- Normal / Random. Delays are alternatives, not added together.
-
+    -- Player overlays; hide knocked/dead targets with the checks below.
+    ['ESP'] = {
+        ['Enabled']      = true;
+        ['VisibleCheck'] = false;
+        ['Names']        = true;
+        ['KnockedCheck'] = true;
+        ['DeadCheck']    = true;
+        ['MaxDistance']  = 5050;
         ['Toggle'] = {
             ['Enabled'] = true;
             ['Holding'] = false;
-            ['Keybind'] = {'V', 'MouseButton2', 'Keyboard'}; -- Arm/disarm Triggerbot.
-        };
-        ['Activation'] = {
-            ['Enabled'] = true; -- Require this activation input in addition to Enabled.
-            ['Holding'] = true;
-            ['Keybind'] = {'Q', 'MouseButton2', 'Mouse'}; -- Hold RMB; change Mouse to Keyboard for Q.
-        };
-
-        ['Fov'] = {
-            ['Enabled'] = false; -- False = character bounds. True = use a selection shape.
-            ['Character'] = 1.2; -- FOV off: scale native body/HB bounds. 1 = actual hit, 1.2 = 20% larger, 0.8 = 20% smaller. Local only (0.1-3).
-
-            ['Mode'] = '2d-Box'; -- Player-centered box or crosshair-centered circle.
-
-            ['2d-Circle'] = {
-                ['Visible'] = false;
-                ['Size'] = 50; -- Radius in pixels.
-                ['Color'] = {255, 255, 255}; -- RGB.
-            };
-        };
-    };
-
-    -- Player boxes and names. Appearance is in the 2d-Box section below.
-    ['ESP'] = {
-        ['Enabled'] = true;
-        ['VisibleCheck'] = false; -- Hide ESP for obstructed players.
-        ['Names'] = true; -- Also respects each box's Name setting.
-        ['KnockedCheck'] = true; -- Hide boxes and names while knocked.
-        ['DeadCheck'] = true; -- Hide dead bodies; an enabled Silent Aim Dead check also hides them.
-        ['MaxDistance'] = 5050; -- Maximum ESP distance in studs.
-
-        -- Enable/disable this feature through its input.
-        ['Toggle'] = {
-            ['Enabled'] = true;
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
             ['Keybind'] = {'Z', 'MouseButton2', 'Keyboard'};
         };
-
     };
 
-    -- Boxes follow each player's root without resizing for walking/limb animations.
-    -- Width/Height are studs; their screen size still changes with distance.
+    -- Feature box sizes in studs; visibility does not change selection.
     ['2d-Box'] = {
         ['Silent Aim'] = {
-            ['Visible'] = true;
-            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
-            ['Name'] = {true, 'DisplayName'}; -- DisplayName / Name / UserId.
-            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}}; -- Foreground, outline.
-            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
-            ['Max Distance'] = 5050;
-            ['Filled'] = false;
-            ['Transparency'] = 1; -- 1 = opaque, 0 = invisible.
+            ['Visible']            = true;
+            ['Predicted Position'] = true;
+            ['Name']               = {true, 'DisplayName'};
+            ['Color']              = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size']               = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance']       = 5050;
+            ['Filled']             = false;
+            ['Transparency']       = 1;
         };
         ['Aim Assist'] = {
-            ['Visible'] = false;
-            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
-            ['Name'] = {false, 'DisplayName'};
-            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
-            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
-            ['Max Distance'] = 5050;
-            ['Filled'] = false;
-            ['Transparency'] = 1;
+            ['Visible']            = false;
+            ['Predicted Position'] = true;
+            ['Name']               = {false, 'DisplayName'};
+            ['Color']              = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size']               = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance']       = 5050;
+            ['Filled']             = false;
+            ['Transparency']       = 1;
         };
         ['Triggerbot'] = {
-            ['Visible'] = false;
-            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
-            ['Name'] = {false, 'DisplayName'};
-            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
-            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
-            ['Max Distance'] = 5050;
-            ['Filled'] = false;
-            ['Transparency'] = 1;
+            ['Visible']            = false;
+            ['Predicted Position'] = true;
+            ['Name']               = {false, 'DisplayName'};
+            ['Color']              = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size']               = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance']       = 5050;
+            ['Filled']             = false;
+            ['Transparency']       = 1;
         };
     };
 
-    -- Weapon profiles override Silent Aim box dimensions only; Aim Assist/TB stay independent.
-    -- BoxSize = projected target-box width/height in studs, not cursor FOV pixels.
-    -- Unlisted weapons and targets beyond Far use the general settings.
-    ['Gun Specifications'] = {
-        ['Enabled'] = false;
-
-        ['Ranges'] = {
-            ['Close'] = 15; -- Close: distance up to 15 studs.
-            ['Medium'] = 30; -- Medium: over Close, up to 30 studs.
-            ['Far'] = 90; -- Far: over Medium, up to 90 studs.
-        };
-
-        ['Revolver'] = {
-            ['Close'] = {['BoxSize'] = {5.1, 5.1}};
-            ['Medium'] = {['BoxSize'] = {5.5, 5.5}};
-            ['Far'] = {['BoxSize'] = {5, 4.5}};
-        };
-
-        ['Double-Barrel SG'] = {
-            ['Close'] = {['BoxSize'] = {7, 6}};
-            ['Medium'] = {['BoxSize'] = {6, 5}};
-            ['Far'] = {['BoxSize'] = {5, 5}};
-        };
-
-        ['TacticalShotgun'] = {
-            ['Close'] = {['BoxSize'] = {7, 7}};
-            ['Medium'] = {['BoxSize'] = {6, 6}};
-            ['Far'] = {['BoxSize'] = {5, 5}};
-        };
-
-        ['Shotgun'] = {
-            ['Close'] = {['BoxSize'] = {7, 7}};
-            ['Medium'] = {['BoxSize'] = {6, 6}};
-            ['Far'] = {['BoxSize'] = {5, 5}};
-        };
-
-        ['Usp'] = {
-            ['Close'] = {['BoxSize'] = {5, 6}};
-            ['Medium'] = {['BoxSize'] = {5, 6}};
-            ['Far'] = {['BoxSize'] = {4, 5}};
-        };
-    };
-
-    -- Local tracer visuals. Weapon handling stays inside the script.
-    -- Draw recognized local tracers toward your mouse; server aim stays independent.
+    -- Local native tracer appearance only.
     ['Client Bullets'] = {
-        ['Enabled'] = true; -- Local visuals only; no separate keybind.
+        ['Enabled'] = true;
     };
 
-    -- Extra controls. No intro settings are exposed here.
+    -- Keep the confirmed shot/restoration path.
+    ['Anti-AimViewer'] = {
+        ['Enabled'] = true;
+    };
+
+    -- Extra controls. Triggerbot check permits Macro Abuse after TB shots.
     ['Misc'] = {
-        ['AntiAfk'] = true; -- Idle prevention where supported.
-        ['AntiFling'] = true; -- Mitigate fling-like movement while preserving normal movement.
-
-        -- After weapon activation: unequip -> hold Ctrl -> re-equip -> release Ctrl.
-        -- One cycle at a time; cancellation releases only the script's simulated input.
+        ['AntiAfk']   = true;
+        ['AntiFling'] = true;
         ['Macro Abuse'] = {
-            ['Enabled'] = false;
-            ['Work With TB'] = false; -- Also run after Triggerbot fires.
-            ['Macro Check'] = true; -- Require Head horizontal speed >30 studs/s, matching this game's shot handler (120ms pre-shot buffer).
+            ['Enabled']      = false;
+            ['Triggerbot check'] = false;
+            ['Macro Check']  = true;
         };
-
-        -- Unload the runtime, remove visuals, and release simulated inputs.
         ['Panic'] = {
             ['Enabled'] = true;
             ['Keybind'] = {'E', 'MouseButton2', 'Keyboard'};
         };
-
-        -- React to an opponent's detected shot while this input is held.
         ['Prefire'] = {
             ['Enabled'] = false;
-            ['Range'] = 100; -- Maximum opponent distance in studs.
-            ['Delay'] = 0.25; -- Seconds after detecting an opponent's shot.
-            ['Holding'] = true; -- Active only while the chosen input is held.
+            ['Range']   = 100;
+            ['Delay']   = 0.25;
+            ['Holding'] = true;
             ['Keybind'] = {'C', 'MouseButton2', 'Keyboard'};
         };
     };
 };
 
 
-
 -- Runtime begins below.
--- neoperro v1.3.6 | generated by build-neoperro.py
+-- neoperro v1.3.8 | generated by build-neoperro.py
 local Core = (function()
 -- Shared math/state helpers. No executor or Roblox services are used here.
 local Core = {}
@@ -535,6 +485,17 @@ function Core.finiteVector(v)
         and math.abs(v.X) < 1e8 and math.abs(v.Y) < 1e8 and math.abs(v.Z) < 1e8
 end
 
+-- Distance to a forward ray, independent of direction length and surface depth.
+function Core.rayDistance(point, origin, direction)
+    if not (Core.finiteVector(point) and Core.finiteVector(origin) and Core.finiteVector(direction)) then return nil end
+    local lengthSquared = direction:Dot(direction)
+    if lengthSquared < 1e-10 then return nil end
+    local t = (point - origin):Dot(direction) / lengthSquared
+    if t < 0 then return nil end
+    local closest = origin + direction * t
+    return (point - closest).Magnitude, closest, t
+end
+
 -- Rotate a native pellet ray toward local mouse aim without merging endpoints.
 -- Native length, pairwise spread and all Beam styling remain independent.
 function Core.redirectTracer(origin, endpoint, serverPoint, mousePoint, newVector)
@@ -655,8 +616,12 @@ end
 function Core.resolveVelocity(history, raw, fitted, zero)
     local last = history[#history]
     if last then last.fitted = fitted end
-    if not Core.finiteVector(raw) or raw.Magnitude > 180 then return fitted, 'history-fallback' end
-    if raw:Dot(fitted) <= 0 then return raw, 'raw-transition' end
+    local function resolved(value, source)
+        if last then last.resolved = value end
+        return value, source
+    end
+    if not Core.finiteVector(raw) or raw.Magnitude > 180 then return resolved(fitted, 'history-fallback') end
+    if raw:Dot(fitted) <= 0 then return resolved(raw, 'raw-transition') end
     local rawError, fitError, count = 0, 0, 0
     for _, sample in ipairs(history) do
         local dt = last.t - sample.t
@@ -666,8 +631,97 @@ function Core.resolveVelocity(history, raw, fitted, zero)
             rawError, fitError, count = rawError + a:Dot(a), fitError + b:Dot(b), count + 1
         end
     end
-    if count >= 2 and fitError < rawError then return fitted, 'history-validated' end
-    return raw, 'raw-validated'
+    if count >= 2 and fitError < rawError then return resolved(fitted, 'history-validated') end
+    return resolved(raw, 'raw-validated')
+end
+
+-- Fit only measured replicated velocities. A stable slope is useful at a jump
+-- apex; sparse updates, a one-frame impulse and noisy slopes are not gravity.
+function Core.motion(history, raw)
+    local model = {VerticalAcceleration = 0, VerticalConfidence = 0, TurnRate = 0}
+    if #history < 4 or not Core.finiteVector(raw) or raw.Magnitude > 180 then return model end
+    local last, first = history[#history], history[1]
+    local span = last.t - first.t
+    if span < 0.05 or span > 0.2 then return model end
+    local count, timeMean, meanY, changes = 0, 0, 0, 0
+    local prior
+    for _, sample in ipairs(history) do
+        if not sample.raw then return model end
+        if prior and math.abs(sample.raw.Y - prior.Y) > 0.25 then changes = changes + 1 end
+        prior = sample.raw
+        count, timeMean, meanY = count + 1, timeMean + sample.t, meanY + sample.raw.Y
+    end
+    timeMean, meanY = timeMean / count, meanY / count
+    local numerator, denominator = 0, 0
+    for _, sample in ipairs(history) do
+        local dt = sample.t - timeMean
+        numerator, denominator = numerator + dt * (sample.raw.Y - meanY), denominator + dt * dt
+    end
+    if denominator < 1e-7 then return model end
+    local acceleration, errorSum = numerator / denominator, 0
+    for _, sample in ipairs(history) do
+        local error = sample.raw.Y - (meanY + acceleration * (sample.t - timeMean))
+        errorSum = errorSum + error * error
+    end
+    local tolerance = math.max(2.5, math.abs(acceleration) * span * 0.2)
+    local rms = math.sqrt(errorSum / count)
+    local endpointError = math.abs(raw.Y - (meanY + acceleration * (last.t - timeMean)))
+    if changes >= 3 and math.abs(acceleration) >= 5 and math.abs(acceleration) <= 600 and
+        rms < tolerance and endpointError < tolerance then
+        model.VerticalAcceleration = acceleration
+        model.VerticalConfidence = 1 - math.max(rms, endpointError) / tolerance
+    end
+    local speed = math.sqrt(raw.X * raw.X + raw.Z * raw.Z)
+    if speed >= 3 then
+        for i = #history - 1, 1, -1 do
+            local sample = history[i]
+            local dt = last.t - sample.t
+            if dt >= 0.05 then
+                local old = sample.raw
+                local oldSpeed = math.sqrt(old.X * old.X + old.Z * old.Z)
+                if oldSpeed >= 3 then
+                    local dot = Core.number((raw.X * old.X + raw.Z * old.Z) / (speed * oldSpeed), 1, -1, 1)
+                    model.TurnRate = math.acos(dot) / dt
+                end
+                break
+            end
+        end
+    end
+    last.turnRate = model.TurnRate
+    model.MeasuredTurnRate = model.TurnRate
+    local straightError, turnError, forecasts = 0, 0, 0
+    for _, sample in ipairs(history) do
+        local dt = last.t - sample.t
+        local velocity = sample.resolved or sample.raw
+        if dt >= 0.035 and sample.turnRate and sample.turnRate > 0 and velocity then
+            local time = Core.motionTime(dt, sample.turnRate)
+            local straight, turned = last.p - sample.p - velocity * dt, last.p - sample.p - velocity * time
+            straightError = straightError + straight.X * straight.X + straight.Z * straight.Z
+            turnError = turnError + turned.X * turned.X + turned.Z * turned.Z
+            forecasts = forecasts + 1
+        end
+    end
+    model.TurnValidated = forecasts >= 2 and turnError < straightError
+    if not model.TurnValidated then model.TurnRate = 0 end
+    return model
+end
+
+function Core.motionTime(seconds, turnRate)
+    local angle = math.min(math.pi / 2, seconds * Core.number(turnRate, 0, 0, 100))
+    if angle < 1e-5 then return seconds end
+    -- The forward component of a constant-rate turn is sin(angle)/rate.
+    return seconds * math.sin(angle) / angle
+end
+
+function Core.verticalLead(vertical, rawY, seconds, height, grounded, model)
+    if grounded then return 0 end
+    local confidence = model and model.VerticalConfidence or 0
+    local correction = 0
+    if confidence >= 0.5 then
+        vertical = rawY
+        correction = 0.5 * model.VerticalAcceleration * seconds * seconds * confidence
+    end
+    return Core.number(vertical * seconds + correction, 0, -height, height * 2), correction
 end
 
 -- State changes in the supplied config win; otherwise keep the running toggle.
@@ -694,336 +748,288 @@ end)()
 local Defaults = (function()
 return {
 
-    -- Send target coordinates only for the shot, then restore ordinary aim. Continuous MOUSE updates pass through.
-    ['Anti-AimViewer'] = {
-        ['Enabled'] = true;
-    };
-
-    -- Silent Aim vertical compensation. Aim Assist has no Y-Axis modifier.
-    ['Y-Axis'] = {
-        ['Enabled'] = false; -- Enable vertical compensation.
-        ['Mode'] = 'Auto'; -- Auto ignores JumpOffset; Custom uses it without automatic adjustment.
-        ['JumpOffset'] = 1.0; -- Custom only: 1 = unchanged, below 1 = less upward lead, above 1 = more.
-        ['SilentAim'] = true; -- Apply the Y-Axis section to Silent Aim.
-    };
-
-    -- Order for every row: {Silent Aim, Aim Assist, Triggerbot}.
-    ['Checks'] = {
-        ['Dead']       = {true, true, true}; -- Reject dead targets.
-        ['Knocked']    = {true, true, true}; -- Reject knocked/incapacitated targets.
-        ['Wall']       = {true, true, true}; -- Require a clear visibility check.
-        ['ForceField'] = {true, true, false}; -- Reject targets with spawn protection.
-        ['Crew']       = {false, false, false}; -- Reject players in your crew.
-        ['Tool']       = {false, true, true}; -- Require an equipped weapon.
-    };
-
-    -- Calculates the aim point used by the firing integration.
+    -- Silent targeting and prediction.
     ['Silent Aim'] = {
         ['Enabled'] = true;
         ['Prediction'] = {
             ['Enabled'] = true;
-            ['Auto'] = true; -- Measured latency estimate; ignores Value. Not a hit guarantee.
-            ['Value'] = 0.128; -- Manual baseline seconds; ignored in Auto. Both modes always adjust XZ time by speed (0.75-1.25x); Y stays separate.
+            ['Auto']    = true;
+            ['Value']   = 0.128;
         };
-
-        ['GroundShotCheck'] = true; -- Bound downward prediction using actual ground/rig geometry.
-        ['Mode'] = 'Auto'; -- Auto = nearest eligible to cursor; Target = select with a keybind.
-        ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
-
+        ['GroundShotCheck'] = true;
+        ['Mode']            = 'Auto';
+        ['Ignore']          = false;
         ['Target'] = {
-            ['BasePart'] = 'UpperTorso'; -- Used when Closest is disabled; R6 falls back to Torso.
+            ['BasePart'] = 'UpperTorso';
             ['Closest'] = {
-                ['Enabled'] = true; -- Choose the body part nearest your crosshair.
-                ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
-                ['Method'] = 'Part'; -- Part = nearest center; Point = nearest allowed point to the cursor ray, across body parts.
-                ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
-                ['Sharpness'] = 0.7; -- Point response: 1 = immediate, 0.01 = slow.
+                ['Enabled']   = true;
+                ['Raycast']   = false;
+                ['Method']    = 'Part';
+                ['Axis']      = 'Center';
+                ['Sharpness'] = 0.7;
                 ['Reduce'] = {
-                    ['Center'] = 0.7; -- Keep this far from Y edges: 0 = edges, 1 = center.
-                    ['All'] = 0.7; -- Same reduction on all axes when Axis is All.
+                    ['Center'] = 0.7;
+                    ['All']    = 0.7;
                 };
             };
         };
-
         ['Fov'] = {
-            ['Mode'] = '2d-Box'; -- 2d-Box = box on each player; 2d-Circle = circle around crosshair.
-
+            ['Mode'] = '2d-Box';
             ['2d-Circle'] = {
-                ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
-                ['Size'] = 50; -- Circle radius in pixels.
-                ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
+                ['Visible'] = false;
+                ['Size']    = 50;
+                ['Color']   = {255, 255, 255};
             };
-
         };
-
-        -- Enable/disable this feature through its input.
         ['Toggle'] = {
             ['Enabled'] = true;
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
+            ['Holding'] = false;
             ['Keybind'] = {'P', 'MouseButton2', 'Keyboard'};
         };
-
-        -- Target selection controls, used when Mode is Target.
-        ['Keybind Mode'] = {
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
-            ['Unlock Mode'] = 'Repeat'; -- Repeat = select again on each press; clear if no eligible target.
-            ['Keybind'] = {'T', 'MouseButton2', 'Keyboard'};
+        ['Activation'] = {
+            ['Holding']     = false;
+            ['Unlock Mode'] = 'Repeat';
+            ['Keybind']     = {'T', 'MouseButton2', 'Keyboard'};
         };
-
-        -- Distance filters; disabled by default. Units are explicit interpretations of the screenshots.
         ['EndMath'] = {
-            ['VelocityHistory'] = true; -- Compare history/raw forecasts against received positions; teleport jumps reset history.
-            ['WallCheck'] = true; -- Silent-only final camera/muzzle visibility checks.
-            ['Visualizer'] = false; -- Display the final Silent Aim point.
+            ['VelocityHistory'] = true;
+            ['WallCheck']       = true;
+            ['Visualizer']      = false;
         };
         ['AntiCurve'] = {
             ['Enabled'] = false;
-            ['Mode'] = '3d-angles'; -- Select one distance filter, not a degree limit.
+            ['Mode']    = '3d-angles';
             ['3d-angles'] = {
-                ['Max'] = 2.2; -- Studs between ordinary Mouse.Hit and final target point.
+                ['Max'] = 2.2;
             };
             ['endmath'] = {
-                ['Radius'] = 120; -- Pixels from cursor to projected final point; reject, never clamp lead.
-                ['WallCheck'] = true; -- Final visibility from the actual muzzle.
+                ['Radius']    = 120;
+                ['WallCheck'] = true;
             };
         };
     };
 
-    -- Moves the camera toward the chosen aim point.
+    -- Camera/mouse assistance; hold its Activation input in Auto.
     ['Aim Assist'] = {
         ['Enabled'] = true;
         ['Prediction'] = {
             ['Enabled'] = true;
-            ['Auto'] = true; -- Same measured latency model, independently enabled.
-            ['Value'] = 0.121; -- Manual baseline seconds; ignored in Auto. Always speed-aware in XZ (0.75-1.25x); Y time stays separate.
+            ['Auto']    = true;
+            ['Value']   = 0.121;
         };
-        ['Mode'] = 'Auto'; -- Auto searches while its key is held; Target uses a selected player.
-        ['Ignore'] = false; -- Ignore circle/player-box bounds; other checks still apply.
-
-        ['Follow'] = 'Camera'; -- Camera / Mouse; Mouse requires mousemoverel and a focused game.
-        ['Smoothness'] = 0.0068; -- Strength referenced to 60 FPS; runtime will compensate for frame time.
-
+        ['Mode']   = 'Auto';
+        ['Ignore'] = false;
+        ['Follow']     = 'Camera';
+        ['Smoothness'] = 0.0068;
         ['Target'] = {
-            ['BasePart'] = 'UpperTorso'; -- Used when Closest is disabled; R6 falls back to Torso.
+            ['BasePart'] = 'UpperTorso';
             ['Closest'] = {
-                ['Enabled'] = true; -- Choose the body part nearest your crosshair.
-                ['Raycast'] = false; -- Exact cursor surface hit before prediction; bypasses Reduce and Sharpness.
-                ['Method'] = 'Part'; -- Part = nearest center; Point = nearest allowed point to the cursor ray, across body parts.
-                ['Axis'] = 'Center'; -- Point movement within the part: Center = Y only; All = XYZ.
-                ['Sharpness'] = 0.65; -- Point response: 1 = immediate, 0.01 = slow.
+                ['Enabled']   = true;
+                ['Raycast']   = false;
+                ['Method']    = 'Part';
+                ['Axis']      = 'Center';
+                ['Sharpness'] = 0.65;
                 ['Reduce'] = {
-                    ['Center'] = 0.45; -- Keep this far from Y edges: 0 = edges, 1 = center.
-                    ['All'] = 0.45; -- Same reduction on all axes when Axis is All.
+                    ['Center'] = 0.45;
+                    ['All']    = 0.45;
                 };
             };
         };
-
         ['Fov'] = {
-            ['Mode'] = '2d-Box'; -- 2d-Box = box on each player; 2d-Circle = circle around crosshair.
-
+            ['Mode'] = '2d-Box';
             ['2d-Circle'] = {
-                ['Visible'] = false; -- Show the FOV outline; hiding it does not disable the FOV check.
-                ['Size'] = 100; -- Circle radius in pixels.
-                ['Color'] = {255, 255, 255}; -- RGB, 0-255 per channel.
+                ['Visible'] = false;
+                ['Size']    = 100;
+                ['Color']   = {255, 255, 255};
             };
-
         };
-
-        -- Enable/disable this feature through its input.
         ['Toggle'] = {
             ['Enabled'] = true;
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
+            ['Holding'] = false;
             ['Keybind'] = {'M', 'MouseButton2', 'Keyboard'};
         };
-
-        -- In Auto, Holding makes this the search input. In Target, this selects a player.
-        ['Keybind Mode'] = {
-            ['Holding'] = true; -- Auto: hold to search continuously. Target: hold the selected target.
-            ['Unlock Mode'] = 'Normal'; -- Normal = lock on one press, unlock on the next.
-            ['Keybind'] = {'Q', 'MouseButton2', 'Keyboard'};
+        ['Activation'] = {
+            ['Holding']     = true;
+            ['Unlock Mode'] = 'Normal';
+            ['Keybind']     = {'Q', 'MouseButton2', 'Keyboard'};
         };
     };
 
-    -- Up to four assigned players. Store UserIds, not display names.
+    -- V arms/disarms; hold RMB. SmartDelay adds a distance-based hold, not a reaction delay.
+    ['Triggerbot'] = {
+        ['Enabled'] = true;
+        ['Prediction'] = {
+            ['Enabled'] = true;
+            ['Auto']    = true;
+            ['Value']   = 0.121;
+        };
+        ['TargetOnly'] = false;
+        ['Delay']       = 0.1;
+        ['RandomDelay'] = {0.1, 0.12};
+        ['SmartDelay']  = false;
+        ['DelayMode']   = 'Random';
+        ['Toggle'] = {
+            ['Enabled'] = true;
+            ['Holding'] = false;
+            ['Keybind'] = {'V', 'MouseButton2', 'Keyboard'};
+        };
+        ['Activation'] = {
+            ['Enabled'] = true;
+            ['Holding'] = true;
+            ['Keybind'] = {'Q', 'MouseButton2', 'Mouse'};
+        };
+        ['Fov'] = {
+            ['Enabled']   = false;
+            ['Character'] = 1.2; -- FOV off: 1 = native body/HB; 1.2 = 20% larger, 0.8 = 20% smaller. Local only.
+            ['Mode'] = '2d-Box';
+            ['2d-Circle'] = {
+                ['Visible'] = false;
+                ['Size']    = 50;
+                ['Color']   = {255, 255, 255};
+            };
+        };
+    };
+
+    -- Silent vertical behavior. Auto ignores JumpOffset.
+    ['Y-Axis'] = {
+        ['Enabled']    = false;
+        ['Mode']       = 'Auto';
+        ['JumpOffset'] = 1.0;
+        ['SilentAim']  = true;
+    };
+
+    -- Row order: Silent Aim, Aim Assist, Triggerbot.
+    ['Checks'] = {
+        ['Dead']       = {true, true, true};
+        ['Knocked']    = {true, true, true};
+        ['Wall']       = {true, true, true};
+        ['ForceField'] = {true, true, false};
+        ['Crew']       = {false, false, false};
+        ['Tool']       = {false, true, true};
+    };
+
+    -- Friend excludes assigned players; Target includes only them.
     ['Whitelist'] = {
         ['Enabled'] = false;
-        ['Mode'] = 'Friend'; -- Friend = ignore assigned players; Target = only assigned players.
-        ['Players'] = {}; -- Up to four numeric UserIds.
-
-        -- Add/remove the eligible player nearest your cursor.
+        ['Mode']    = 'Friend';
+        ['Players'] = {};
         ['AssignKey'] = {
             ['Keybind'] = {'R', 'MouseButton2', 'Keyboard'};
         };
     };
 
-    -- Recheck before pressing; one owned press/hold/release cycle, cancelled on target loss.
-    ['Triggerbot'] = {
-        ['Enabled'] = true;
-        ['Prediction'] = {
-            ['Enabled'] = true;
-            ['Auto'] = true; -- Independent from Silent Aim and Aim Assist.
-            ['Value'] = 0.121; -- Manual baseline seconds; ignored in Auto. Always speed-aware in XZ (0.75-1.25x); Y time stays separate.
+    -- Enable and equip a supported gun. Ranges are upper bounds; beyond Far uses general size.
+    ['Gun Specifications'] = {
+        ['Enabled'] = false;
+        ['Ranges'] = {
+            ['Close']  = 15;
+            ['Medium'] = 30;
+            ['Far']    = 90;
         };
+        ['Revolver'] = {
+            ['Close']  = {['BoxSize'] = {5.1, 5.1}};
+            ['Medium'] = {['BoxSize'] = {5.5, 5.5}};
+            ['Far']    = {['BoxSize'] = {5, 4.5}};
+        };
+        ['Double-Barrel SG'] = {
+            ['Close']  = {['BoxSize'] = {7, 6}};
+            ['Medium'] = {['BoxSize'] = {6, 5}};
+            ['Far']    = {['BoxSize'] = {5, 5}};
+        };
+        ['TacticalShotgun'] = {
+            ['Close']  = {['BoxSize'] = {7, 7}};
+            ['Medium'] = {['BoxSize'] = {6, 6}};
+            ['Far']    = {['BoxSize'] = {5, 5}};
+        };
+        ['Shotgun'] = {
+            ['Close']  = {['BoxSize'] = {7, 7}};
+            ['Medium'] = {['BoxSize'] = {6, 6}};
+            ['Far']    = {['BoxSize'] = {5, 5}};
+        };
+        ['Usp'] = {
+            ['Close']  = {['BoxSize'] = {5, 6}};
+            ['Medium'] = {['BoxSize'] = {5, 6}};
+            ['Far']    = {['BoxSize'] = {4, 5}};
+        };
+    };
 
-        ['TargetOnly'] = false; -- When true, require the Silent Aim target.
-
-        ['Delay'] = 0.1; -- Button hold duration in seconds, as in Looten; not a pre-shot wait.
-        ['RandomDelay'] = {0.1, 0.12}; -- Minimum and maximum delay in seconds.
-        ['SmartDelay'] = false; -- Distance-based timing; overrides DelayMode when enabled.
-        ['DelayMode'] = 'Random'; -- Normal / Random. Delays are alternatives, not added together.
-
+    -- Player overlays; hide knocked/dead targets with the checks below.
+    ['ESP'] = {
+        ['Enabled']      = true;
+        ['VisibleCheck'] = false;
+        ['Names']        = true;
+        ['KnockedCheck'] = true;
+        ['DeadCheck']    = true;
+        ['MaxDistance']  = 5050;
         ['Toggle'] = {
             ['Enabled'] = true;
             ['Holding'] = false;
-            ['Keybind'] = {'V', 'MouseButton2', 'Keyboard'}; -- Arm/disarm Triggerbot.
-        };
-        ['Activation'] = {
-            ['Enabled'] = true; -- Require this activation input in addition to Enabled.
-            ['Holding'] = true;
-            ['Keybind'] = {'Q', 'MouseButton2', 'Mouse'}; -- Hold RMB; change Mouse to Keyboard for Q.
-        };
-
-        ['Fov'] = {
-            ['Enabled'] = false; -- False = character bounds. True = use a selection shape.
-            ['Character'] = 1.2; -- FOV off: scale native body/HB bounds. 1 = actual hit, 1.2 = 20% larger, 0.8 = 20% smaller. Local only (0.1-3).
-
-            ['Mode'] = '2d-Box'; -- Player-centered box or crosshair-centered circle.
-
-            ['2d-Circle'] = {
-                ['Visible'] = false;
-                ['Size'] = 50; -- Radius in pixels.
-                ['Color'] = {255, 255, 255}; -- RGB.
-            };
-        };
-    };
-
-    -- Player boxes and names. Appearance is in the 2d-Box section below.
-    ['ESP'] = {
-        ['Enabled'] = true;
-        ['VisibleCheck'] = false; -- Hide ESP for obstructed players.
-        ['Names'] = true; -- Also respects each box's Name setting.
-        ['KnockedCheck'] = true; -- Hide boxes and names while knocked.
-        ['DeadCheck'] = true; -- Hide dead bodies; an enabled Silent Aim Dead check also hides them.
-        ['MaxDistance'] = 5050; -- Maximum ESP distance in studs.
-
-        -- Enable/disable this feature through its input.
-        ['Toggle'] = {
-            ['Enabled'] = true;
-            ['Holding'] = false; -- Press to toggle/select rather than holding.
             ['Keybind'] = {'Z', 'MouseButton2', 'Keyboard'};
         };
-
     };
 
-    -- Boxes follow each player's root without resizing for walking/limb animations.
-    -- Width/Height are studs; their screen size still changes with distance.
+    -- Feature box sizes in studs; visibility does not change selection.
     ['2d-Box'] = {
         ['Silent Aim'] = {
-            ['Visible'] = true;
-            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
-            ['Name'] = {true, 'DisplayName'}; -- DisplayName / Name / UserId.
-            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}}; -- Foreground, outline.
-            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
-            ['Max Distance'] = 5050;
-            ['Filled'] = false;
-            ['Transparency'] = 1; -- 1 = opaque, 0 = invisible.
+            ['Visible']            = true;
+            ['Predicted Position'] = true;
+            ['Name']               = {true, 'DisplayName'};
+            ['Color']              = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size']               = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance']       = 5050;
+            ['Filled']             = false;
+            ['Transparency']       = 1;
         };
         ['Aim Assist'] = {
-            ['Visible'] = false;
-            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
-            ['Name'] = {false, 'DisplayName'};
-            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
-            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
-            ['Max Distance'] = 5050;
-            ['Filled'] = false;
-            ['Transparency'] = 1;
+            ['Visible']            = false;
+            ['Predicted Position'] = true;
+            ['Name']               = {false, 'DisplayName'};
+            ['Color']              = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size']               = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance']       = 5050;
+            ['Filled']             = false;
+            ['Transparency']       = 1;
         };
         ['Triggerbot'] = {
-            ['Visible'] = false;
-            ['Predicted Position'] = true; -- Match selection/drawing to prediction; false keeps a body-centered box.
-            ['Name'] = {false, 'DisplayName'};
-            ['Color'] = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
-            ['Size'] = {['Width'] = 5; ['Height'] = 4.3};
-            ['Max Distance'] = 5050;
-            ['Filled'] = false;
-            ['Transparency'] = 1;
+            ['Visible']            = false;
+            ['Predicted Position'] = true;
+            ['Name']               = {false, 'DisplayName'};
+            ['Color']              = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
+            ['Size']               = {['Width'] = 5; ['Height'] = 4.3};
+            ['Max Distance']       = 5050;
+            ['Filled']             = false;
+            ['Transparency']       = 1;
         };
     };
 
-    -- Weapon profiles override Silent Aim box dimensions only; Aim Assist/TB stay independent.
-    -- BoxSize = projected target-box width/height in studs, not cursor FOV pixels.
-    -- Unlisted weapons and targets beyond Far use the general settings.
-    ['Gun Specifications'] = {
-        ['Enabled'] = false;
-
-        ['Ranges'] = {
-            ['Close'] = 15; -- Close: distance up to 15 studs.
-            ['Medium'] = 30; -- Medium: over Close, up to 30 studs.
-            ['Far'] = 90; -- Far: over Medium, up to 90 studs.
-        };
-
-        ['Revolver'] = {
-            ['Close'] = {['BoxSize'] = {5.1, 5.1}};
-            ['Medium'] = {['BoxSize'] = {5.5, 5.5}};
-            ['Far'] = {['BoxSize'] = {5, 4.5}};
-        };
-
-        ['Double-Barrel SG'] = {
-            ['Close'] = {['BoxSize'] = {7, 6}};
-            ['Medium'] = {['BoxSize'] = {6, 5}};
-            ['Far'] = {['BoxSize'] = {5, 5}};
-        };
-
-        ['TacticalShotgun'] = {
-            ['Close'] = {['BoxSize'] = {7, 7}};
-            ['Medium'] = {['BoxSize'] = {6, 6}};
-            ['Far'] = {['BoxSize'] = {5, 5}};
-        };
-
-        ['Shotgun'] = {
-            ['Close'] = {['BoxSize'] = {7, 7}};
-            ['Medium'] = {['BoxSize'] = {6, 6}};
-            ['Far'] = {['BoxSize'] = {5, 5}};
-        };
-
-        ['Usp'] = {
-            ['Close'] = {['BoxSize'] = {5, 6}};
-            ['Medium'] = {['BoxSize'] = {5, 6}};
-            ['Far'] = {['BoxSize'] = {4, 5}};
-        };
-    };
-
-    -- Local tracer visuals. Weapon handling stays inside the script.
-    -- Draw recognized local tracers toward your mouse; server aim stays independent.
+    -- Local native tracer appearance only.
     ['Client Bullets'] = {
-        ['Enabled'] = true; -- Local visuals only; no separate keybind.
+        ['Enabled'] = true;
     };
 
-    -- Extra controls. No intro settings are exposed here.
+    -- Keep the confirmed shot/restoration path.
+    ['Anti-AimViewer'] = {
+        ['Enabled'] = true;
+    };
+
+    -- Extra controls. Triggerbot check permits Macro Abuse after TB shots.
     ['Misc'] = {
-        ['AntiAfk'] = true; -- Idle prevention where supported.
-        ['AntiFling'] = true; -- Mitigate fling-like movement while preserving normal movement.
-
-        -- After weapon activation: unequip -> hold Ctrl -> re-equip -> release Ctrl.
-        -- One cycle at a time; cancellation releases only the script's simulated input.
+        ['AntiAfk']   = true;
+        ['AntiFling'] = true;
         ['Macro Abuse'] = {
-            ['Enabled'] = false;
-            ['Work With TB'] = false; -- Also run after Triggerbot fires.
-            ['Macro Check'] = true; -- Require Head horizontal speed >30 studs/s, matching this game's shot handler (120ms pre-shot buffer).
+            ['Enabled']      = false;
+            ['Triggerbot check'] = false;
+            ['Macro Check']  = true;
         };
-
-        -- Unload the runtime, remove visuals, and release simulated inputs.
         ['Panic'] = {
             ['Enabled'] = true;
             ['Keybind'] = {'E', 'MouseButton2', 'Keyboard'};
         };
-
-        -- React to an opponent's detected shot while this input is held.
         ['Prefire'] = {
             ['Enabled'] = false;
-            ['Range'] = 100; -- Maximum opponent distance in studs.
-            ['Delay'] = 0.25; -- Seconds after detecting an opponent's shot.
-            ['Holding'] = true; -- Active only while the chosen input is held.
+            ['Range']   = 100;
+            ['Delay']   = 0.25;
+            ['Holding'] = true;
             ['Keybind'] = {'C', 'MouseButton2', 'Keyboard'};
         };
     };
@@ -1295,7 +1301,18 @@ local supported = {
 }
 assert(supported[game.PlaceId], '[neoperro] This place is not supported.')
 assert(type(environment.neoperro) == 'table', '[neoperro] Put the configuration above the runtime.')
-local config = Core.merge(Defaults, environment.neoperro)
+local suppliedConfig = Core.copy(environment.neoperro)
+for _, name in ipairs({'Silent Aim', 'Aim Assist'}) do
+    local feature = suppliedConfig[name]
+    if type(feature) == 'table' and feature.Activation == nil then feature.Activation = feature['Keybind Mode'] end
+    if type(feature) == 'table' then feature['Keybind Mode'] = nil end
+end
+local suppliedMacro = suppliedConfig.Misc and suppliedConfig.Misc['Macro Abuse']
+if type(suppliedMacro) == 'table' then
+    if suppliedMacro['Triggerbot check'] == nil then suppliedMacro['Triggerbot check'] = suppliedMacro['Work With TB'] end
+    suppliedMacro['Work With TB'] = nil
+end
+local config = Core.merge(Defaults, suppliedConfig)
 Core.validate(Defaults, config)
 local Players = game:GetService('Players')
 local RunService = game:GetService('RunService')
@@ -1317,7 +1334,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.6', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.8', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Mode,
@@ -1334,11 +1351,10 @@ local camera, cursor, cursorRay
 local localCharacter, localHumanoid, localRoot, equipped, weaponName, muzzleAttachment
 local releaseShotInput
 local charConnections, toolConnections = {}, {}
-local pendingTrigger, pendingPrefire, macro, activation
+local pendingPrefire, macro, activation
 local renderName = 'neoperro.' .. tostring(now())
 local featureNames = {'Silent Aim', 'Aim Assist', 'Triggerbot', 'ESP'}
 local checkIndices = {['Silent Aim'] = 1, ['Aim Assist'] = 2, Triggerbot = 3}
-local predictionKeys = {['Silent Aim'] = 'SilentAim', ['Aim Assist'] = 'AimAssist', Triggerbot = 'Triggerbot'}
 local virtualInput
 pcall(function() virtualInput = game:GetService('VirtualInputManager') end)
 
@@ -1374,7 +1390,7 @@ function state:Diagnose()
         MouseOwned = self.MouseOwned == true, ControlOwned = self.ControlOwned == true,
         Equipped = equipped and equipped.Name or nil, Remote = self.Remote and self.Remote.Name or nil,
         Aim = Core.copy(self.AimTrace), LastSend = Core.copy(self.LastSend), Network = Core.copy(self.Network),
-        Performance = Core.copy(self.Performance),
+        Performance = Core.copy(self.Performance), Input = self.InputStatus and self:InputStatus(),
         ShotResult = 'unverified; activation and MOUSE submission do not establish damage'}
     for name, player in pairs(self.Targets) do result.Targets[name] = player.UserId end
     for _, record in pairs(self.Records) do
@@ -1426,7 +1442,9 @@ for _, name in ipairs(featureNames) do
 end
 if saved and config.Whitelist.Enabled then
     if Core.equal(state.InitialWhitelist, saved.InitialWhitelist) then state.Whitelist = Core.ids(saved.Whitelist) end
-    if previous.Version == state.Version and state.InitialWhiteMode == saved.InitialWhiteMode then state.WhiteMode = saved.WhiteMode end
+    if state.InitialWhiteMode == saved.InitialWhiteMode and (saved.WhiteMode == 'Friend' or saved.WhiteMode == 'Target') then
+        state.WhiteMode = saved.WhiteMode
+    end
 end
 
 if not config.Whitelist.Enabled then state.Whitelist = {} end
@@ -1477,20 +1495,53 @@ function state:Destroy(reason)
     if reason ~= 'replace' then print('[neoperro] Unloaded.') end
 end
 
+local function holding(slot, binding)
+    local ok, down = pcall(function()
+        if binding[3] == 'Mouse' then return Input:IsMouseButtonPressed(Enum.UserInputType[binding[2]]) end
+        local key = tostring(binding[1] or '')
+        if #key == 1 then key = key:upper() end
+        return Input:IsKeyDown(Enum.KeyCode[key])
+    end)
+    if ok then state.Held[slot] = down == true end
+    return state.Held[slot] == true
+end
+
 local function enabled(name)
     local feature = config[name]
     if feature.Enabled ~= true or not state.Toggles[name] then return false end
     local toggle = feature.Toggle
-    if toggle and toggle.Enabled and toggle.Holding and not state.Held['toggle:' .. name] then return false end
+    if toggle and toggle.Enabled and toggle.Holding and not holding('toggle:' .. name, toggle.Keybind) then return false end
     if name == 'Triggerbot' then
         local gate = feature.Activation
-        if gate.Enabled and not state.Held['activation:Triggerbot'] then return false end
+        if gate.Enabled and not (gate.Holding and holding('activation:Triggerbot', gate.Keybind) or
+            not gate.Holding and state.Held['activation:Triggerbot']) then return false end
+    elseif feature.Activation and feature.Activation.Holding and
+        not holding('target:' .. name, feature.Activation.Keybind) then return false
     end
     return true
 end
 
 local function typing()
     return not state.Focused or (type(isrbxactive) == 'function' and not isrbxactive()) or Input:GetFocusedTextBox() ~= nil
+        or game:GetService('GuiService').MenuIsOpen == true
+end
+
+function state:InputStatus()
+    local result = {Focused = not typing(), Features = {}}
+    for _, name in ipairs({'Silent Aim', 'Aim Assist', 'Triggerbot'}) do
+        local feature, activation = config[name], config[name].Activation
+        local reason = not feature.Enabled and 'disabled' or not self.Toggles[name] and 'toggle-off' or typing() and 'focus-or-text-input' or nil
+        if not reason and feature.Toggle.Enabled and feature.Toggle.Holding and
+            not holding('toggle:' .. name, feature.Toggle.Keybind) then reason = 'toggle-not-held' end
+        if not reason and activation and activation.Holding and (name ~= 'Triggerbot' or activation.Enabled) and
+            not holding(name == 'Triggerbot' and 'activation:Triggerbot' or 'target:' .. name, activation.Keybind) then reason = 'activation-not-held' end
+        if not reason and name == 'Triggerbot' and activation.Enabled and not activation.Holding and
+            not self.Held['activation:Triggerbot'] then reason = 'activation-off' end
+        result.Features[name] = {Ready = reason == nil, Reason = reason,
+            Device = activation and activation.Keybind[3],
+            Key = activation and (activation.Keybind[3] == 'Mouse' and activation.Keybind[2] or activation.Keybind[1])}
+    end
+    return result
 end
 
 local function captureView()
@@ -1611,6 +1662,18 @@ local function cursorHit()
     return World:Raycast(cursorRay.Origin, cursorRay.Direction * 5000, rayParams)
 end
 
+local function nativeAimRay()
+    local origin, point = muzzle(), mouse.Hit.Position
+    if not (Core.finiteVector(origin) and Core.finiteVector(point)) then return nil end
+    local direction = point - origin
+    if direction.Magnitude < 0.001 then return nil end
+    return {Origin = origin, Direction = direction / direction.Magnitude}
+end
+
+local function firingVisible(point, character, feature, excludeTarget)
+    return visible(point, character, feature == 'Aim Assist' and camera.CFrame.Position or muzzle(), excludeTarget)
+end
+
 local function closestLocal(part, closest)
     local reduction = Core.number(closest.Reduce[closest.Axis == 'All' and 'All' or 'Center'], 0.7, 0, 1)
     local half = part.Size * (0.5 * (1 - reduction))
@@ -1647,6 +1710,7 @@ local function valid(record, feature, part, skipWall)
     local character, humanoid, root = record.character, record.humanoid, record.root
     if not character or not character.Parent or not humanoid or not root or not part or not part.Parent then return false end
     if not Core.finiteVector(part.Position) then return false end
+    if feature == 'Triggerbot' and config.Triggerbot.TargetOnly and record.player ~= state.Targets['Silent Aim'] then return false end
     if not Core.whitelisted(config.Whitelist.Enabled, state.WhiteMode, state.Whitelist, record.player.UserId) then return false end
     local index = checkIndices[feature]
     local function check(key) return config.Checks[key] and config.Checks[key][index] == true end
@@ -1658,7 +1722,7 @@ local function valid(record, feature, part, skipWall)
         local mine, theirs = crew(localPlayer), crew(record.player)
         if mine ~= nil and mine ~= '' and mine ~= '0' and mine ~= 0 and mine == theirs then return false end
     end
-    if not skipWall and check('Wall') and not visible(part.Position, character) then return false end
+    if not skipWall and check('Wall') and not firingVisible(part.Position, character, feature) then return false end
     return true
 end
 
@@ -1666,11 +1730,13 @@ local function velocity(record, feature)
     local raw = record.root.AssemblyLinearVelocity
     if not Core.finiteVector(raw) then raw = zero end
     local last = record.history[#record.history]
-    if record.velocityAt ~= (last and last.t) or not record.sampledVelocity then
+    if record.velocityAt ~= (last and last.t) or record.velocityRaw ~= raw or not record.sampledVelocity then
         record.sampledVelocity = Core.velocity(record.history, raw, zero)
         record.resolvedVelocity, record.velocitySource = Core.resolveVelocity(record.history,
             record.root.AssemblyLinearVelocity, record.sampledVelocity, zero)
         record.velocityAt = last and last.t
+        record.velocityRaw = raw
+        record.motion = Core.motion(record.history, record.root.AssemblyLinearVelocity)
     end
     if feature ~= 'Silent Aim' or config['Silent Aim'].EndMath.VelocityHistory then return record.resolvedVelocity end
     return Core.limit(raw, 180)
@@ -1692,14 +1758,14 @@ local groundParams = RaycastParams.new()
 groundParams.FilterType = Enum.RaycastFilterType.Exclude
 groundParams.IgnoreWater = true
 groundParams.RespectCanCollide = true
-local function support(record, point, lead)
+local function support(record, point, lead, fallLimit)
     local root, humanoid = record.root, record.humanoid
     local stand = Core.number(humanoid.HipHeight, 2, 0, 10) + root.Size.Y / 2
     local leg = record.character:FindFirstChild('Left Leg')
     if leg and leg:IsA('BasePart') then stand = stand + leg.Size.Y end
     groundParams.FilterDescendantsInstances = {record.character, localCharacter, camera}
     local origin = root.Position + Vector3.new(lead.X, 0, lead.Z)
-    local hit = World:Raycast(origin, Vector3.new(0, -(stand + math.max(0, -lead.Y) + 1), 0), groundParams)
+    local hit = World:Raycast(origin, Vector3.new(0, -(stand + math.max(0, -lead.Y, fallLimit or 0) + 1), 0), groundParams)
     if not hit or not hit.Normal or hit.Normal.Y < 0.45 then return nil, false end
     local clearance = root.Position.Y - hit.Position.Y
     local standing = clearance <= stand + 0.3 and math.abs(root.AssemblyLinearVelocity.Y) < 3
@@ -1723,7 +1789,8 @@ local function playerBox(record, feature, standalone, predictedOffset)
     if standalone then width, height = 6, 6 end
     local profile, range
     local physicalDistance = (record.root.Position - (localRoot and localRoot.Position or camera.CFrame.Position)).Magnitude
-    if not standalone and feature == 'Silent Aim' then
+    if feature == 'Silent Aim' then
+        weaponName = equipped and Core.weapon(equipped.Name) or nil
         profile, range = Core.profile(config['Gun Specifications'], weaponName, physicalDistance)
     end
     if profile and profile.BoxSize then
@@ -1731,8 +1798,10 @@ local function playerBox(record, feature, standalone, predictedOffset)
         height = Core.number(profile.BoxSize[2], height, 0.1, 100)
     end
     record.BoxInfo = record.BoxInfo or {}
-    record.BoxInfo[feature] = {Width = width, Height = height, Distance = physicalDistance,
-        Weapon = weaponName, Range = profile and range or nil, Standalone = standalone == true}
+    local boxInfo = record.BoxInfo[feature] or {}
+    record.BoxInfo[feature] = boxInfo
+    boxInfo.Width, boxInfo.Height, boxInfo.Distance = width, height, physicalDistance
+    boxInfo.Weapon, boxInfo.Range, boxInfo.Standalone = weaponName, profile and range or nil, standalone == true
     local focal = camera.ViewportSize.Y / (2 * math.tan(math.rad(camera.FieldOfView) / 2))
     local x, y, w, h = Core.projectedBox(projected.X, projected.Y, projected.Z, width, height, focal)
     if not x or x+w < 0 or y+h < 0 or x > camera.ViewportSize.X or y > camera.ViewportSize.Y then return nil end
@@ -1768,7 +1837,7 @@ local function nearest(feature, assignment, resolve)
     end
     table.sort(choices, function(a, b) return a.distance < b.distance end)
     for _, choice in ipairs(choices) do
-        if assignment or valid(choice.record, feature, choice.part) then
+        if assignment or valid(choice.record, feature, choice.part, resolve ~= nil) then
             if resolve then
                 local point, part = resolve(choice.record, feature, nil, nil, choice.part)
                 if point then return choice.record, point, part end
@@ -1792,7 +1861,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         traceEvent('aim', evidence)
         return nil
     end
-    if not valid(record, feature, part, hitPart ~= nil) then return reject('eligibility') end
+    if not valid(record, feature, part, true) then return reject('eligibility') end
     local point = hitPoint or part.Position
     local exact = closest.Enabled and closest.Raycast and state.CursorHit
     if hitPart then
@@ -1825,9 +1894,12 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
     local leadTime, predictionSource, speedFactor, baseLeadTime = prediction(record, feature, point)
     local vel = velocity(record, feature)
     baseLeadTime = baseLeadTime or leadTime
-    local horizontalTime, limited = leadTime, false
+    local motion = record.motion or {}
+    local horizontalTime, limited = Core.motionTime(leadTime, motion.TurnRate), false
+    evidence.TurnRate, evidence.TurnLeadTime = motion.TurnRate, horizontalTime
+    evidence.MeasuredTurnRate, evidence.TurnValidated = motion.MeasuredTurnRate, motion.TurnValidated
     if feature == 'Silent Aim' then
-        horizontalTime, limited = Core.silentLeadTime(leadTime, Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed)
+        horizontalTime, limited = Core.silentLeadTime(horizontalTime, Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed)
     end
     local lead = Vector3.new(vel.X * horizontalTime, vel.Y * baseLeadTime, vel.Z * horizontalTime)
     evidence.Part, evidence.PartPosition, evidence.BasePoint = part.Name, vectorData(part.Position), vectorData(point)
@@ -1841,17 +1913,19 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
     evidence.HistoryAge = record.history[#record.history] and now() - record.history[#record.history].t
     evidence.VelocitySource = (feature ~= 'Silent Aim' or settings.EndMath.VelocityHistory) and record.velocitySource or 'raw'
     evidence.LeadBeforeY = vectorData(lead)
+    evidence.VerticalAcceleration, evidence.VerticalConfidence = motion.VerticalAcceleration, motion.VerticalConfidence
     evidence.Airborne = record.humanoid.FloorMaterial == Enum.Material.Air
     evidence.FloorMaterial = record.humanoid.FloorMaterial.Name
     evidence.Health = record.humanoid.Health
     evidence.MuzzleOrigin, evidence.CameraOrigin = vectorData(muzzle()), vectorData(camera.CFrame.Position)
-    evidence.RawMousePoint = vectorData(mouse.Hit.Position)
+    local rawMousePoint = mouse.Hit.Position
+    evidence.RawMousePoint = vectorData(rawMousePoint)
     local ySettings = config['Y-Axis']
     local useY = feature == 'Silent Aim' and ySettings.Enabled and ySettings.SilentAim
     evidence.YMode = useY and ySettings.Mode or 'Disabled'
     local minY, supportedGround
-    if feature == 'Silent Aim' and (settings.GroundShotCheck or (useY and ySettings.Mode == 'Auto')) then
-        minY, supportedGround = support(record, point, lead)
+    if feature ~= 'Silent Aim' or settings.GroundShotCheck or (useY and ySettings.Mode == 'Auto') then
+        minY, supportedGround = support(record, point, lead, part.Size.Y)
     end
     if useY then
         local y = lead.Y
@@ -1861,13 +1935,21 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
             local grounded = supportedGround or (not evidence.Airborne and math.abs(record.root.AssemblyLinearVelocity.Y) < 3)
             local vertical, source = Core.autoVertical(vel.Y, record.root.AssemblyLinearVelocity.Y)
             evidence.AutoVerticalVelocity, evidence.AutoVerticalSource = vertical, source
-            y = Core.autoY(vertical, baseLeadTime, part.Size.Y, grounded)
+            y, evidence.AccelerationCorrection = Core.verticalLead(vertical, record.root.AssemblyLinearVelocity.Y,
+                baseLeadTime, part.Size.Y, grounded, motion)
         end
+        lead = Vector3.new(lead.X, y, lead.Z)
+    elseif feature ~= 'Silent Aim' then
+        local vertical, source = Core.autoVertical(vel.Y, record.root.AssemblyLinearVelocity.Y)
+        evidence.AutoVerticalVelocity, evidence.AutoVerticalSource = vertical, source
+        local y
+        y, evidence.AccelerationCorrection = Core.verticalLead(vertical, record.root.AssemblyLinearVelocity.Y,
+            baseLeadTime, part.Size.Y, supportedGround, motion)
         lead = Vector3.new(lead.X, y, lead.Z)
     end
     point = point + lead
     -- Independent guard; Custom still only applies its own JumpOffset above.
-    if feature == 'Silent Aim' and settings.GroundShotCheck and lead.Y < 0 and minY and point.Y < minY then
+    if (feature ~= 'Silent Aim' or settings.GroundShotCheck) and lead.Y < 0 and minY and point.Y < minY then
         evidence.GroundCorrected = true
         -- Never invent an upward move to compensate for a crouched/animated rig.
         point = Vector3.new(point.X, math.min(evidence.BasePoint.Y, minY), point.Z)
@@ -1879,39 +1961,75 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
     record.finalLead = record.finalLead or {}
     record.finalLead[feature] = {offset = lead, time = now()}
     if not Core.finiteVector(point) then return reject('nonfinite') end
+    evidence.WallOrigin = vectorData(feature == 'Aim Assist' and camera.CFrame.Position or muzzle())
+    if config.Checks.Wall[checkIndices[feature]] and not firingVisible(point, record.character, feature) then return reject('predicted-wall') end
     if (feature ~= 'Triggerbot' or settings.Fov.Enabled) and not inFov(record, feature, part, point,
         Vector3.new(evidence.BasePoint.X, evidence.BasePoint.Y, evidence.BasePoint.Z)) then return reject('fov') end
     -- Final Silent settings never reject camera assistance or independent trigger candidates.
     local anti = feature == 'Silent Aim' and settings.AntiCurve
     if anti and anti.Enabled then
+        local cameraGap, cameraPoint = Core.rayDistance(point, cursorRay.Origin, cursorRay.Direction)
+        local nativeRay = nativeAimRay()
+        local nativeGap, nativePoint
+        if nativeRay then nativeGap, nativePoint = Core.rayDistance(point, nativeRay.Origin, nativeRay.Direction) end
+        evidence.AntiCurveCameraDistance, evidence.AntiCurveMuzzleDistance = cameraGap, nativeGap
+        evidence.NativeAimOrigin = nativeRay and vectorData(nativeRay.Origin)
+        evidence.NativeAimDirection = nativeRay and vectorData(nativeRay.Direction)
         if anti.Mode == 'endmath' then
             local projected, onScreen = camera:WorldToViewportPoint(point)
+            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'pixels', Core.number(anti.endmath.Radius, 120, 0, 10000)
+            local screenGap = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
+            local nativeScreenGap
+            if nativePoint then
+                local p = camera:WorldToViewportPoint(nativePoint)
+                if p.Z > 0 then nativeScreenGap = (Vector2.new(projected.X, projected.Y) - Vector2.new(p.X, p.Y)).Magnitude end
+            end
+            evidence.AntiCurveCameraPixels, evidence.AntiCurveMuzzlePixels = screenGap, nativeScreenGap
+            evidence.AntiCurveDistance = math.min(screenGap, nativeScreenGap or math.huge)
+            evidence.AntiCurveReference = nativeScreenGap and nativeScreenGap < screenGap and 'muzzle-to-mouse-ray' or 'forward-cursor-ray'
             if not onScreen or projected.Z <= 0 or
-                (Vector2.new(projected.X, projected.Y) - cursor).Magnitude > Core.number(anti.endmath.Radius, 120, 0, 10000) then return reject('anti-curve-pixels') end
+                evidence.AntiCurveDistance > evidence.AntiCurveLimit then return reject('anti-curve-pixels') end
             if anti.endmath.WallCheck and not visible(point, record.character, muzzle(), true) then return reject('anti-curve-wall') end
         elseif anti.Mode == '3d-angles' then
-            -- World-space interpretation; no unrequested angular rejection.
-            if (point - mouse.Hit.Position).Magnitude > Core.number(anti['3d-angles'].Max, 2.2, 0, 10000) then return reject('anti-curve-studs') end
+            evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'studs', Core.number(anti['3d-angles'].Max, 2.2, 0, 10000)
+            local useMuzzle = nativeGap and nativeGap < (cameraGap or math.huge)
+            evidence.AntiCurveReference = useMuzzle and 'muzzle-to-mouse-ray' or 'forward-cursor-ray'
+            evidence.AntiCurveCursorPoint = vectorData(useMuzzle and nativePoint or cameraPoint)
+            evidence.AntiCurveRawSurfaceDistance = (point - rawMousePoint).Magnitude
+            evidence.AntiCurveDistance = math.min(cameraGap or math.huge, nativeGap or math.huge)
+            if evidence.AntiCurveDistance > evidence.AntiCurveLimit then return reject('anti-curve-studs') end
         end
     end
     if not Core.finiteVector(point) then return reject('nonfinite') end
     if feature == 'Silent Aim' and settings.EndMath.WallCheck and
-        (not visible(point, record.character, camera.CFrame.Position, true)
-        or not visible(point, record.character, muzzle(), true)) then return reject('final-wall') end
+        not firingVisible(point, record.character, feature, true) then return reject('final-wall') end
     evidence.Accepted = true
+    record.renderAim = record.renderAim or {}
+    record.renderAim[feature] = {part = part, localPoint = part.CFrame:PointToObjectSpace(
+        Vector3.new(evidence.BasePoint.X, evidence.BasePoint.Y, evidence.BasePoint.Z)), lead = lead, time = now()}
     traceEvent('aim', evidence)
     return point, part
+end
+
+local function renderPoint(feature)
+    local point, player = state.Points[feature], state.Targets[feature]
+    local record = player and state.Records[player]
+    local sample = record and record.renderAim and record.renderAim[feature]
+    if point and sample and sample.part.Parent == record.character and now() - sample.time <= 0.1 then
+        return sample.part.CFrame:PointToWorldSpace(sample.localPoint) + sample.lead
+    end
+    return point
 end
 
 local function selectTarget(feature)
     if not enabled(feature) or typing() then return nil end
     if config[feature].Mode == 'Auto' then
-        if feature == 'Aim Assist' and config[feature]['Keybind Mode'].Holding and not state.Held['target:' .. feature] then return nil end
+        if config[feature].Activation.Holding and not holding('target:' .. feature, config[feature].Activation.Keybind) then return nil end
         -- A rejected final prediction must not starve another eligible candidate.
         return nearest(feature, false, aimPoint)
     end
-    local mode = config[feature]['Keybind Mode']
-    if mode.Holding and not state.Held['target:' .. feature] then return nil end
+    local mode = config[feature].Activation
+    if mode.Holding and not holding('target:' .. feature, mode.Keybind) then return nil end
     local player = validPlayer(state.Locks[feature])
     return player and state.Records[player] or nil
 end
@@ -2083,7 +2201,7 @@ end
 local function beginMacro(source, tool)
     local settings = config.Misc['Macro Abuse']
     if not macroEnabled() or macro or (source ~= 'Manual' and source ~= 'Triggerbot') then return end
-    if source == 'Triggerbot' and not settings['Work With TB'] then return end
+    if source == 'Triggerbot' and not settings['Triggerbot check'] then return end
     if settings['Macro Check'] and not detectedMacro() then return end
     if not virtualInput then warnOnce('macro-input', 'Macro needs VirtualInputManager key events.'); return end
     if not localHumanoid or localHumanoid.Health <= 0 or typing() then return end
@@ -2225,7 +2343,7 @@ local function bindTool(tool)
             releaseShotInput()
             equipped, weaponName, muzzleAttachment = nil, nil, nil
             state.PacketPoint, state.ClientPoint = nil, nil
-            pendingTrigger, pendingPrefire = nil, nil
+            pendingPrefire = nil
             disconnect(toolConnections)
         end
     end, toolConnections)
@@ -2237,7 +2355,7 @@ local function bindCharacter(character)
     disconnect(charConnections); disconnect(toolConnections)
     localCharacter, localHumanoid, localRoot = character, nil, nil
     equipped, weaponName, muzzleAttachment = nil, nil, nil
-    pendingTrigger, pendingPrefire, activation = nil, nil, nil
+    pendingPrefire, activation = nil, nil
     state.LastLocalVelocity, state.LastShot, state.MacroMotion = nil, nil, nil
     local function added(child)
         if child:IsA('Humanoid') then localHumanoid = child
@@ -2310,26 +2428,27 @@ local function addPlayer(player)
     if player.Character then bindOpponent(record, player.Character) end
 end
 
-local function scaledCursorTarget(hit, onlyRecord)
+local function scaledCursorTarget(hit, onlyRecord, ray)
     local scale = Core.number(config.Triggerbot.Fov.Character, 1.2, 0.1, 3)
-    if scale == 1 or not cursorRay then return nil end
+    ray = ray or cursorRay
+    if scale == 1 or not ray then return nil end
     local best, bestPart, bestPoint, distance = nil, nil, nil, 5000
-    if hit and not onlyRecord then distance = (hit.Position - cursorRay.Origin).Magnitude end
+    if hit and not onlyRecord then distance = (hit.Position - ray.Origin).Magnitude end
     for _, record in pairs(state.Records) do
         if (not onlyRecord or record == onlyRecord) and record.character and record.root and valid(record, 'Triggerbot', record.root, true) then
             for _, part in ipairs(record.character:GetChildren()) do
                 -- This game's real cursor ray also hits the transparent HB. Scaling
                 -- only visible limbs left 1.3 no larger than its native hitbox.
                 if nativeBodyPart(part, record.character) then
-                    local origin = part.CFrame:PointToObjectSpace(cursorRay.Origin)
-                    local direction = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction) - origin
+                    local origin = part.CFrame:PointToObjectSpace(ray.Origin)
+                    local direction = part.CFrame:PointToObjectSpace(ray.Origin + ray.Direction) - origin
                     local entry = Core.rayBox(origin, direction, part.Size * (scale * 0.5))
                     if entry and entry < distance then
                         local p = origin + direction * entry
                         local half = part.Size * 0.5
                         local point = part.CFrame:PointToWorldSpace(Vector3.new(
                             math.clamp(p.X, -half.X, half.X), math.clamp(p.Y, -half.Y, half.Y), math.clamp(p.Z, -half.Z, half.Z)))
-                        if visible(point, record.character) then
+                        if visible(point, record.character, ray.Origin) then
                             best, bestPart, bestPoint, distance = record, part, point, entry
                         end
                     end
@@ -2340,28 +2459,40 @@ local function scaledCursorTarget(hit, onlyRecord)
     return best, bestPart, bestPoint
 end
 
+local function triggerRayTarget(ray, hit)
+    local record, part, point
+    if hit then
+        for _, candidate in pairs(state.Records) do
+            if candidate.character and characterSurface(hit.Instance, candidate.character) then
+                record, part, point = candidate, hit.Instance, hit.Position
+                break
+            end
+        end
+    end
+    local scale = Core.number(config.Triggerbot.Fov.Character, 1.2, 0.1, 3)
+    if scale < 1 or not record then return scaledCursorTarget(hit, scale < 1 and record or nil, ray) end
+    return record, part, point
+end
+
 local function triggerCandidate()
     if not enabled('Triggerbot') or typing() or not equipped or not captureView() then return nil end
     state.CursorHit = cursorHit()
-    local record, hitPart, hitPoint
-    if config.Triggerbot.Fov.Enabled then record = nearest('Triggerbot')
+    local record, hitPart, hitPoint, point
+    if config.Triggerbot.Fov.Enabled then record, point = nearest('Triggerbot', false, aimPoint)
     else
-        -- A fresh, independent cursor ray takes precedence over Mouse.Target, which
-        -- can be stale or redirected by another feature. Never fall through a wall.
-        local hit = state.CursorHit
-        local object, player = hit and hit.Instance or mouse.Target, nil
-        if hit and object:IsA('BasePart') then hitPart, hitPoint = object, hit.Position end
-        while object and object ~= World do
-            if object:IsA('Model') then player = Players:GetPlayerFromCharacter(object); if player then break end end
-            object = object.Parent
+        record, hitPart, hitPoint = triggerRayTarget(cursorRay, state.CursorHit)
+        if not record then
+            local nativeRay = nativeAimRay()
+            if nativeRay then
+                rayParams.FilterDescendantsInstances = localCharacter and {localCharacter, camera} or {camera}
+                local hit = World:Raycast(nativeRay.Origin, nativeRay.Direction * 5000, rayParams)
+                record, hitPart, hitPoint = triggerRayTarget(nativeRay, hit)
+            end
         end
-        record = player and state.Records[player]
-        local scale = Core.number(config.Triggerbot.Fov.Character, 1.2, 0.1, 3)
-        if scale < 1 or not record then record, hitPart, hitPoint = scaledCursorTarget(hit, scale < 1 and record or nil) end
     end
     if not record then return nil end
     if config.Triggerbot.TargetOnly and record.player ~= state.Targets['Silent Aim'] then return nil end
-    local point = aimPoint(record, 'Triggerbot', hitPart, hitPoint)
+    point = point or aimPoint(record, 'Triggerbot', hitPart, hitPoint)
     if point then return record, point end
     return nil
 end
@@ -2406,7 +2537,12 @@ local function visual(kind)
         if kind == 'Circle' then drawable.NumSides = 64 end
         if kind ~= 'Text' then drawable.Thickness = 1; drawable.Filled = false end
         if kind == 'Text' then drawable.Size = 13; drawable.Center = true; drawable.Outline = true end
-        function wrapper:Set(p) for k, v in pairs(p) do drawable[k] = v end end
+        local applied = {}
+        function wrapper:Set(p)
+            for k, v in pairs(p) do
+                if applied[k] ~= v then drawable[k] = v; applied[k] = v end
+            end
+        end
         function wrapper:Destroy() drawable:Remove() end
     else
         local obj = make(kind == 'Text' and 'TextLabel' or 'Frame', {
@@ -2423,6 +2559,9 @@ local function visual(kind)
         end
         local props = {Transparency = 1, Filled = false, Radius = 1, Color = Color3.new(1, 1, 1)}
         function wrapper:Set(p)
+            local changed = false
+            for k, v in pairs(p) do if props[k] ~= v then changed = true; break end end
+            if not changed then return end
             for k, v in pairs(p) do props[k] = v end
             if p.Visible ~= nil then obj.Visible = p.Visible end
             if props.Position then
@@ -2448,11 +2587,11 @@ local function visual(kind)
     return wrapper
 end
 
-local fovVisuals, debugVisuals = {}, {}
+local fovVisuals = {}
 for _, name in ipairs({'Silent Aim', 'Aim Assist', 'Triggerbot'}) do
-    fovVisuals[name] = {box = visual('Square'), circle = visual('Circle')}
-    debugVisuals[name] = visual('Circle')
+    fovVisuals[name] = {outline = visual('Circle'), circle = visual('Circle')}
 end
+local pointVisuals = {outline = visual('Circle'), point = visual('Circle')}
 
 local function color(rgb)
     return Color3.fromRGB(Core.number(rgb[1], 255, 0, 255), Core.number(rgb[2], 255, 0, 255), Core.number(rgb[3], 255, 0, 255))
@@ -2462,16 +2601,22 @@ local function drawFov()
     for name, shapes in pairs(fovVisuals) do
         local fov = config[name].Fov
         local circle = fov['2d-Circle']
-        shapes.box:Set({Visible = false})
-        shapes.circle:Set({Visible = enabled(name) and (name ~= 'Triggerbot' or fov.Enabled) and fov.Mode == '2d-Circle' and circle.Visible == true,
-            Position = cursor, Radius = Core.number(circle.Size, 50, 1, 10000), Color = color(circle.Color), Transparency = 1})
-        local point = state.Points[name]
-        local projected, onScreen
-        if point then projected, onScreen = camera:WorldToViewportPoint(point) end
-        debugVisuals[name]:Set({Visible = name == 'Silent Aim' and config['Silent Aim'].EndMath.Visualizer and onScreen == true,
-            Position = projected and Vector2.new(projected.X, projected.Y) or cursor,
-            Radius = 3, Filled = true, Color = Color3.new(1, 1, 1), Transparency = 1})
+        local show = enabled(name) and (name ~= 'Triggerbot' or fov.Enabled) and fov.Mode == '2d-Circle' and circle.Visible == true
+        local radius = Core.number(circle.Size, 50, 1, 10000)
+        shapes.outline:Set({Visible = show, Position = cursor, Radius = radius, Filled = false,
+            Thickness = 3, Color = Color3.new(0, 0, 0), Transparency = 0.8})
+        shapes.circle:Set({Visible = show, Position = cursor, Radius = radius, Filled = false,
+            Thickness = 1, Color = color(circle.Color), Transparency = 1})
     end
+    local point = renderPoint('Silent Aim')
+    local projected, onScreen
+    if point then projected, onScreen = camera:WorldToViewportPoint(point) end
+    local position = projected and Vector2.new(projected.X, projected.Y) or cursor
+    local show = enabled('Silent Aim') and config['Silent Aim'].EndMath.Visualizer and onScreen == true
+    pointVisuals.outline:Set({Visible = show, Position = position, Radius = 4, Filled = true,
+        Color = Color3.new(0, 0, 0), Transparency = 0.85})
+    pointVisuals.point:Set({Visible = show, Position = position, Radius = 2, Filled = true,
+        Color = Color3.new(1, 1, 1), Transparency = 1})
 end
 
 local function assignedColor(id, fallback)
@@ -2509,8 +2654,7 @@ local function drawPlayers(time)
                     if not v then v = {outline = visual('Square'), box = visual('Square'), name = visual('Text')}; record.visuals[feature] = v end
                     local opacity = Core.number(style.Transparency, 1, 0, 1)
                     local foreground = assignedColor(record.player.UserId, color(style.Color.Box[1]))
-                    position = Vector2.new(math.floor(position.X + 0.5), math.floor(position.Y + 0.5))
-                    size = Vector2.new(math.max(1, math.floor(size.X + 0.5)), math.max(1, math.floor(size.Y + 0.5)))
+                    size = Vector2.new(math.max(1, size.X), math.max(1, size.Y))
                     v.outline:Set({Visible = true, Position = position, Size = size, Thickness = 3, Filled = false,
                         Color = color(style.Color.Box[2]), Transparency = opacity})
                     v.box:Set({Visible = true, Position = position, Size = size, Filled = style.Filled == true,
@@ -2548,9 +2692,10 @@ local function inputChanged(input, began, processed)
         end
     end
     for _, name in ipairs({'Silent Aim', 'Aim Assist'}) do
-        local mode = config[name]['Keybind Mode']
+        local mode = config[name].Activation
         if inputMatches(input, mode) then
             state.Held['target:' .. name] = began
+            if not began and mode.Holding then state.Points[name], state.Targets[name] = nil, nil end
         end
         if config[name].Mode == 'Target' and inputMatches(input, mode) then
             if mode.Holding then
@@ -2646,7 +2791,7 @@ local function start()
         releaseShotInput(); cancelMacro(); disconnect(charConnections); disconnect(toolConnections)
         localCharacter, localHumanoid, localRoot, equipped, weaponName, muzzleAttachment = nil, nil, nil, nil, nil, nil
         state.PacketPoint, state.ClientPoint, state.Points, state.Targets = nil, nil, {}, {}
-        pendingTrigger, pendingPrefire = nil, nil
+        pendingPrefire = nil
     end)
     if localPlayer.Character then bindCharacter(localPlayer.Character) end
     for _, player in ipairs(Players:GetPlayers()) do addPlayer(player) end
@@ -2665,7 +2810,7 @@ local function start()
     local function suspend()
         state.Held = {}; state.Points = {}; state.Targets = {}; state.MacroMotion = nil
         state.PacketPoint, state.ClientPoint = nil, nil
-        pendingTrigger, pendingPrefire = nil, nil
+        pendingPrefire = nil
         cancelMacro(); releaseShotInput()
         if state.AutomatedTool then pcall(function() state.AutomatedTool:Deactivate() end); state.AutomatedTool = nil end
     end
@@ -2722,7 +2867,7 @@ local function start()
     end)
     RunService:BindToRenderStep(renderName, Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not state.Alive or not captureView() then return end
-        local point = state.Points['Aim Assist']
+        local point = renderPoint('Aim Assist')
         if point and enabled('Aim Assist') and not typing() then
             local offset = point - camera.CFrame.Position
             if config['Aim Assist'].Follow == 'Mouse' and type(mousemoverel) == 'function' then
@@ -2739,11 +2884,7 @@ local function start()
                 camera.CFrame = camera.CFrame:Lerp(CFrame.lookAt(camera.CFrame.Position, point), Core.alpha(config['Aim Assist'].Smoothness, dt))
             end
         else state.MouseRemainder = nil end
-        -- Keep camera smoothing frame-based; bounded overlay work avoids redundant
-        -- Drawing updates on 200+ FPS clients.
-        local drawTime = now()
-        if drawTime < (state.NextDraw or 0) then return end
-        state.NextDraw = drawTime + 1 / 60
+        local renderStarted = now()
         if state.Intro and state.Intro.Alive then
             for visual in pairs(state.Visuals) do visual:Set({Visible = false}) end
             return
@@ -2751,6 +2892,10 @@ local function start()
         local ok, reason = pcall(drawFov)
         if not ok then warnOnce('draw-fov', tostring(reason)) end
         drawPlayers(now())
+        state.Performance.RenderUpdates = (state.Performance.RenderUpdates or 0) + 1
+        local renderMs = (now() - renderStarted) * 1000
+        state.Performance.RenderTotalMs = (state.Performance.RenderTotalMs or 0) + renderMs
+        state.Performance.RenderMaxMs = math.max(state.Performance.RenderMaxMs or 0, renderMs)
     end)
     -- Intro is bundled locally; no second downloaded script and no exposed intro options.
     if not environment.__neoperroIntroSeenV1 then

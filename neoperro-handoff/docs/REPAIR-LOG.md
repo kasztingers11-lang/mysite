@@ -1,3 +1,26 @@
+# 1.3.8 activation, profiles, rendering and shared geometry
+
+Fixed standalone ESP bypassing weapon profiles; removed the drawing throttle and
+pixel stepping; restored physically held activation state; renamed the requested
+table fields with internal legacy migration. Added camera/native muzzle corridors,
+feature-specific final wall origins, qualified vertical acceleration and validated
+turn shortening. Existing aim restoration, native pellets and Macro Abuse remain.
+
+Local engine profile/input/parallax fixtures, ~240 Hz drawing and one native jump
+were observed. Both mock suites and generated syntax checks pass. No actual-player
+combat was available; turn replay has a small mean/tail tradeoff and full-bundle
+static analysis remains non-clean. Exact results and remaining uncertainty are in
+SESSION-2026-10-23 and NEXT-SESSION.
+
+# 1.3.7 reviewed checkpoint included
+
+Cursor-ray AntiCurve distance replaces unstable raw background-surface distance;
+TargetOnly filters candidates before selection; final-point walls, whitelist mode
+retention, plain visual outlines/property caching and replacement cleanup improved.
+The later 1.3.8 removes this checkpoint's 60 Hz visual cap and adds muzzle parallax.
+
+---
+
 # 1.3.6 prediction/Closest follow-up
 
 Always-on bounded speed response in every prediction path, without a switch;

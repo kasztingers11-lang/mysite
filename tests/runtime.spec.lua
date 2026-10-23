@@ -306,7 +306,7 @@ enemyTorso.Size=V.new(30,50,40);step(0.04)
 for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then assert(d.Size==stableSize,'Limb bounds must not change the box')end end
 second.WhiteMode='Target';step(0.04)
 for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then assert(d.Color[1]==255 and d.Color[2]==75,'Assigned target is red')end end
--- Silent box hidden: independent 6x6 ESP ignores weapon overrides and Silent max distance.
+-- Silent box hidden: standalone ESP follows weapon profiles and its own max distance.
 second.Config['2d-Box']['Silent Aim'].Visible=false
 second.Config['2d-Box']['Silent Aim']['Max Distance']=1
 second.Config['Gun Specifications'].Enabled=true;step(0.04)
@@ -314,7 +314,7 @@ local standaloneSize
 for _,d in ipairs(drawingObjects)do
     if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then standaloneSize=d.Size end
 end
-assert(standaloneSize and math.abs(standaloneSize.X-6*1080/(2*math.tan(math.rad(70)/2))/50)<=0.5,'Standalone ESP uses fixed six-stud width rounded to a pixel')
+assert(standaloneSize and math.abs(standaloneSize.X-5*1080/(2*math.tan(math.rad(70)/2))/50)<=0.5,'Standalone ESP uses the active weapon profile')
 second.Config.Whitelist.Enabled=false;step(0.04)
 assert(#second.Whitelist==0)
 key('R',true);key('R',false);assert(#second.Whitelist==0,'Assignment disabled with whitelist')
@@ -323,6 +323,37 @@ enemyChar.props['attr:Knocked']=true;step(0.04);assert(not anyBoxVisible(),'Knoc
 enemyChar.props['attr:Knocked']=false;step(0.04);assert(anyBoxVisible(),'Recovery restores eligible ESP')
 enemyHum.Health=0;step(0.04);assert(not anyBoxVisible(),'Dead check hides boxes and labels')
 enemyHum.Health=100;enemyTorso.Size=V.new(2,2,1);second:Destroy('test');clearInput()
+
+-- Aim Assist Auto searches continuously only during its hold input.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false
+    local rt=loadRuntime(cfg)
+    Input.keys.Q=true;step(.04)
+    assert(rt.Targets['Aim Assist']==enemy,'An already-held activation key works without a new InputBegan')
+    local replacement=loadRuntime(cfg);step(.04)
+    assert(replacement.Targets['Aim Assist']==enemy,'Re-execution resynchronizes a physically held activation')
+    Input.keys.Q=false;step(.04)
+    assert(not replacement.Targets['Aim Assist'],'A missed InputEnded cannot leave activation latched')
+    replacement:Destroy('test');clearInput()
+    cfg['Aim Assist']['Keybind Mode']=cfg['Aim Assist'].Activation;cfg['Aim Assist'].Activation=nil
+    cfg.Misc['Macro Abuse']['Work With TB']=true;cfg.Misc['Macro Abuse']['Triggerbot check']=nil
+    rt=loadRuntime(cfg)
+    assert(rt.Config['Aim Assist'].Activation.Keybind[1]=='Q' and rt.Config['Aim Assist']['Keybind Mode']==nil,'Legacy activation names migrate to the canonical table')
+    assert(rt.Config.Misc['Macro Abuse']['Triggerbot check'] and rt.Config.Misc['Macro Abuse']['Work With TB']==nil)
+    rt:Destroy('test');clearInput()
+end
+
+-- Aim Assist Auto searches continuously only during its hold input.
+do
+    local cfg=Core.copy(Defaults);cfg.Whitelist.Enabled=true;cfg.Whitelist.Mode='Friend'
+    local old=loadRuntime(cfg);old.WhiteMode='Target';old.Whitelist={enemy.UserId};old.Version='1.3.4'
+    local current=loadRuntime(cfg)
+    assert(current.WhiteMode=='Target' and current.Whitelist[1]==enemy.UserId,'An unchanged configuration preserves valid whitelist state across runtime versions')
+    cfg.Whitelist.Mode='Target'
+    current=loadRuntime(cfg)
+    assert(current.WhiteMode=='Target','An explicit configuration mode still wins')
+    current:Destroy('test');clearInput()
+end
 
 -- Aim Assist Auto searches continuously only during its hold input.
 local aim=loadRuntime(Defaults);step(0.04);assert(aim.Targets['Aim Assist']==nil)
@@ -412,6 +443,25 @@ end
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
     local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.EndMath.WallCheck=false
+    s.Target.Closest.Method='Point';s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
+    moveEnemy(2,0,-50)
+    local raycast=World.Raycast
+    World.Raycast=function(self,origin,direction,params)
+        if (origin+direction).X>1.5 then return {Instance=World,Position=origin+direction*.5} end
+        return raycast(self,origin,direction,params)
+    end
+    local rt=loadRuntime(cfg);step(.04)
+    assert(rt.Points['Silent Aim'] and rt.Points['Silent Aim'].X<=1.5,'Visible allowed point can be selected when its part center is blocked')
+    rt.Config['Silent Aim'].Prediction.Enabled=true;rt.Config['Silent Aim'].Prediction.Auto=false
+    rt.Config['Silent Aim'].EndMath.VelocityHistory=false;enemyRoot.AssemblyLinearVelocity=V.new(22,0,0);step(.04)
+    assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='predicted-wall','Wall checks follow final prediction rather than an earlier visible center')
+    rt:Destroy('test');World.Raycast=raycast;moveEnemy(0,0,-50);enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- Point selection evaluates allowed part geometry; exact native HB hits bypass smoothing.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.EndMath.WallCheck=false
     s.Target.Closest.Raycast=false;s.Target.Closest.Method='Part';s.Target.Closest.Sharpness=1
     s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0
     moveEnemy(2,0,-50)
@@ -436,6 +486,25 @@ do
     closest.Raycast=false;step(.04)
     assert(rt.Points['Silent Aim']~=hit,'Leaving raycast clears its smoothing state')
     rt:Destroy('test');leg:Destroy();hb:Destroy();rayHit=nil;moveEnemy(0,0,-50)
+end
+
+-- Expanded body tolerance does not resize the target and stops outside its margin.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Fov.Mode='2d-Circle';cfg['Silent Aim'].Fov['2d-Circle'].Visible=true
+    cfg['Silent Aim'].Fov['2d-Circle'].Size=75;cfg['Silent Aim'].EndMath.Visualizer=true
+    local rt=loadRuntime(cfg);step(.04)
+    local outline,circle,halo,dot=false,false,false,false
+    for _,d in ipairs(drawingObjects) do if not d.removed and d.Visible and d.Kind=='Circle' then
+        if d.Radius==75 and d.Thickness==3 then outline=true end
+        if d.Radius==75 and d.Thickness==1 then circle=true end
+        if d.Radius==4 and d.Filled then halo=true end
+        if d.Radius==2 and d.Filled then dot=true end
+    end end
+    assert(outline and circle and halo and dot,'Existing circle and final-point options receive plain outlined visuals')
+    rt.Config['Silent Aim'].Enabled=false;step(.04)
+    for _,d in ipairs(drawingObjects) do if not d.removed and d.Kind=='Circle' then assert(not d.Visible,'Disabling the feature hides both visual layers') end end
+    rt:Destroy('test')
 end
 
 -- Expanded body tolerance does not resize the target and stops outside its margin.
@@ -509,7 +578,9 @@ handle.Position=V.new(5,0,0);muzzleBlocked=true
 local isolated=loadRuntime(independent);key('Q',true);step(0.04)
 assert(isolated.Points['Silent Aim']==nil and isolated.Points['Aim Assist']~=nil,'Silent final wall filter is feature-local')
 key('MouseButton2',true);before=shots;step(0.04)
-assert(shots==before+1,'Independent Triggerbot bypasses Silent-only final filters')
+assert(shots==before,'Triggerbot Wall check also rejects a blocked muzzle')
+isolated.Config.Checks.Wall[3]=false;step(.04)
+assert(shots==before+1,'Disabling Triggerbot Wall remains independent of Silent final filters')
 isolated:Destroy('test');clearInput();muzzleBlocked=false;handle.Position=V.new();camera.CFrame=CF.new()
 
 -- Replacements during owned input release it and retain exactly one callback set.
@@ -523,7 +594,8 @@ for i=1,20 do
     assert(activeConnections()==replacementConnections and renderCount()==1 and hooks.__namecall==hookBefore,'Repeated replacement stays bounded')
     local aliveDrawings=0
     for _,d in ipairs(drawingObjects)do if not d.removed then aliveDrawings=aliveDrawings+1 end end
-    assert(aliveDrawings==9,'No drawings left by replaced instances before first render')
+    local ownedVisuals=0;for _ in pairs(replacement.Visuals) do ownedVisuals=ownedVisuals+1 end
+    assert(aliveDrawings==ownedVisuals,'No drawings left by replaced instances before first render')
 end
 replacement:Destroy('test');clearInput()
 
@@ -580,6 +652,71 @@ key('E',true);key('E',false);assert(macroRuntime.Alive,'Panic false honors its s
 macroRuntime.Config.Misc.Panic.Enabled=true;key('E',true);key('E',false)
 assert(not macroRuntime.Alive and activeConnections()==0 and renderCount()==0)
 clearInput();myRoot.AssemblyLinearVelocity=V.new()
+
+-- Prediction and the barrel-alignment filters.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Prediction.Enabled=false
+    cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Silent Aim'].AntiCurve.Enabled=true
+    cfg['Silent Aim'].AntiCurve.Mode='3d-angles'
+    local originalHit=mouse.Hit;mouse.Hit=CF.new(0,0,-5000)
+    local rt=loadRuntime(cfg);step(.04)
+    assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveDistance<.01,'Background depth cannot manufacture a lateral curve')
+    assert(rt.AimTrace['Silent Aim'].AntiCurveRawSurfaceDistance>4000,'Keep raw-surface evidence separately')
+    moveEnemy(3,0,-50);step(.04)
+    assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='anti-curve-studs','The 2.2-stud lateral limit still rejects actual large redirects')
+    rt:Destroy('test');mouse.Hit=originalHit;moveEnemy(0,0,-50)
+end
+
+-- Third-person parallax: a valid muzzle corridor survives a blocked camera path.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Prediction.Enabled=false
+    cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Silent Aim'].AntiCurve.Enabled=true
+    cfg['Aim Assist'].Ignore=true;cfg['Aim Assist'].Prediction.Enabled=false
+    local originalHit,raycast=mouse.Hit,World.Raycast
+    handle.Position=V.new(5,0,0);mouse.Hit=CF.new(0,0,-100);moveEnemy(3,0,-40)
+    World.Raycast=function(self,origin,direction,params)
+        if origin.X==0 then return {Instance=World,Position=origin+direction*.1} end
+        return nil
+    end
+    local rt=loadRuntime(cfg);key('Q',true);step(.04)
+    assert(rt.Points['Silent Aim'] and not rt.Points['Aim Assist'],'Firing uses a clear muzzle while assistance respects its camera wall')
+    assert(rt.AimTrace['Silent Aim'].AntiCurveCameraDistance>2.2 and rt.AimTrace['Silent Aim'].AntiCurveMuzzleDistance<.01)
+    assert(rt.AimTrace['Silent Aim'].AntiCurveReference=='muzzle-to-mouse-ray')
+    rt.Config['Silent Aim'].AntiCurve.Mode='endmath';rt.Config['Silent Aim'].AntiCurve.endmath.Radius=10;step(.04)
+    assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveCameraPixels>10,'Pixel mode also accounts for native muzzle alignment')
+    rt.Config.Triggerbot.Enabled=true;rt.Toggles.Triggerbot=true;rt.Config.Triggerbot.Fov.Character=1
+    World.Raycast=function(self,origin,direction,params)
+        if origin.X==0 then return {Instance=World,Position=origin+direction*.1} end
+        return {Instance=enemyTorso,Position=enemyTorso.Position}
+    end
+    key('MouseButton2',true);step(.04)
+    assert(rt.Targets.Triggerbot==enemy,'FOV-off Triggerbot recognizes a real muzzle ray hit in third person')
+    World.Raycast=function()return {Instance=World,Position=V.new(0,0,-5)}end;step(.04)
+    assert(not rt.Points['Silent Aim'] and not rt.Targets.Triggerbot and not rt.MouseOwned,'Muzzle obstruction still rejects both firing paths')
+    rt:Destroy('test');clearInput();World.Raycast=raycast;mouse.Hit=originalHit
+    handle.Position=V.new();moveEnemy(0,0,-50);camera.CFrame=CF.new()
+end
+
+-- Rendering follows live part motion between 60 Hz selection updates.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg['Silent Aim'].EndMath.Visualizer=true;cfg['Silent Aim'].Prediction.Enabled=false
+    cfg['Silent Aim'].Target.Closest.Enabled=false;cfg.ESP.VisibleCheck=false
+    local rt=loadRuntime(cfg);step(.04)
+    local updates=rt.Performance.Updates
+    local dot
+    for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Circle' and d.Radius==2 then dot=d end end
+    assert(dot and dot.Visible)
+    local oldX=dot.Position.X
+    for _=1,4 do
+        moveEnemy(enemyRoot.Position.X+.001,0,-50);clock=clock+1/240
+        for _,callback in pairs(renders)do callback(1/240)end
+    end
+    assert(rt.Performance.Updates==updates and dot.Position.X>oldX,'Subpixel marker updates on render frames without a selection tick')
+    rt:Destroy('test');moveEnemy(0,0,-50)
+end
 
 -- Prediction and the barrel-alignment filters.
 local modes=Core.copy(Defaults);modes['Silent Aim'].Ignore=true;modes['Silent Aim'].EndMath.VelocityHistory=false
@@ -655,6 +792,20 @@ do
         assert(info['Aim Assist'].Width==5 and info['Aim Assist'].Height==4.3,'Weapon box must not override Assist')
     end
     rt:Destroy('test');moveEnemy(0,0,-50)
+end
+
+-- Auto continues to the next candidate after final prediction/filter rejection.
+do
+    local rival=obj('Player','NearerTriggerCandidate',Players);rival.UserId=78;rival.DisplayName='Nearer'
+    local rivalChar=character(rival,-50)
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
+    cfg['Silent Aim'].Mode='Target';cfg['Silent Aim'].Ignore=true
+    cfg.Triggerbot.TargetOnly=true;cfg.Triggerbot.Fov.Enabled=true;cfg.Triggerbot.Prediction.Enabled=false
+    local wasEnabled=tool.Enabled;tool.Enabled=false
+    moveEnemy(1,0,-50)
+    local rt=loadRuntime(cfg);rt.Locks['Silent Aim']=enemy.UserId;key('MouseButton2',true);step(.04)
+    assert(rt.Targets['Silent Aim']==enemy and rt.Targets.Triggerbot==enemy,'TargetOnly filters candidates before choosing the nearest player')
+    key('MouseButton2',false);rt:Destroy('test');rivalChar:Destroy();rival:Destroy();tool.Enabled=wasEnabled;moveEnemy(0,0,-50);clearInput()
 end
 
 -- Auto continues to the next candidate after final prediction/filter rejection.
