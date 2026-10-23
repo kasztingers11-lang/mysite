@@ -29,3 +29,6 @@ and refreshing/removing the historical snapshot remain pending.
 Never store executor credentials. Keep supported game IDs internal to runtime.
 
 Latest feedback repairs and evidence: [session 2026-10-23](docs/SESSION-2026-10-23.md).
+
+Pending table review: [comparison](reviews/table-comparison.md) and
+[aligned proposal](reviews/table-proposal.lua). These are drafts, not runtime defaults.
