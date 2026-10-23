@@ -1,10 +1,26 @@
-# neoperro 1.3.12 - testing build
+# neoperro 1.3.14 - testing build
 
 FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
 [build, upload and validation instructions](neoperro-protection/README.md).
 Only the runtime upload is obfuscated; the table remains readable. Generated
 upload files stay outside this public repository. Public development source and
 its history remain available; obfuscation cannot revoke those copies.
+
+This update fixes a cursor/camera mismatch between Assist and Silent/Triggerbot:
+Assist now aligns the actual cursor ray before the other features check it.
+Eligible Silent coordinates can supply a Triggerbot-owned shot without changing
+Triggerbot's activation or selection rules. All eight enabled/disabled feature
+combinations pass mocks, including an off-center cursor with Triggerbot FOV off.
+The revised collision fix has not been injected or tested live: the user's latest
+instruction is to work offline.
+
+Same-build table edits now update the running session without another HTTP fetch,
+compile or FlowAuth launch. Cold loads still authenticate normally. Keep your own
+key and edited table; replace only the old bottom loader with the release's
+loader-only file. The complete starter contains defaults, not your private edits.
+Whitelist assignments have no cap and an empty list allows everyone. Internal
+posture sampling uses actual rig geometry and game animation IDs. ESP DisplayName
+uses Humanoid.DisplayName when available, preserving tags such as [WINTER].
 
 Use [neoperro.lua](neoperro.lua): edit the table and execute the whole file.
 Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
@@ -60,7 +76,8 @@ with python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua.
 The historical handoff snapshot/ZIP remains 1.2.0. Preserve local edits.
 No executor credentials belong in the repository.
 
-1.3.12 validation: regression suites and both REAL bundle analyzers pass. The full
-bundle loaded successfully in a rejoined empty Roblox server. Runtime schema
-checks passed with 33,522 aim updates, six FOV Drawing objects, zero remote
-records and zero activations. No new shots or populated-server visual test.
+1.3.14 validation: Core/runtime/protected regression suites pass. Full, runtime,
+readable starter and protected upload pass REAL static analysis with zero errors
+or warnings. Static analysis does not execute Roblox or authenticate FlowAuth.
+Earlier startup/config-update measurements are recorded separately in the session
+log; they do not validate the final collision fix or remote hit accuracy.

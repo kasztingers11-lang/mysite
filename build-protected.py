@@ -84,14 +84,24 @@ def build(prometheus, output):
     starter = ('script_key = "FLOW-REPLACE-WITH-YOUR-KEY";\n\n'
                '-- Put your own key above. Edit the table, then run this whole file.\n'
                '-- Prediction can lead a moving player in X, Y and Z. Auto ignores Value.\n'
+               '-- Empty Whitelist lists allow everyone. There is no assignment cap.\n'
+               '-- Crouch, lying and emote pose measurements run automatically.\n'
+               '-- Table edits reuse the current same-build session; a fresh load still uses FlowAuth.\n'
                '-- The intro plays once per client session. There are no intro settings.\n'
                '-- P: Silent toggle | M: Assist toggle | hold Q: Assist | V: Trigger toggle | hold RMB: Trigger | E: stop.\n\n')
     starter += explain_table(config).rstrip() + '\n\n'
-    starter += 'loadstring(game:HttpGet("' + LOADER + '"))(script_key)\n'
+    tail = (ROOT / 'neoperro-src/loader-tail.lua').read_text(encoding='utf-8')
+    tail = (tail.replace('__NEOPERRO_VERSION__', '1.3.14')
+                .replace('__NEOPERRO_DISTRIBUTION__', 'FlowAuth')
+                .replace('__NEOPERRO_LOADER_URL__', LOADER)
+                .replace('__NEOPERRO_CLEAR_KEY__', 'script_key = nil -- Configuration updates use the already-running session.')
+                .replace('__NEOPERRO_KEY_ARGUMENT__', 'script_key'))
+    starter += tail
     (ROOT / 'neoperro-flowauth.lua').write_text(starter, encoding='utf-8')
     (output / 'neoperro-flowauth.lua').write_text(starter, encoding='utf-8')
+    (output / 'neoperro-flowauth-loader.lua').write_text(tail, encoding='utf-8')
     metadata = {
-        'runtime_version': '1.3.12', 'prometheus_commit': PROMETHEUS_COMMIT,
+        'runtime_version': '1.3.14', 'prometheus_commit': PROMETHEUS_COMMIT,
         'source_sha256': hashlib.sha256(source).hexdigest(),
         'native_payload_sha256': digest,
         'upload_sha256': hashlib.sha256(protected).hexdigest(),
@@ -107,6 +117,6 @@ def build(prometheus, output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prometheus', type=Path, required=True)
-    parser.add_argument('--output', type=Path, default=ROOT.parent / 'releases/neoperro-1.3.12')
+    parser.add_argument('--output', type=Path, default=ROOT.parent / 'releases/neoperro-1.3.14')
     args = parser.parse_args()
     build(args.prometheus.resolve(), args.output.resolve())

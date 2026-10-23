@@ -1,3 +1,42 @@
+# 1.3.14 offline collision repair and session updates - 2026-10-24
+
+Assist previously pointed the camera center at the target while Silent/TB tested
+the actual cursor; selection also ran before Assist movement. This is a source and
+modeled-projection finding, not a live reproduction of every reported collision.
+Assist now rotates the actual cursor ray with the camera basis, then refreshes
+projection before Silent/TB select. Triggerbot retains its click/eligibility while
+an accepted active Silent point may supply coordinates. LastShotRoute separates
+click source, aim feature and selected targets. No new feature switches were added.
+
+Same-build starters update configuration in place without HTTP, compilation or a
+second provider launch. Invalid tables cannot mutate the current runtime. Explicit
+configuration wins over embedded full-bundle defaults. Update state preserves valid
+unchanged toggles/locks/assignments and sampled history without adding listeners or
+visuals. FlowAuth cold loads still authenticate normally. Loader phase timings are
+reported without keys. The loader-only release file preserves the user's own table.
+
+Whitelist empty lists permit everyone, configuration/assignment has no cap, and
+membership is cached with explicit assignment invalidation. Internal posture
+measurement uses actual rig geometry and cataloged game Animation IDs, including
+generic live track names. Rotated parts use world height. Pose transitions reset
+point smoothing/active estimates. ESP names prefer Humanoid.DisplayName for tags.
+
+Core/runtime/protected regression suites pass: all eight feature switches, shared
+hold/release, off-center cursor with TB FOV on/off, reverse camera rays, explicit
+config propagation, 50 warm updates, 1,000 configured IDs and >4 assignments,
+remove/add cache invalidation, crouch/prone/emote and [WINTER] name cases.
+All four REAL static analyzers report zero errors/warnings. Protected tests use a
+synthetic grant/hash backend. No final runtime injection occurred after the user
+said 'dont inject js work'; final collision/pose/shot behavior is not live verified.
+
+Earlier intermediate live measurements and the incorrect-default-table reload are
+recorded in SESSION-2026-10-23.md. Do not reuse those stale wrappers or infer that a
+default panic key caused the later absence of runtime. The user withdrew the crash
+investigation. Actual FlowAuth authentication/publication and controlled remote
+shots remain open. No credentials or real keys were read, saved or published.
+
+---
+
 # 1.3.12 protected distribution artifacts
 
 Built the runtime upload with pinned Prometheus AST transformations, local-name

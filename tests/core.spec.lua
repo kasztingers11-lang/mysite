@@ -32,10 +32,20 @@ assert(Core.restoreToggle(true, true, false) == false)
 assert(Core.restoreToggle(false, true, true) == false)
 assert(Core.restoreToggle(true, false, false) == true)
 local ids = Core.ids({42, 42, 'bad', 1, 2, 3, 4, math.huge})
-assert(#ids == 4 and ids[1] == 42 and ids[4] == 3)
+assert(#ids == 5 and ids[1] == 42 and ids[5] == 4)
+do
+    local many={};for i=1,1000 do many[i]=i end
+    assert(#Core.ids(many)==1000,'Whitelist assignments have no four-player cap')
+    assert(Core.whitelisted(true,'Target',many,1000,{[1000]=true}))
+    assert(not Core.whitelisted(true,'Target',many,1001,{[1000]=true}))
+end
 assert(not Core.whitelisted(true, 'Friend', ids, 42))
 assert(Core.whitelisted(true, 'Target', ids, 42))
 assert(Core.whitelisted(false, 'Target', {}, 42))
+assert(Core.whitelisted(true, 'Target', {}, 42), 'Empty target list allows everyone until someone is assigned')
+assert(Core.whitelisted(true, 'Friend', {}, 42))
+assert(not Core.whitelisted(true, 'Target', {7}, 42), 'Nonempty Target list limits eligibility')
+assert(Core.whitelisted(true, 'Friend', {7}, 42))
 near(Core.delay({DelayMethod = 'Random', RandomDelay = {0.12, 0.1}}, 0, 0.5), 0.11)
 near(Core.delay({DelayMethod = 'Normal', Delay = 0.2}, 100, 0.5), 0.2)
 assert(Core.delay({SmartDelay = true, Delay = 0.1}, 200, 0) > 0.1)
@@ -53,6 +63,30 @@ local mt = {
     end,
 }
 function V.new(x,y,z) return setmetatable({X=x,Y=y,Z=z}, mt) end
+
+do
+    local look,up=V.new(0,0,-1),V.new(0,1,0)
+    for _,ray in ipairs({V.new(0,0,-1),V.new(.2,.1,-1),V.new(-.3,.2,-1)})do
+        ray=ray/ray.Magnitude
+        for _,target in ipairs({V.new(.5,.3,-1),V.new(-2,1,-1),ray*-1})do
+            target=target/target.Magnitude
+            local aimedLook,aimedUp=Core.cursorOrientation(ray,target,look,up)
+            local right=aimedLook:Cross(aimedUp)
+            local actual=right*ray.X+aimedUp*ray.Y+aimedLook*(-ray.Z)
+            near((actual-target).Magnitude,0,1e-7)
+        end
+    end
+    assert(Core.cursorOrientation(V.new(0,0,0),look,look,up)==nil)
+    for _,basis in ipairs({{V.new(1,0,0),V.new(0,1,0)},{V.new(0,1,0),V.new(0,0,1)}})do
+        local startLook,startUp=basis[1],basis[2]
+        local startRight=startLook:Cross(startUp)
+        local ray=startLook+startRight*.2+startUp*.1;ray=ray/ray.Magnitude
+        local target=V.new(5,-2,-3);target=target/target.Magnitude
+        local newLook,newUp=Core.cursorOrientation(ray,target,startLook,startUp)
+        local actual=newLook:Cross(newUp)*ray:Dot(startRight)+newUp*ray:Dot(startUp)+newLook*ray:Dot(startLook)
+        near((actual-target).Magnitude,0,1e-7)
+    end
+end
 do
     local p=Core.closestRayBox(V.new(0,0,10),V.new(0,0,-1),V.new(1,1,1),V.new)
     near(p.X,0);near(p.Y,0);near(p.Z,1)

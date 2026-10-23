@@ -1,13 +1,13 @@
 # neoperro - current repair handoff
 
-Current runtime: **1.3.12**, branch **repair/neoperro-evidence**. Main is older.
+Current runtime: **1.3.14**, branch **repair/neoperro-evidence**. Main is older.
 Use the repository-root `neoperro.lua` (editable table plus repair-branch loader)
 or `neoperro-full.lua` (full bundle). Preserve local edits before switching branches.
 
 ## Read first
 
 1. [Current continuation instructions](docs/NEXT-SESSION.md)
-2. [Live observations and limitations](docs/SESSION-2026-10-22.md)
+2. [Latest observations and limitations](docs/SESSION-2026-10-23.md)
 3. [Repair history](docs/REPAIR-LOG.md)
 4. Remaining docs, Looten reference, and all four reference screenshots.
 
@@ -35,3 +35,10 @@ Historical table review: [comparison](reviews/table-comparison.md) and
 
 Protected distribution: [build and FlowAuth guide](../neoperro-protection/README.md),
 [readable key/table/loader](../neoperro-flowauth.lua). Actual provider login is pending.
+
+Latest changes: cursor-aware Assist ordering and shared eligible shot coordinates,
+in-place table updates, unlimited assignments, internal posture sampling and ESP
+game tags. Regression/static checks pass. **Do not inject or change the live game:
+the user explicitly requested offline work.** The final collision fix is not live
+verified. An earlier test mistakenly loaded default controls; document that error
+and never restore a presumed user table from a generic starter.

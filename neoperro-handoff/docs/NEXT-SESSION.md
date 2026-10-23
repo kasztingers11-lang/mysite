@@ -1,51 +1,64 @@
-# Continue from 1.3.12
+# Continue from 1.3.14
 
 Use repair/neoperro-evidence and repository-root sources. Main and historical
-snapshot/ZIP are older. Preserve local edits and user-confirmed aim restoration,
-native client pellet style, Macro Abuse, whitelist and session-once intro.
+snapshot/ZIP are older. Preserve local edits and the accepted table. Current user
+instruction: **"dont inject js work"**. Do not execute, reload or alter Roblox until
+the user explicitly authorizes live work again. Static analysis is not injection.
 
-Latest: the user's accepted table is integrated with renamed Method/Selection
-fields, global Resolver/Anti-AimViewer/Client Bullets, shared Y-Axis feature
-flags and ground checks. Filled/transparency/predicted-box/Assist Ignore controls
-are removed. ESP/box distance is unlimited internally. Old tables migrate.
+## Implemented and checked offline
 
-Lua suites and REAL analysis pass. Full 1.3.12 loaded in a rejoined empty server
-with canonical-state assertions and no console problems. Zero remote players
-and zero shots were available; broader firing/visual validation remains open.
+- Assist rotates the actual cursor ray toward its point before Silent/TB select.
+  This addresses an off-center cursor/camera-center mismatch. Shared bindings and
+  feature gates stay independent. An eligible Silent point can supply a TB-owned
+  shot; otherwise TB retains its own point. LastShotRoute exposes the distinction.
+- Same-build/distribution starters apply table edits in place without HTTP,
+  compilation or another provider launch. Invalid config is rejected before
+  mutation. Owned input is released on valid edits; listeners/drawings/history are
+  reused. Explicit config survives full-bundle defaults. Cold loads still auth.
+- Empty Whitelist permits everyone in Friend/Target. All configured IDs survive;
+  assignment has no cap. Membership lookup is cached and assignment changes
+  invalidate it even when remove/add leaves the same list length.
+- Internal posture detection samples geometry and actual game animation IDs.
+  Generic track names are resolved through the game's catalog. Rotated parts use
+  measured world height; pose transitions reset smoothing/prediction context.
+- ESP DisplayName prefers Humanoid.DisplayName, preserving in-game tags.
 
-Protected upload artifacts and a readable key/table/loader are built. See the
-root neoperro-protection/README.md. Mock regressions and REAL native integrity/
-startup fixtures pass; native authorization was a local fixture only. The user
-must upload/publish to FlowAuth, require keys and enable Auto-obfuscate before
-real provider authentication/output can be verified. Do not collect their key.
-Public source/history remains readable. Normal development runtime is restored.
+Core/runtime suites and the complete protected-runtime suite pass. Full/runtime,
+readable FlowAuth starter and protected upload pass REAL static analysis with zero
+errors/warnings. Off-center tests cover TB FOV on/off, all eight feature switches,
+shared hold/release and reverse-ray geometry. Mocks do not prove compatibility.
 
-Implemented: shared XYZ forecast for all features/boxes; separate XZ/Y resolution;
-speed/turn bounds; measured jump acceleration with braking-to-rest for decelerating
-falls; active Auto target/weapon/ping estimates every 0.5 seconds. Hitscan adds no
-travel time; no invented finite bullet speed. Manual Value remains its baseline,
-no Dynamic switch. Auto Y ignores JumpOffset and Custom remains separate.
+## Evidence boundaries and prior mistake
 
-Selection/Triggerbot checks now follow render frames; history and network work
-remain paced independently. AntiCurve Max/Radius accept 1e-9 upward or math.huge
-for unlimited distance/radius. Defaults remain 2.2 studs / 120 pixels. Geometry/
-wall checks remain independent.
+Intermediate native tests measured fast warm config updates without accumulating
+listeners or drawings. Exact figures are in SESSION-2026-10-23.md. They are not
+live verification of the final cursor fix or posture behavior. Actual provider
+authentication/publication is untested. The prior launch_ticket_rejected console
+message has no established cause. The user withdrew the crash investigation.
 
-Prior 1.3.10 focused capture: 15-player server, 1,898 aim updates/draws on all 1,898 frames
-in 8.0017 seconds (~237 FPS). Prior 1.3.9 capture: 15,576 forecasts per feature,
-zero falling-upward/grounded-lead violations at ~200 ms Data Ping. Shared Q/RMB
-local fixture and half-second refresh checks passed. Both generated bundles have
-zero REAL analyzer errors/warnings; Lua regressions pass. Mocks do not establish
-Roblox compatibility.
+An intermediate test loaded defaults from a Downloads starter instead of the
+user's edited table. The live runtime was later absent. The default E panic key
+was observed, but its causal role in unload was not proven. We admitted this and
+stopped live changes. Do not reuse stale wrappers or assume the starter is the
+user's private config. Preserve their key/table and replace only the bottom loader.
 
-Still needed: controlled actual-player damage and shot-time eligibility testing,
-broad weapon/obstacle/third-person cases, verified macro movement, and further
-latency calibration. Public native shots consumed two Revolver rounds without
-observed health loss; DB sends without ammo consumption were not shots. Existing
-evidence does not prove perfect prediction or every hit.
+## Release and remaining work
 
-Computer Use reported a physical Escape stop. Do not resume computer input in that
-stopped turn. Preserve focus-loss guards and cleanup. Inspect current REAL health,
-diagnostics and console before any newly authorized live continuation. Use rebuilt
-full bundles and the stable live-reload label. Key system, anti-tamper and webhook
-logging are later work. Never print/save executor credentials.
+Protected release files live outside Git under releases/neoperro-1.3.14. Upload
+neoperro-flowauth-upload.obfuscated.lua into the existing FlowAuth script, publish,
+require keys and enable Auto-obfuscate with keyless disabled. The loader-only file
+upgrades the user's private starter without replacing their key/table. Never
+request, print, save or publish their real key or executor credentials.
+
+The user requested a further 20-minute offline review of Silent prediction and
+3D targeting after this release; record that review and any later version here.
+When live testing is newly authorized, inspect current diagnostics/console first.
+Do not infer shots from sends alone: distinguish target eligibility, selected
+part, raw/sampled velocity, final point, muzzle, MOUSE payload, ammo/activation and
+observed damage. Prior native shots were inconclusive; no perfect-hit claim.
+
+Still open: controlled remote jumping/falling/strafe/macro shots at high ping,
+broad third-person weapon/obstacle cases, and published FlowAuth cold/warm timings.
+No new live intro/audio, full combination or hit-rate result is claimed. Existing
+aim restoration, native pellets, Macro Abuse, gun profiles and once-per-session
+intro remain protected by regressions. No new webhook logging was added.

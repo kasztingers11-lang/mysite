@@ -1,6 +1,7 @@
 -- Behavioral tests against a small deterministic Roblox mock, not a live game test.
 local Core = dofile('neoperro-src/core.lua')
 local Defaults = dofile('neoperro-src/defaults.lua')
+local Posture = dofile('neoperro-src/posture.lua')
 math.clamp = function(x, a, b) return math.max(a, math.min(b, x)) end
 local clock, connections, renders, packets, keyEvents, hooks = 0, {}, {}, {}, {}, {}
 local V, VM = {}, {}
@@ -177,7 +178,7 @@ services.VirtualInputManager={SendKeyEvent=function(_,down,key)keyEvents[#keyEve
 services.VirtualUser={CaptureController=function()end,Button2Down=function()end,Button2Up=function()end}
 
 local introPlays=0
-local env=setmetatable({Core=Core,Defaults=Defaults,game=game,Enum=Enum,Vector3=V,Vector2=V,CFrame=CF,
+local env=setmetatable({Core=Core,Posture=Posture,Defaults=Defaults,game=game,Enum=Enum,Vector3=V,Vector2=V,CFrame=CF,
     UDim2={fromOffset=function(...)return {...}end,fromScale=function(...)return {...}end},UDim={new=function(...)return {...}end},
     Color3={new=function(...)return {...}end,fromRGB=function(...)return {...}end},
     RaycastParams={new=function()return {}end},Instance={new=function(class)return obj(class)end},
@@ -598,6 +599,90 @@ for i=1,20 do
     assert(aliveDrawings==ownedVisuals,'No drawings left by replaced instances before first render')
 end
 replacement:Destroy('test');clearInput()
+
+-- Table-only updates are atomic and never rebuild listeners, history or drawings.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false
+    cfg['Aim Assist'].Activation.Holding=false
+    local rt=loadRuntime(cfg);step(.04)
+    local originalConfig=rt.Config
+    local bad=Core.copy(cfg);bad['Aim Assist'].Smoothness='invalid'
+    local beforeConnections,beforeRenders=activeConnections(),renderCount()
+    local history=rt.Records[enemy].history
+    local beforeVisuals=0;for _ in pairs(rt.Visuals)do beforeVisuals=beforeVisuals+1 end
+    rt.ShotRelease=env.mouse1release;rt.MouseOwned=true;Input.keys.MouseButton1=true
+    assert(not pcall(function()rt:ApplyConfig(bad)end),'Invalid config is rejected')
+    assert(rt.Alive and rt.Config==originalConfig and rt.MouseOwned,'Validation must not partially change running state or owned input')
+    rt.Toggles['Silent Aim']=false;rt.Locks['Aim Assist']=enemy.UserId
+    cfg['Silent Aim'].Prediction.Value=.17
+    cfg['2d-Box']['Silent Aim'].Size.Width=12
+    rt.AutoPrediction.Features['Silent Aim']={Target=enemy.UserId,NextSample=math.huge}
+    local returned=rt:ApplyConfig(cfg)
+    assert(returned==rt and env.__neoperroRuntimeV1==rt and rt.Config~=originalConfig)
+    assert(not rt.MouseOwned and not Input.keys.MouseButton1,'Table updates release owned firing input')
+    assert(not rt.Toggles['Silent Aim'] and rt.Locks['Aim Assist']==enemy.UserId,'User toggles and valid locks survive')
+    assert(rt.Config['Silent Aim'].Prediction.Value==.17 and rt.Config['2d-Box']['Silent Aim'].Size.Width==12)
+    assert(next(rt.AutoPrediction.Features)==nil and next(rt.Points)==nil,'Forecast and selected-point caches are invalidated')
+    assert(rt.Records[enemy].history==history,'Motion history stays warm')
+    cfg['Silent Aim'].Toggle.Enabled=false
+    rt:ApplyConfig(cfg);step(.04)
+    assert(rt.Toggles['Silent Aim'] and rt.Targets['Silent Aim']==enemy,'Disabling the toggle restores an enabled feature without an inaccessible off latch')
+    cfg.Whitelist.Enabled=true;rt:ApplyConfig(cfg)
+    rt.Whitelist={enemy.UserId};rt:ApplyConfig(cfg)
+    assert(#rt.Whitelist==1,'Unchanged whitelist config preserves assignments')
+    cfg.Whitelist.Players={other.UserId};rt:ApplyConfig(cfg)
+    assert(#rt.Whitelist==1 and rt.Whitelist[1]==other.UserId,'An edited list takes effect immediately')
+    cfg.Whitelist.Enabled=false
+    for i=1,50 do
+        cfg['2d-Box']['Silent Aim'].Size.Width=5+i*.01
+        rt:ApplyConfig(cfg);step(.04)
+        assert(activeConnections()==beforeConnections and renderCount()==beforeRenders,'No listeners or render callbacks accumulate')
+        assert(hooks.__namecall==hookBefore and rt.Records[enemy].history==history,'No extra hooks or discarded history')
+        local count=0;for _ in pairs(rt.Visuals)do count=count+1 end
+        assert(count==beforeVisuals,'No drawings accumulate from table edits')
+    end
+    assert(#rt.Whitelist==0 and rt.ConfigUpdates==55)
+    rt:Destroy('test')
+    assert(not pcall(function()rt:ApplyConfig(cfg)end),'A stopped runtime cannot accept a config update')
+    clearInput()
+end
+
+-- An empty assignment list allows all three features; assignment and clearing take effect live.
+do
+    local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do
+        local cfg=Core.copy(Defaults)
+        cfg.Whitelist.Enabled=true;cfg.Whitelist.Method='Target';cfg.Whitelist.Players={}
+        cfg['Aim Assist'].Activation.Holding=false
+        cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=true
+        for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do
+            cfg[name].Enabled=name==feature;cfg[name].Prediction.Enabled=false
+        end
+        local rt=loadRuntime(cfg);step(.12)
+        assert(rt.Targets[feature]==enemy,'Empty Target whitelist allows '..feature)
+        rt.Whitelist={other.UserId};step(.12)
+        assert(rt.Targets[feature]~=enemy,'Assignment restricts '..feature)
+        rt.Whitelist={};step(.12)
+        assert(rt.Targets[feature]==enemy,'Clearing the Target list restores '..feature)
+        rt.WhiteMode='Friend';rt.Whitelist={enemy.UserId};step(.12)
+        assert(rt.Targets[feature]~=enemy,'Friend excludes assigned player for '..feature)
+        rt.Whitelist={};step(.12)
+        assert(rt.Targets[feature]==enemy,'Empty Friend list restores '..feature)
+        rt:Destroy('test');clearInput()
+    end
+    ammo.Value=savedAmmo
+end
+
+do
+    local cfg=Core.copy(Defaults);cfg.Whitelist.Enabled=false;cfg.Whitelist.Players={other.UserId}
+    local rt=loadRuntime(cfg)
+    cfg.Whitelist.Enabled=true;rt:ApplyConfig(cfg)
+    assert(rt.Whitelist[1]==other.UserId,'Re-enabling applies the configured list instead of preserving a disabled empty list')
+    cfg.Whitelist.Enabled=false;rt=loadRuntime(cfg)
+    cfg.Whitelist.Enabled=true;rt=loadRuntime(cfg)
+    assert(rt.Whitelist[1]==other.UserId,'Full replacement also restores an explicitly configured list when re-enabled')
+    rt:Destroy('test');clearInput()
+end
 
 -- A denied native press and denied virtual press may fall back without losing shot context.
 local savedPress,savedRelease=env.mouse1press,env.mouse1release
@@ -1047,12 +1132,177 @@ do
     mouse.Target=World;rayHit={Instance=enemyTorso,Position=V.new(.2,.3,-49.5)}
     key('MouseButton2',true);before=shots;step(.12)
     assert(shots==before+1 and rt.AimTrace.Triggerbot.Part=='UpperTorso','Fresh character ray wins over stale native Mouse.Target')
-    assert(rt.ForcedPoint==rayHit.Position,'FOV-off trigger uses actual cursor hit, independent of Silent closest')
+    assert(rt.ForcedPoint==rt.Points['Silent Aim'] and rt.LastShotRoute.AimFeature=='Silent Aim',
+        'An eligible Silent point owns redirection while Triggerbot owns the click')
     key('MouseButton2',false);step(.2);ammo.Value=0;before=shots
     key('MouseButton2',true);step(.12);assert(shots==before,'Uppercase AMMO empty prevents trigger attempts')
     key('MouseButton2',false);ammo.Value=6
     rt:Destroy('test');flare:Destroy();ammo.Name='Ammo';mouse.Target=nil;rayHit=nil;groundY=nil
     enemyHum.FloorMaterial=Enum.Material.Plastic;clearInput()
+end
+
+-- Camera Assist must aim under an off-center cursor before Silent/TB run their shape checks.
+do
+    local oldMouse,oldProject,oldRay=Input.GetMouseLocation,camera.WorldToViewportPoint,camera.ViewportPointToRay
+    local oldLookAt,oldLerp=CF.lookAt,CM.__index.Lerp
+    local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)
+    Input.GetMouseLocation=function()return V.new(1060,540)end
+    CF.lookAt=function(origin,target,up)
+        local c=CF.new(origin);c.LookVector=(target-origin).Unit
+        c.RightVector=c.LookVector:Cross(up or V.new(0,1,0)).Unit
+        c.UpVector=c.RightVector:Cross(c.LookVector).Unit;return c
+    end
+    CM.__index.Lerp=function(a,b,t)
+        return CF.lookAt(a.Position,a.Position+a.LookVector*(1-t)+b.LookVector*t,
+            (a.UpVector or V.new(0,1,0))*(1-t)+(b.UpVector or V.new(0,1,0))*t)
+    end
+    camera.WorldToViewportPoint=function(self,point)
+        local relative=point-self.CFrame.Position;local z=relative:Dot(self.CFrame.LookVector)
+        return V.new(960+relative:Dot(self.CFrame.RightVector)*1000/math.max(z,.001),
+            540-relative:Dot(self.CFrame.UpVector)*1000/math.max(z,.001),z),z>0
+    end
+    camera.ViewportPointToRay=function(self,x,y)
+        return {Origin=self.CFrame.Position,Direction=(self.CFrame.LookVector+self.CFrame.RightVector*((x-960)/1000)
+            +self.CFrame.UpVector*(-(y-540)/1000)).Unit}
+    end
+    local function run(legacy, characterOnly)
+        camera.CFrame=CF.lookAt(V.new(),V.new(0,0,-1))
+        if legacy then
+            camera.CFrame=CF.lookAt(camera.CFrame.Position,enemyTorso.Position)
+            local p=camera:WorldToViewportPoint(enemyTorso.Position)
+            assert(not Core.fov(p.X-1060,p.Y-540,'2d-Circle',0,0,2),
+                'The old camera-center transform leaves the body outside cursor-based checks')
+            return
+        end
+        local cfg=Core.copy(Defaults);cfg['Aim Assist'].Activation.Holding=false;cfg['Aim Assist'].Smoothness=1
+        cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=not characterOnly
+        for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+            cfg[name].Prediction.Enabled=false;cfg[name].Fov.Method='2d-Circle'
+            cfg[name].Fov['2d-Circle'].Size=name=='Aim Assist' and 150 or 2
+        end
+        local rt=loadRuntime(cfg);step(.02)
+        local p=camera:WorldToViewportPoint(enemyTorso.Position)
+        assert(math.abs(p.X-1060)<1e-6 and math.abs(p.Y-540)<1e-6,'Assist preserves the actual cursor projection')
+        assert(rt.Targets['Silent Aim']==enemy and rt.Targets.Triggerbot==enemy and rt.Stats.TriggerAttempts==1,
+            'Fresh post-Assist geometry lets Silent and TB accept the target on the same frame')
+        rt:Destroy('test');clearInput()
+    end
+    run(true);run(false,false);run(false,true)
+    Input.GetMouseLocation=oldMouse;camera.WorldToViewportPoint=oldProject;camera.ViewportPointToRay=oldRay
+    CF.lookAt=oldLookAt;CM.__index.Lerp=oldLerp
+    camera.CFrame=CF.new();ammo.Value=savedAmmo
+end
+
+-- A full bundle's default table cannot overwrite an explicitly supplied edited table.
+do
+    local edited=Core.copy(Defaults)
+    edited.Misc.Panic.Enabled=false
+    edited['Aim Assist'].Activation.Keybind={'Q','MouseButton2','Mouse'}
+    edited.Triggerbot.Activation.Keybind={'Q','MouseButton2','Keyboard'}
+    edited.ESP.Toggle.Keybind={'V','MouseButton2','Keyboard'}
+    edited['Silent Aim'].Prediction.Auto=false;edited['Silent Aim'].Prediction.Value=.121
+    for _,file in ipairs({'neoperro-full.lua','neoperro-runtime.lua'})do
+        env.neoperro=Core.copy(Defaults)
+        local rt=assert(loadfile(file,'t',env))(edited)
+        assert(Core.equal(rt.Config,edited),'Explicit configuration wins in '..file)
+        rt:Destroy('test')
+    end
+    clearInput()
+end
+
+-- User-supplied current place IDs all start the same Looten-derived remote path.
+-- Generic track names resolve through the game's animation catalog; all aim paths share pose geometry.
+do
+    local savedAmmo,savedSize,savedFrame=ammo.Value,enemyTorso.Size,enemyTorso.CFrame
+    ammo.Value=100;moveEnemy(0,0,-50)
+    local folder=obj('Folder','Animations',storage)
+    local crouch=obj('Animation','crouch',folder);crouch.AnimationId='rbxassetid://101'
+    local dances=obj('Folder','dances',folder)
+    local lay=obj('Animation','laying',dances);lay.AnimationId='rbxassetid://102'
+    local dance=obj('Animation','the rossy',dances);dance.AnimationId='rbxassetid://103'
+    local animator=obj('Animator','Animator',enemyHum)
+    local generic=obj('Animation','Animation');generic.AnimationId=crouch.AnimationId
+    local track={IsPlaying=true,WeightCurrent=1,Name='Animation',Animation=generic}
+    animator.GetPlayingAnimationTracks=function()return {track}end
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Activation.Holding=false
+    cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=true
+    cfg['Silent Aim'].AntiCurve.Enabled=true;cfg['Silent Aim'].AntiCurve['3d-angles'].Max=math.huge
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do cfg[name].Prediction.Enabled=false end
+    cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Aim Assist'].Target.Closest.Enabled=false
+    local rt=loadRuntime(cfg);step(.04)
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        assert(rt.AimTrace[name].Posture=='Crouched' and rt.AimTrace[name].PostureSource=='game-animation')
+    end
+    local record=rt.Records[enemy]
+    record.pointState={['Silent Aim']={part=enemyTorso,point=V.new(),time=clock}}
+    generic.AnimationId=lay.AnimationId
+    enemyTorso.Size=V.new(4,2,1)
+    enemyTorso.CFrame.RightVector=V.new(0,1,0);enemyTorso.CFrame.UpVector=V.new(1,0,0);enemyTorso.CFrame.LookVector=V.new(0,0,1)
+    step(.25)
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        assert(rt.AimTrace[name].Posture=='Prone' and rt.AimTrace[name].PartWorldHeight==4,'Rotated body height is measured in world Y for '..name)
+    end
+    assert(record.pointState==nil and rt.PostureStats.Changes>=1,'Posture transitions discard old point smoothing')
+    generic.AnimationId=dance.AnimationId;step(.25)
+    assert(rt.AimTrace['Silent Aim'].Posture=='Emote' and rt.PostureStats.Changes>=2)
+    rt:Destroy('test');folder:Destroy();animator:Destroy();generic:Destroy()
+    enemyTorso.Size,enemyTorso.CFrame=savedSize,savedFrame;ammo.Value=savedAmmo;clearInput()
+end
+
+-- All eight feature combinations accept a shared hold key; Silent owns eligible shot redirection.
+do
+    local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)
+    enemyRoot.AssemblyLinearVelocity=V.new(10,0,0)
+    for mask=0,7 do
+        camera.CFrame=CF.new(0,0,0)
+        local cfg=Core.copy(Defaults);cfg.Resolver.Enabled=false
+        cfg.Triggerbot.Fov.Enabled=true;cfg.Triggerbot.TargetOnly=false
+        for index,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+            cfg[name].Enabled=math.floor(mask/2^(index-1))%2==1
+            cfg[name].Toggle.Enabled=false
+            cfg[name].Activation.Holding=true;cfg[name].Activation.Keybind={'Q','MouseButton2','Keyboard'}
+            cfg[name].Prediction.Auto=false;cfg[name].Prediction.Value=index*.1
+        end
+        cfg.Triggerbot.Activation.Enabled=true
+        local rt=loadRuntime(cfg);key('Q',true);step(.12)
+        assert((rt.Targets['Silent Aim']~=nil)==cfg['Silent Aim'].Enabled)
+        assert((rt.Targets['Aim Assist']~=nil)==cfg['Aim Assist'].Enabled)
+        if cfg.Triggerbot.Enabled then
+            assert(rt.Stats.TriggerAttempts==1 and rt.FiringSource=='Triggerbot')
+            if cfg['Silent Aim'].Enabled then
+                assert(rt.LastShotRoute.AimFeature=='Silent Aim' and rt.LastShot.serverPoint==rt.ForcedPoint)
+                assert(rt.ForcedPoint==rt.Points['Silent Aim'],'Silent prediction owns the TB shot')
+            else assert(rt.LastShotRoute.AimFeature=='Triggerbot' and rt.ForcedPoint==rt.Points.Triggerbot) end
+        else assert(rt.Stats.TriggerAttempts==0) end
+        key('Q',false);step(.2)
+        assert(not rt.MouseOwned and not rt.Targets['Silent Aim'] and not rt.Targets['Aim Assist'],'Shared release stops each hold independently')
+        rt:Destroy('test');clearInput()
+    end
+    enemyRoot.AssemblyLinearVelocity=V.new();ammo.Value=savedAmmo;camera.CFrame=CF.new(0,0,0)
+end
+
+-- Assignment grows beyond four; display-name text follows the live Humanoid tag.
+do
+    local otherParent,oldOtherPosition=other.Parent,otherRoot.Position
+    other.Parent=Players;otherRoot.Position=V.new(20,0,-50)
+    local cfg=Core.copy(Defaults);cfg.Whitelist.Enabled=true;cfg.Whitelist.Method='Target';cfg.Whitelist.Players={101,102,103,104,105}
+    cfg.Triggerbot.Enabled=false
+    local rt=loadRuntime(cfg);step(.04)
+    assert(#rt.Whitelist==5)
+    key('R',true);key('R',false);assert(#rt.Whitelist==6 and rt.Whitelist[6]==enemy.UserId)
+    step(.04);assert(rt.Targets['Silent Aim']==enemy)
+    key('R',true);key('R',false);assert(#rt.Whitelist==5)
+    moveEnemy(10,0,-50);otherRoot.Position=V.new(5,0,-50)
+    key('R',true);key('R',false);assert(#rt.Whitelist==6)
+    moveEnemy(0,0,-50);otherRoot.Position=V.new(20,0,-50);step(.04)
+    assert(rt.Targets['Silent Aim']~=enemy,'Remove/add in one frame invalidates membership even when list length is unchanged')
+    rt.Config.Whitelist.Enabled=false
+    local oldDisplay=enemyHum.DisplayName;enemyHum.DisplayName='[WINTER] '..enemy.DisplayName;step(.04)
+    local found=false
+    for _,d in ipairs(drawingObjects)do if not d.removed and d.Kind=='Text' and d.Visible and d.Text==enemyHum.DisplayName then found=true end end
+    assert(found,'ESP DisplayName includes the actual game tag from Humanoid.DisplayName')
+    enemyHum.DisplayName=oldDisplay;rt:Destroy('test');clearInput()
+    other.Parent,otherRoot.Position=otherParent,oldOtherPosition
 end
 
 -- User-supplied current place IDs all start the same Looten-derived remote path.

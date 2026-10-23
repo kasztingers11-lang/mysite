@@ -120,16 +120,16 @@ function Core.ids(list)
     for _, id in ipairs(list) do
         if type(id) == 'number' and id > 0 and id < math.huge and id % 1 == 0 and not seen[id] then
             result[#result + 1], seen[id] = id, true
-            if #result == 4 then break end
         end
     end
     return result
 end
 
-function Core.whitelisted(enabled, mode, ids, id)
-    if not enabled then return true end
+function Core.whitelisted(enabled, mode, ids, id, lookup)
+    if not enabled or #ids == 0 then return true end
     local present = false
-    for _, item in ipairs(ids) do if item == id then present = true; break end end
+    if lookup then present = lookup[id] == true
+    else for _, item in ipairs(ids) do if item == id then present = true; break end end end
     if mode == 'Target' then return present end
     return not present
 end
@@ -242,6 +242,25 @@ end
 function Core.finiteVector(v)
     return v and v.X == v.X and v.Y == v.Y and v.Z == v.Z
         and math.abs(v.X) < 1e8 and math.abs(v.Y) < 1e8 and math.abs(v.Z) < 1e8
+end
+
+-- Rotate the camera basis so its cursor ray, rather than its center ray, reaches the target.
+function Core.cursorOrientation(ray, target, look, up)
+    if ray.Magnitude < 1e-8 or target.Magnitude < 1e-8 then return nil end
+    ray, target = ray / ray.Magnitude, target / target.Magnitude
+    local cosine = math.max(-1, math.min(1, ray:Dot(target)))
+    local axis = ray:Cross(target)
+    local sine = axis.Magnitude
+    if sine < 1e-8 then
+        if cosine > 0 then return look, up end
+        axis = ray:Cross(up)
+        if axis.Magnitude < 1e-8 then axis = ray:Cross(look) end
+        axis, sine = axis / axis.Magnitude, 0
+    else axis = axis / sine end
+    local function rotate(vector)
+        return vector * cosine + axis:Cross(vector) * sine + axis * (axis:Dot(vector) * (1 - cosine))
+    end
+    return rotate(look), rotate(up)
 end
 
 -- Distance to a forward ray, independent of direction length and surface depth.

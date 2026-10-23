@@ -1,13 +1,15 @@
--- Bundler supplies Core, Defaults and playIntro; this file is the readable runtime body.
+-- Bundler supplies Core, Posture, Defaults and playIntro; this is the readable runtime body.
 local environment = type(getgenv) == 'function' and getgenv() or _G
+local launchConfig = ...
+if type(launchConfig) ~= 'table' then launchConfig = environment.neoperro end
 local supported = {
     [134196333708867] = 'Da Strike',
     [71324444457408] = 'Da Uphill',
     [139144803593140] = 'Da Downhill',
 }
 assert(supported[game.PlaceId], '[neoperro] This place is not supported.')
-assert(type(environment.neoperro) == 'table', '[neoperro] Put the configuration above the runtime.')
-local suppliedConfig = Core.normalizeConfig(environment.neoperro)
+assert(type(launchConfig) == 'table', '[neoperro] Put the configuration above the runtime.')
+local suppliedConfig = Core.normalizeConfig(launchConfig)
 local config = Core.merge(Defaults, suppliedConfig)
 Core.validate(Defaults, config)
 local Players = game:GetService('Players')
@@ -30,7 +32,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.12', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.14', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
@@ -43,6 +45,8 @@ local state = {
     CursorHit = nil, ShotRelease = nil, AutomatedTool = nil, MacroMotion = nil,
     TriggerRandom = nil, LastMousePayload = nil, MouseRemainder = nil, Intro = nil,
     ToolEpoch = 0, AutoPrediction = {Interval = 0.5, Refreshes = 0, Features = {}},
+    PostureStats = {Samples = 0, Changes = 0},
+    WhiteLookup = {}, WhiteLookupSource = nil, WhiteLookupCount = -1,
 }
 environment[runtimeKey] = state
 local zero = Vector3.new(0, 0, 0)
@@ -91,6 +95,9 @@ function state:Diagnose()
         Equipped = equipped and equipped.Name or nil, Remote = self.Remote and self.Remote.Name or nil,
         Aim = Core.copy(self.AimTrace), LastSend = Core.copy(self.LastSend), Network = Core.copy(self.Network),
         Performance = Core.copy(self.Performance), Input = self.InputStatus and self:InputStatus(),
+        ConfigUpdates = self.ConfigUpdates, LastConfigMs = self.LastConfigMs,
+        StartupProtection = Core.copy(self.StartupProtection),
+        PostureStats = Core.copy(self.PostureStats), ShotRoute = Core.copy(self.LastShotRoute),
         AutoPrediction = Core.copy(self.AutoPrediction),
         ShotResult = 'unverified; activation and MOUSE submission do not establish damage'}
     for name, player in pairs(self.Targets) do result.Targets[name] = player.UserId end
@@ -138,10 +145,12 @@ end
 for _, name in ipairs(featureNames) do
     state.Initial[name] = config[name].Enabled == true
     state.Toggles[name] = state.Initial[name]
-    if saved then state.Toggles[name] = Core.restoreToggle(state.Initial[name], saved.Initial[name], saved.Toggles[name]) end
+    if saved and config[name].Toggle.Enabled then
+        state.Toggles[name] = Core.restoreToggle(state.Initial[name], saved.Initial[name], saved.Toggles[name])
+    end
     if saved and saved.Locks[name] and validPlayer(saved.Locks[name]) then state.Locks[name] = saved.Locks[name] end
 end
-if saved and config.Whitelist.Enabled then
+if saved and config.Whitelist.Enabled and saved.WhitelistEnabled ~= false then
     if Core.equal(state.InitialWhitelist, saved.InitialWhitelist) then state.Whitelist = Core.ids(saved.Whitelist) end
     if state.InitialWhiteMode == saved.InitialWhiteMode and (saved.WhiteMode == 'Friend' or saved.WhiteMode == 'Target') then
         state.WhiteMode = saved.WhiteMode
@@ -153,7 +162,8 @@ if not config.Whitelist.Enabled then state.Whitelist = {} end
 function state:Snapshot()
     return Core.copy({Initial = self.Initial, Toggles = self.Toggles, Locks = self.Locks,
         Whitelist = self.Whitelist, WhiteMode = self.WhiteMode,
-        InitialWhitelist = self.InitialWhitelist, InitialWhiteMode = self.InitialWhiteMode})
+        InitialWhitelist = self.InitialWhitelist, InitialWhiteMode = self.InitialWhiteMode,
+        WhitelistEnabled = config.Whitelist.Enabled})
 end
 
 local function releaseControl()
@@ -348,6 +358,21 @@ local function bodyPart(part, character)
     return part and part:IsA('BasePart') and part.Parent == character and bodyParts[part.Name] == true
 end
 
+local animationCatalog = {}
+local function samplePosture(record, time)
+    local pose, changed, sampled = Posture.sample(record, time, animationCatalog, bodyPart)
+    record.pose = pose
+    if sampled then state.PostureStats.Samples = state.PostureStats.Samples + 1 end
+    if changed then
+        state.PostureStats.Changes = state.PostureStats.Changes + 1
+        record.pointState, record.renderAim = nil, nil
+        for name, context in pairs(state.AutoPrediction.Features) do
+            if context.Target == record.player.UserId then state.AutoPrediction.Features[name] = nil end
+        end
+    end
+    return pose
+end
+
 local function nativeBodyPart(part, character)
     return part and part:IsA('BasePart') and part.Parent == character and part.CanQuery ~= false
         and (bodyParts[part.Name] == true or part.Name == 'HB' or part.Name == 'HumanoidRootPart')
@@ -411,13 +436,22 @@ local function targetPart(record, feature)
     return best or partFor(record, target.BasePart)
 end
 
+local function whitelistLookup()
+    if state.WhiteLookupSource ~= state.Whitelist or state.WhiteLookupCount ~= #state.Whitelist then
+        local lookup = {}
+        for _, id in ipairs(state.Whitelist) do lookup[id] = true end
+        state.WhiteLookup, state.WhiteLookupSource, state.WhiteLookupCount = lookup, state.Whitelist, #state.Whitelist
+    end
+    return state.WhiteLookup
+end
+
 local function valid(record, feature, part, skipWall)
     if not record or record.player == localPlayer or record.player.Parent ~= Players then return false end
     local character, humanoid, root = record.character, record.humanoid, record.root
     if not character or not character.Parent or not humanoid or not root or not part or not part.Parent then return false end
     if not Core.finiteVector(part.Position) then return false end
     if feature == 'Triggerbot' and config.Triggerbot.TargetOnly and record.player ~= state.Targets['Silent Aim'] then return false end
-    if not Core.whitelisted(config.Whitelist.Enabled, state.WhiteMode, state.Whitelist, record.player.UserId) then return false end
+    if not Core.whitelisted(config.Whitelist.Enabled, state.WhiteMode, state.Whitelist, record.player.UserId, whitelistLookup()) then return false end
     local index = checkIndices[feature]
     local function check(key) return config.Checks[key] and config.Checks[key][index] == true end
     if check('Dead') and (humanoid.Health <= 0 or character:GetAttribute('Dead') == true) then return false end
@@ -476,6 +510,7 @@ local function support(record, point, lead, fallLimit)
     local stand = Core.number(humanoid.HipHeight, 2, 0, 10) + root.Size.Y / 2
     local leg = record.character:FindFirstChild('Left Leg')
     if leg and leg:IsA('BasePart') then stand = stand + leg.Size.Y end
+    if record.pose and record.pose.SupportHeight then stand = math.min(stand, record.pose.SupportHeight) end
     groundParams.FilterDescendantsInstances = {record.character, localCharacter, camera}
     local origin = root.Position + Vector3.new(lead.X, 0, lead.Z)
     local hit = World:Raycast(origin, Vector3.new(0, -(stand + math.max(0, -lead.Y, fallLimit or 0) + 1), 0), groundParams)
@@ -488,6 +523,8 @@ end
 
 -- Shared forecast for selection, shot coordinates and unselected predicted boxes.
 local function leadOffset(record, feature, part, point, evidence)
+    local pose = samplePosture(record, now())
+    local worldHeight = Posture.verticalSize(part)
     local raw = record.root.AssemblyLinearVelocity
     local leadTime, predictionSource, speedFactor, baseLeadTime = prediction(record, feature, point)
     local vel, motion = velocity(record), record.motion or {}
@@ -502,7 +539,7 @@ local function leadOffset(record, feature, part, point, evidence)
     local minY, supportedGround
     local needsGround = lead.Y ~= 0 or raw.Y ~= 0 or (motion.VerticalConfidence or 0) >= 0.5
     if needsGround and (groundCheck or (useY and ySettings.Method == 'Auto')) then
-        minY, supportedGround = support(record, point, lead, part.Size.Y)
+        minY, supportedGround = support(record, point, lead, worldHeight)
     end
     local vertical, source, correction, accelerationMode
     local verticalRaw = raw.Y
@@ -514,7 +551,7 @@ local function leadOffset(record, feature, part, point, evidence)
         local grounded = supportedGround or (not airborne and math.abs(raw.Y) < 3)
         vertical, source = Core.autoVertical(vel.Y, verticalRaw)
         local y
-        y, correction, accelerationMode = Core.verticalLead(vertical, verticalRaw, baseLeadTime, part.Size.Y, grounded, motion)
+        y, correction, accelerationMode = Core.verticalLead(vertical, verticalRaw, baseLeadTime, worldHeight, grounded, motion)
         lead = Vector3.new(lead.X, y, lead.Z)
     end
     local groundCorrected
@@ -523,6 +560,8 @@ local function leadOffset(record, feature, part, point, evidence)
         lead = Vector3.new(lead.X, math.min(point.Y, minY) - point.Y, lead.Z)
     end
     if evidence then
+        evidence.Posture, evidence.PostureSource = pose and pose.Kind, pose and pose.Source
+        evidence.PartWorldHeight = worldHeight
         evidence.Part, evidence.PartPosition, evidence.BasePoint = part.Name, vectorData(part.Position), vectorData(point)
         evidence.RawVelocity, evidence.SampledVelocity = vectorData(raw), vectorData(record.sampledVelocity)
         evidence.ResolvedVelocity = vectorData(vel)
@@ -646,6 +685,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         return nil
     end
     if not valid(record, feature, part, true) then return reject('eligibility') end
+    samplePosture(record, now())
     local point = hitPoint or part.Position
     local exact = closest.Enabled and closest.Raycast and state.CursorHit
     if hitPart then
@@ -753,18 +793,49 @@ local function selectTarget(feature)
     return player and state.Records[player] or nil
 end
 
-local function updateAim()
+local function followAssist(point, dt)
+    if not point or not enabled('Aim Assist') or typing() then state.MouseRemainder = nil; return false end
+    local settings = config['Aim Assist']
+    if settings.Follow == 'Mouse' and type(mousemoverel) == 'function' then
+        local screen, onScreen = camera:WorldToViewportPoint(point)
+        if onScreen then
+            local delta = (Vector2.new(screen.X, screen.Y) - cursor) * Core.alpha(settings.Smoothness, math.min(dt, 0.05))
+            state.MouseRemainder = (state.MouseRemainder or Vector2.new()) + delta
+            local x, y = math.floor(state.MouseRemainder.X + 0.5), math.floor(state.MouseRemainder.Y + 0.5)
+            state.MouseRemainder = state.MouseRemainder - Vector2.new(x, y)
+            if x ~= 0 or y ~= 0 then mousemoverel(x, y); return true end
+        end
+    elseif settings.Follow == 'Camera' then
+        local offset = point - camera.CFrame.Position
+        if offset.Magnitude > 0.01 then
+            local look, up = Core.cursorOrientation(cursorRay.Direction, offset, camera.CFrame.LookVector,
+                camera.CFrame.UpVector or Vector3.new(0, 1, 0))
+            if look then
+                local desired = CFrame.lookAt(camera.CFrame.Position, camera.CFrame.Position + look, up)
+                camera.CFrame = camera.CFrame:Lerp(desired, Core.alpha(settings.Smoothness, dt))
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function updateAim(dt)
     state.AimTrace['Silent Aim'], state.AimTrace['Aim Assist'] = nil, nil
     if not captureView() or not localHumanoid or localHumanoid.Health <= 0 then
         state.Points, state.Targets = {}, {}; return
     end
     state.CursorHit = cursorHit()
-    for _, feature in ipairs({'Silent Aim', 'Aim Assist'}) do
+    for _, feature in ipairs({'Aim Assist', 'Silent Aim'}) do
         local record, point, part = selectTarget(feature)
         if record and not point then point, part = aimPoint(record, feature) end
         state.Targets[feature] = point and record.player or nil
         state.Points[feature] = point
         if feature == 'Silent Aim' then state.AimPart = part end
+        if feature == 'Aim Assist' and dt and followAssist(renderPoint('Aim Assist'), dt) then
+            captureView()
+            state.CursorHit = cursorHit()
+        end
     end
     state.ForwardPoint = camera.CFrame.Position + camera.CFrame.LookVector * 1000
     state.RawMousePoint = mouse.Hit.Position
@@ -1008,6 +1079,17 @@ local function fire(source, record, point)
     local ammo = ammoCount(equipped)
     if type(ammo) == 'number' and ammo <= 0 then return false end
     local time, tool = now(), equipped
+    local aimFeature, aimRecord = source, record
+    if source == 'Triggerbot' and enabled('Silent Aim') and state.Points['Silent Aim'] then
+        local selected = state.Targets['Silent Aim']
+        local selectedRecord = selected and state.Records[selected]
+        if selectedRecord and (not config.Triggerbot.TargetOnly or selectedRecord == record) then
+            point, aimFeature, aimRecord = state.Points['Silent Aim'], 'Silent Aim', selectedRecord
+        end
+    end
+    state.LastShotRoute = {Source=source, AimFeature=aimFeature, TriggerTarget=record.player.UserId,
+        AimTarget=aimRecord.player.UserId, Point=vectorData(point), Time=time}
+    traceEvent('shot-routing', state.LastShotRoute)
     state.NextFire, state.ShotUntil = time + 0.08, time + 0.14
     state.ForcedPoint, state.ForcedUntil = point, time + 0.14
     activation = {source = source, tool = tool, untilTime = time + 0.14, sent = true}
@@ -1140,6 +1222,7 @@ local function bindOpponent(record, character)
     record.sampledVelocity, record.velocityAt = nil, nil
     record.bounds, record.boundsAt, record.visibilityAt = nil, nil, nil
     record.pointState = {}
+    record.pose = nil
     record.lastAmmo, record.ammoTool = nil, nil
     local function added(item)
         if item.Name == 'HumanoidRootPart' and item:IsA('BasePart') then record.root = item end
@@ -1360,9 +1443,7 @@ end
 
 local function assignedColor(id, fallback)
     if not config.Whitelist.Enabled then return fallback end
-    for _, assigned in ipairs(state.Whitelist) do
-        if assigned == id then return state.WhiteMode == 'Target' and Color3.fromRGB(255, 75, 75) or Color3.fromRGB(80, 230, 110) end
-    end
+    if whitelistLookup()[id] then return state.WhiteMode == 'Target' and Color3.fromRGB(255, 75, 75) or Color3.fromRGB(80, 230, 110) end
     return fallback
 end
 
@@ -1396,8 +1477,10 @@ local function drawPlayers(time)
                         Color = color(style.Color.Box[2]), Transparency = 1})
                     v.box:Set({Visible = true, Position = position, Size = size, Filled = false,
                         Color = foreground, Transparency = 1})
+                    local display = record.humanoid.DisplayName
+                    if type(display) ~= 'string' or display == '' then display = record.player.DisplayName end
                     local name = style.Name[2] == 'Name' and record.player.Name
-                        or (style.Name[2] == 'UserId' and tostring(record.player.UserId) or record.player.DisplayName)
+                        or (style.Name[2] == 'UserId' and tostring(record.player.UserId) or display)
                     v.name:Set({Visible = config.ESP.Names and style.Name[1], Text = name,
                         Position = Vector2.new(position.X + size.X / 2, position.Y - 17), Color = foreground, Transparency = 1})
                 elseif v then for _, object in pairs(v) do object:Set({Visible = false}) end end
@@ -1461,7 +1544,8 @@ local function inputChanged(input, began, processed)
                 local id, found = record.player.UserId, nil
                 for i, value in ipairs(state.Whitelist) do if value == id then found = i; break end end
                 if found then table.remove(state.Whitelist, found)
-                elseif #state.Whitelist < 4 then state.Whitelist[#state.Whitelist + 1] = id end
+                else state.Whitelist[#state.Whitelist + 1] = id end
+                state.WhiteLookupSource = nil
             end
         end
     end
@@ -1516,12 +1600,60 @@ state.Destroy = function(self, reason)
     originalDestroy(self, reason)
 end
 
+-- Update only configuration. Validation precedes all mutation; listeners,
+-- drawings, motion history, hooks and the authorized runtime stay in place.
+function state:ApplyConfig(supplied)
+    assert(self == state and self.Alive and environment[runtimeKey] == self,
+        '[neoperro] This runtime is no longer active.')
+    assert(type(supplied) == 'table', '[neoperro] Configuration must be a table.')
+    local started = now()
+    local incoming = Core.merge(Defaults, Core.normalizeConfig(supplied))
+    Core.validate(Defaults, incoming)
+    local incomingWhitelist = Core.ids(incoming.Whitelist.Players)
+    local keepWhitelist = config.Whitelist.Enabled and Core.equal(incomingWhitelist, self.InitialWhitelist)
+    local keepWhiteMode = incoming.Whitelist.Method == self.InitialWhiteMode
+
+    releaseShotInput()
+    cancelMacro()
+    if not incoming['Client Bullets'].Enabled then restoreBeams(true) end
+    for _, name in ipairs(featureNames) do
+        local initial = incoming[name].Enabled == true
+        if incoming[name].Toggle.Enabled then
+            self.Toggles[name] = Core.restoreToggle(initial, self.Initial[name], self.Toggles[name])
+        else self.Toggles[name] = initial end
+        self.Initial[name] = initial
+        if not initial or not validPlayer(self.Locks[name]) then self.Locks[name] = nil end
+    end
+    self.Whitelist = incoming.Whitelist.Enabled and (keepWhitelist and self.Whitelist or incomingWhitelist) or {}
+    self.WhiteMode = keepWhiteMode and self.WhiteMode or incoming.Whitelist.Method
+    self.InitialWhitelist, self.InitialWhiteMode = incomingWhitelist, incoming.Whitelist.Method
+    config, self.Config = incoming, incoming
+    self.Held, self.Points, self.Targets, self.AimTrace = {}, {}, {}, {}
+    self.CursorHit, self.MouseRemainder, self.TriggerRandom = nil, nil, nil
+    self.PacketPoint, self.ClientPoint, self.LastMousePayload = nil, nil, nil
+    self.ShotUntil = 0
+    self.NextFire = math.max(self.NextFire, now() + 0.08)
+    self.AutoPrediction.Features = {}
+    pendingPrefire = nil
+    for _, record in pairs(self.Records) do
+        record.pointState, record.renderAim, record.BoxInfo = nil, nil, nil
+        record.visibilityAt, record.espVisible = nil, nil
+    end
+    self.ConfigUpdates = (self.ConfigUpdates or 0) + 1
+    self.LastConfigMs = (now() - started) * 1000
+    return self
+end
+
 local function start()
+    animationCatalog = Posture.catalog(ReplicatedStorage:FindFirstChild('Animations'))
     findRemote()
     installHooks()
     if not state.Remote then warnOnce('missing-remote', 'MAINEVENT is missing; firing redirection waits for it to appear.') end
     if not hooks.Namecall then warnOnce('no-hook', 'Namecall hooks unavailable: using Looten-style activation updates; Anti-AimViewer is unavailable.') end
-    connect(ReplicatedStorage.ChildAdded, function(child) if child.Name == 'MAINEVENT' or child.Name == 'MainEvent' then findRemote() end end)
+    connect(ReplicatedStorage.ChildAdded, function(child)
+        if child.Name == 'MAINEVENT' or child.Name == 'MainEvent' then findRemote() end
+        if child.Name == 'Animations' then animationCatalog = Posture.catalog(child) end
+    end)
     connect(ReplicatedStorage.ChildRemoved, function(child) if child == state.Remote then findRemote() end end)
     connect(localPlayer.CharacterAdded, bindCharacter)
     connect(localPlayer.CharacterRemoving, function()
@@ -1587,6 +1719,7 @@ local function start()
             sampleNetwork(time)
             for _, record in pairs(state.Records) do
                 if record.root and Core.finiteVector(record.root.Position) then
+                    samplePosture(record, time)
                     Core.sample(record.history, record.root.Position, time, record.root.AssemblyLinearVelocity)
                 end
                 if config.Misc.Prefire.Enabled then observeAmmo(record) end
@@ -1602,7 +1735,7 @@ local function start()
     RunService:BindToRenderStep(renderName, Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not state.Alive or not captureView() then return end
         local aimStarted = now()
-        updateAim()
+        updateAim(dt)
         if not typing() then automaticFire(aimStarted) end
         refreshAutoPrediction(aimStarted)
         refreshPacket()
@@ -1610,23 +1743,6 @@ local function start()
         local aimMs = (now() - aimStarted) * 1000
         state.Performance.AimTotalMs = state.Performance.AimTotalMs + aimMs
         state.Performance.AimMaxMs = math.max(state.Performance.AimMaxMs, aimMs)
-        local point = renderPoint('Aim Assist')
-        if point and enabled('Aim Assist') and not typing() then
-            local offset = point - camera.CFrame.Position
-            if config['Aim Assist'].Follow == 'Mouse' and type(mousemoverel) == 'function' then
-                local screen, onScreen = camera:WorldToViewportPoint(point)
-                if onScreen then
-                    local alpha = Core.alpha(config['Aim Assist'].Smoothness, math.min(dt, 0.05))
-                    local delta = (Vector2.new(screen.X, screen.Y) - cursor) * alpha
-                    state.MouseRemainder = (state.MouseRemainder or Vector2.new()) + delta
-                    local x, y = math.floor(state.MouseRemainder.X + 0.5), math.floor(state.MouseRemainder.Y + 0.5)
-                    state.MouseRemainder = state.MouseRemainder - Vector2.new(x, y)
-                    if x ~= 0 or y ~= 0 then mousemoverel(x, y) end
-                end
-            elseif config['Aim Assist'].Follow == 'Camera' and offset.Magnitude > 0.01 then
-                camera.CFrame = camera.CFrame:Lerp(CFrame.lookAt(camera.CFrame.Position, point), Core.alpha(config['Aim Assist'].Smoothness, dt))
-            end
-        else state.MouseRemainder = nil end
         local renderStarted = now()
         if state.Intro and state.Intro.Alive then
             for visual in pairs(state.Visuals) do visual:Set({Visible = false}) end

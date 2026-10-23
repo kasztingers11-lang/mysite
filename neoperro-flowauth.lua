@@ -2,6 +2,9 @@ script_key = "FLOW-REPLACE-WITH-YOUR-KEY";
 
 -- Put your own key above. Edit the table, then run this whole file.
 -- Prediction can lead a moving player in X, Y and Z. Auto ignores Value.
+-- Empty Whitelist lists allow everyone. There is no assignment cap.
+-- Crouch, lying and emote pose measurements run automatically.
+-- Table edits reuse the current same-build session; a fresh load still uses FlowAuth.
 -- The intro plays once per client session. There are no intro settings.
 -- P: Silent toggle | M: Assist toggle | hold Q: Assist | V: Trigger toggle | hold RMB: Trigger | E: stop.
 
@@ -189,10 +192,10 @@ getgenv()['neoperro'] = {
         };
     };
 
-    -- Choose players to skip, or choose the only players you want to target.
+    -- An empty list allows everyone. Assign someone to start filtering players.
     ['Whitelist']          = {
         ['Enabled']   = false;                                                   -- Main on/off switch for this option.
-        ['Method']    = 'Friend';                                                -- Friend skips your list. Target only targets your list.
+        ['Method']    = 'Friend';                                                -- With names assigned: Friend skips them; Target only targets them. Empty allows everyone.
         ['Players']   = {};                                                      -- Put Roblox user IDs in this list.
         ['AssignKey'] = {
             ['Keybind'] = {'R', 'MouseButton2', 'Keyboard'};                     -- Keyboard key, mouse button, then which one to use: Keyboard or Mouse.
@@ -296,4 +299,25 @@ getgenv()['neoperro'] = {
     };
 };
 
-loadstring(game:HttpGet("https://flowauth.net/v1/loaders/56265b6f33860b070090db29d343e59a.lua"))(script_key)
+-- Execution starts here. Table edits reuse this client session; new builds load normally.
+local neoperroEnvironment = getgenv()
+local neoperroRuntime = neoperroEnvironment.__neoperroRuntimeV1
+if type(neoperroRuntime) == 'table' and neoperroRuntime.Alive
+    and neoperroRuntime.Version == '1.3.14'
+    and neoperroRuntime.Distribution == 'FlowAuth' and type(neoperroRuntime.ApplyConfig) == 'function' then
+    script_key = nil -- Configuration updates use the already-running session.
+    neoperroRuntime:ApplyConfig(neoperroEnvironment.neoperro)
+    print(string.format('[neoperro] Table updated in %.2f ms.', neoperroRuntime.LastConfigMs))
+else
+    local started = os.clock()
+    local source = game:HttpGet('https://flowauth.net/v1/loaders/56265b6f33860b070090db29d343e59a.lua')
+    local fetched = os.clock()
+    local program = loadstring(source, '@neoperro-loader')
+    assert(type(program) == 'function', '[neoperro] Loader could not compile.')
+    source = nil
+    local compiled = os.clock()
+    program(script_key)
+    local finished = os.clock()
+    print(string.format('[neoperro] Startup: download %.0f ms, loader compile %.0f ms, loader return %.0f ms.',
+        (fetched - started) * 1000, (compiled - fetched) * 1000, (finished - compiled) * 1000))
+end
