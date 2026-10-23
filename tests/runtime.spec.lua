@@ -25,6 +25,7 @@ function CF.new(x,y,z) return setmetatable({Position=type(x)=='table' and x or V
 function CF.lookAt(origin,target) local c=CF.new(origin); c.LookVector=(target-origin).Unit; return c end
 CM.__index={
     PointToObjectSpace=function(a,p)return p-a.Position end,
+    VectorToObjectSpace=function(a,p)return p end,
     PointToWorldSpace=function(a,p)return p+a.Position end,
     Lerp=function(a,b,t)return CF.lookAt(a.Position,(a.LookVector*(1-t)+b.LookVector*t)+a.Position)end,
 }
@@ -487,6 +488,133 @@ do
     closest.Raycast=false;step(.04)
     assert(rt.Points['Silent Aim']~=hit,'Leaving raycast clears its smoothing state')
     rt:Destroy('test');leg:Destroy();hb:Destroy();rayHit=nil;moveEnemy(0,0,-50)
+end
+
+-- Closest Point must find the nearest point on translated predicted geometry,
+-- rather than finding a current surface point and moving it away from the ray.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.AntiCurve.Enabled=false
+    s.Target.Closest.Raycast=false;s.Target.Closest.Selection='Point'
+    s.Target.Closest.Axis='All';s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
+    s.Prediction.Auto=false;s.Prediction.Value=.121
+    local savedWalk=enemyHum.WalkSpeed
+    for _,motion in ipairs({V.new(22,0,0),V.new(-14,6,14),V.new(0,-12,0),V.new(6,12,-14)})do
+        local horizontal=math.sqrt(motion.X*motion.X+motion.Z*motion.Z)
+        enemyHum.WalkSpeed=math.max(1,horizontal)
+        local shift=motion*.121
+        moveEnemy(-shift.X,-shift.Y,-50-shift.Z);enemyRoot.AssemblyLinearVelocity=motion
+        enemyHum.FloorMaterial=Enum.Material.Air
+        local rt=loadRuntime(cfg);step(.04)
+        local point=rt.Points['Silent Aim']
+        assert(point and math.abs(point.X)<1e-6 and math.abs(point.Y)<1e-6,
+            'XYZ prediction must select the surface of the predicted part under the cursor')
+        assert(rt.AimTrace['Silent Aim'].PointSource=='closest-point-predicted')
+        local base=rt.AimTrace['Silent Aim'].BasePoint
+        assert(math.abs(base.X-enemyTorso.Position.X)<=enemyTorso.Size.X/2+1e-8
+            and math.abs(base.Y-enemyTorso.Position.Y)<=enemyTorso.Size.Y/2+1e-8,
+            'The pre-lead point must remain inside actual part geometry')
+        rt:Destroy('test')
+    end
+    enemyHum.WalkSpeed=savedWalk;enemyHum.FloorMaterial=Enum.Material.Plastic
+    enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- Reusing a hitscan forecast must rebase support diagnostics to the final local
+-- point, including when the ground guard removes falling lead.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.AntiCurve.Enabled=false
+    s.Prediction.Auto=false;s.Prediction.Value=.121
+    s.Target.Closest.Raycast=false;s.Target.Closest.Selection='Point';s.Target.Closest.Axis='All'
+    s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
+    local savedSize=enemyTorso.Size;enemyTorso.Size=V.new(2,4,1)
+    moveEnemy(0,3,-50);groundY=0;enemyHum.FloorMaterial=Enum.Material.Air
+    enemyRoot.AssemblyLinearVelocity=V.new(0,-12,0)
+    local rt=loadRuntime(cfg);step(.02)
+    local point,evidence=rt.Points['Silent Aim'],rt.AimTrace['Silent Aim']
+    assert(point and point.Y==1 and evidence.GroundCorrected)
+    assert(evidence.GroundMinimumY==evidence.BasePoint.Y and evidence.PredictedPoint.Y==point.Y,
+        'Support trace must use the actual final selected point, not the provisional center')
+    rt:Destroy('test');enemyTorso.Size=savedSize;groundY=nil;enemyRoot.AssemblyLinearVelocity=V.new()
+    enemyHum.FloorMaterial=Enum.Material.Plastic;moveEnemy(0,0,-50);clearInput()
+end
+
+-- Expanded body tolerance does not resize the target and stops outside its margin.
+-- Rotated native parts and both timing modes keep predicted XYZ geometry coherent
+-- for every feature. Mouse follow is unavailable in this mock, so Assist cannot
+-- make this pass by moving the camera/cursor after selection.
+do
+    local savedSize,savedWalk,savedEnabled=enemyTorso.Size,enemyHum.WalkSpeed,tool.Enabled
+    local savedRaycast,groundQueries=World.Raycast,0
+    World.Raycast=function(self,origin,direction,params)
+        if params.RespectCanCollide then groundQueries=groundQueries+1 end
+        return savedRaycast(self,origin,direction,params)
+    end
+    enemyTorso.Size=V.new(2,4,1);tool.Enabled=false
+    local function frame(origin,right,up,look)
+        return {Position=origin,RightVector=right,UpVector=up,LookVector=look,
+            PointToObjectSpace=function(self,p)
+                local d=p-self.Position
+                return V.new(d:Dot(right),d:Dot(up),-d:Dot(look))
+            end,
+            VectorToObjectSpace=function(self,d)return V.new(d:Dot(right),d:Dot(up),-d:Dot(look))end,
+            PointToWorldSpace=function(self,p)return self.Position+right*p.X+up*p.Y-look*p.Z end}
+    end
+    local diagonal=math.sqrt(.5)
+    local bases={
+        {V.new(1,0,0),V.new(0,1,0),V.new(0,0,-1)},
+        {V.new(diagonal,0,diagonal),V.new(0,1,0),V.new(diagonal,0,-diagonal)},
+        {V.new(0,1,0),V.new(-1,0,0),V.new(0,0,-1)},
+    }
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        for _,auto in ipairs({false,true})do
+            for _,basis in ipairs(bases)do
+                local cfg=Core.copy(Defaults)
+                for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+                    cfg[name].Enabled=name==feature;cfg[name].Toggle.Enabled=false
+                    cfg[name].Activation.Holding=false
+                    cfg[name].Fov.Method='2d-Circle';cfg[name].Fov['2d-Circle'].Size=300
+                    cfg[name].Prediction.Auto=auto;cfg[name].Prediction.Value=.121
+                end
+                cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].AntiCurve.Enabled=false
+                cfg['Aim Assist'].Follow='Mouse';cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=true
+                local closest=(feature=='Aim Assist' and cfg['Aim Assist'] or cfg['Silent Aim']).Target.Closest
+                closest.Raycast=false;closest.Selection='Point';closest.Axis='All'
+                closest.Reduce.All=0;closest.Sharpness=1
+                local motion=V.new(14,6,-14);enemyHum.WalkSpeed=math.sqrt(14*14*2)
+                local horizon=auto and .18 or .121;local shift=motion*horizon
+                moveEnemy(-shift.X,-shift.Y,-50-shift.Z)
+                enemyTorso.CFrame=frame(enemyTorso.Position,basis[1],basis[2],basis[3])
+                enemyRoot.AssemblyLinearVelocity=motion;enemyHum.FloorMaterial=Enum.Material.Air
+                local rt=loadRuntime(cfg);rt.Network.RTT=.18;rt.Network.DataRTT=.18;rt.Network.NextSample=clock+10
+                groundQueries=0
+                step(.02)
+                local point=rt.Points[feature]
+                assert(point and math.abs(point.X)<1e-6 and math.abs(point.Y)<1e-6,
+                    'Predicted rotated geometry must meet the cursor for '..feature)
+                assert(groundQueries==1,'Closest prediction must use one support query per selection, not two')
+                local base=rt.AimTrace[feature].BasePoint
+                local localPoint=enemyTorso.CFrame:PointToObjectSpace(V.new(base.X,base.Y,base.Z))
+                assert(math.abs(localPoint.X)<=1+1e-7 and math.abs(localPoint.Y)<=2+1e-7 and math.abs(localPoint.Z)<=.5+1e-7)
+                -- Exact surfaces retain their original pre-lead point instead of
+                -- being silently replaced with the translated Closest Point.
+                closest=rt.Config[feature=='Aim Assist' and feature or 'Silent Aim'].Target.Closest
+                closest.Raycast=true;closest.Reduce.All=1;closest.Sharpness=.01
+                local surface=enemyTorso.Position+V.new(.1,.2,.1)
+                rayHit={Instance=enemyTorso,Position=surface};step(.02)
+                local evidence=rt.AimTrace[feature]
+                assert(evidence.PointSource=='cursor-surface' and evidence.BasePoint.X==surface.X
+                    and evidence.BasePoint.Y==surface.Y and evidence.BasePoint.Z==surface.Z,
+                    'Raycast keeps exact pre-prediction surface semantics for '..feature)
+                rt:Destroy('test');rayHit=nil
+            end
+        end
+    end
+    enemyTorso.Size=savedSize;enemyHum.WalkSpeed=savedWalk;tool.Enabled=savedEnabled
+    World.Raycast=savedRaycast
+    enemyRoot.AssemblyLinearVelocity=V.new();enemyHum.FloorMaterial=Enum.Material.Plastic
+    moveEnemy(0,0,-50);clearInput()
 end
 
 -- Expanded body tolerance does not resize the target and stops outside its margin.
@@ -1279,6 +1407,26 @@ do
         rt:Destroy('test');clearInput()
     end
     enemyRoot.AssemblyLinearVelocity=V.new();ammo.Value=savedAmmo;camera.CFrame=CF.new(0,0,0)
+end
+
+-- Assignment grows beyond four; display-name text follows the live Humanoid tag.
+do
+    local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)
+    enemyRoot.AssemblyLinearVelocity=V.new(10,0,0)
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
+    cfg.Triggerbot.Fov.Enabled=true;cfg.Triggerbot.Activation.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Prediction.Auto=false;cfg['Silent Aim'].Prediction.Value=.1
+    cfg.Triggerbot.Prediction.Auto=false;cfg.Triggerbot.Prediction.Value=.3
+    local rt=loadRuntime(cfg);step(.02)
+    assert(rt.FiringSource=='Triggerbot' and rt.LastShotRoute.AimFeature=='Silent Aim')
+    local attempts=rt.Stats.TriggerAttempts
+    step(.02)
+    assert(rt.Points.Triggerbot~=rt.Points['Silent Aim'],'Fixture requires distinct prediction settings')
+    assert(rt.MouseOwned and rt.Stats.TriggerAttempts==attempts and rt.ForcedPoint==rt.Points['Silent Aim'],
+        'Held TB input must keep the same eligible Silent route between activations')
+    rt.Config['Silent Aim'].Enabled=false;step(.02)
+    assert(rt.ForcedPoint==rt.Points.Triggerbot,'A held cycle falls back when Silent becomes ineligible')
+    rt:Destroy('test');clearInput();ammo.Value=savedAmmo;enemyRoot.AssemblyLinearVelocity=V.new()
 end
 
 -- Assignment grows beyond four; display-name text follows the live Humanoid tag.

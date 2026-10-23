@@ -1,4 +1,4 @@
-# Continue from 1.3.14
+# Continue from 1.3.15
 
 Use repair/neoperro-evidence and repository-root sources. Main and historical
 snapshot/ZIP are older. Preserve local edits and the accepted table. Current user
@@ -44,14 +44,16 @@ user's private config. Preserve their key/table and replace only the bottom load
 
 ## Release and remaining work
 
-Protected release files live outside Git under releases/neoperro-1.3.14. Upload
+Protected release files live outside Git under releases/neoperro-1.3.15. Upload
 neoperro-flowauth-upload.obfuscated.lua into the existing FlowAuth script, publish,
 require keys and enable Auto-obfuscate with keyless disabled. The loader-only file
 upgrades the user's private starter without replacing their key/table. Never
 request, print, save or publish their real key or executor credentials.
 
-The user requested a further 20-minute offline review of Silent prediction and
-3D targeting after this release; record that review and any later version here.
+The follow-up prediction/3D review is recorded in PREDICTION-REVIEW-2026-10-24.md.
+1.3.15 adds predicted-part Closest Point, evidence-gated acute-turn/braking response,
+direct direction transforms and consistent held-trigger shot routing. Table values
+are unchanged. All regressions and four static artifacts pass; no live injection.
 When live testing is newly authorized, inspect current diagnostics/console first.
 Do not infer shots from sends alone: distinguish target eligibility, selected
 part, raw/sampled velocity, final point, muzzle, MOUSE payload, ammo/activation and

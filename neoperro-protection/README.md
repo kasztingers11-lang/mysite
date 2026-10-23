@@ -8,7 +8,7 @@ upstream checkout. This project does not vendor the obfuscator.
 
 Rebuild the runtime with `build-neoperro.py`, then run `build-protected.py` with
 `--prometheus` pointing to that checkout. Python requires Lupa's Lua 5.1 backend.
-Outputs default to the sibling `releases/neoperro-1.3.14/` directory, outside Git.
+Outputs default to the sibling `releases/neoperro-1.3.15/` directory, outside Git.
 
 - `neoperro-flowauth-upload.obfuscated.lua`: upload this runtime to your FlowAuth script.
 - `neoperro-flowauth.lua`: editable placeholder key, full table, and your public loader.
@@ -62,12 +62,14 @@ The starter reports download, loader-compile and loader-return timings. Asynchro
 provider initialization may continue after loader return; that number is not a
 complete provider startup measurement.
 
-## Validation for 1.3.14
+## Validation for 1.3.15
 
 Core/runtime/protected regressions pass. Coverage includes off-center camera/cursor
 alignment, all eight Silent/Assist/Triggerbot combinations, FOV-off character tests,
 50 repeated table updates, unlimited IDs/assignments, posture transitions and ESP
-tags. The protected suite uses synthetic grants and hashing, not FlowAuth auth.
+tags. Added tests cover predicted XYZ Closest Point, 18 rotated-part/manual/Auto
+feature cases and 18 exact Raycast cases, observed acute turns/braking, one support
+query per selection and held-trigger routing. The protected suite uses synthetic grants and hashing, not FlowAuth auth.
 Full, runtime, readable starter and protected upload pass REAL static analysis with
 zero errors/warnings. The final collision fix has not been injected/live tested,
 following the user's instruction to work offline. Provider publication remains

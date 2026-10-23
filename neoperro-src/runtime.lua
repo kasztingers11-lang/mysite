@@ -32,7 +32,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.14', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.15', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
@@ -405,12 +405,15 @@ local function firingVisible(point, character, feature, excludeTarget)
     return visible(point, character, feature == 'Aim Assist' and camera.CFrame.Position or muzzle(), excludeTarget)
 end
 
-local function closestLocal(part, closest)
+local function closestLocal(part, closest, lead)
     local reduction = Core.number(closest.Reduce[closest.Axis == 'All' and 'All' or 'Center'], 0.7, 0, 1)
     local half = part.Size * (0.5 * (1 - reduction))
     if closest.Axis ~= 'All' then half = Vector3.new(0, half.Y, 0) end
-    local origin = part.CFrame:PointToObjectSpace(cursorRay.Origin)
-    local direction = part.CFrame:PointToObjectSpace(cursorRay.Origin + cursorRay.Direction) - origin
+    -- A predicted part is translated in world XYZ. Move the ray back by that
+    -- translation before entering the actual rotated part's local frame.
+    local worldOrigin = cursorRay.Origin - (lead or zero)
+    local origin = part.CFrame:PointToObjectSpace(worldOrigin)
+    local direction = part.CFrame:VectorToObjectSpace(cursorRay.Direction)
     return Core.closestRayBox(origin, direction, half, Vector3.new), half
 end
 
@@ -687,6 +690,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
     if not valid(record, feature, part, true) then return reject('eligibility') end
     samplePosture(record, now())
     local point = hitPoint or part.Position
+    local lead
     local exact = closest.Enabled and closest.Raycast and state.CursorHit
     if hitPart then
         -- Triggerbot without FOV uses the actual unobstructed cursor surface.
@@ -699,8 +703,9 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         evidence.PointSource, evidence.SurfacePart = 'cursor-surface', exact.Instance.Name
         if record.pointState then record.pointState[feature] = nil end
     elseif closest.Enabled and closest.Selection == 'Point' then
-        evidence.PointSource = 'closest-point'
-        local localPoint, half = closestLocal(part, closest)
+        lead = leadOffset(record, feature, part, part.Position, evidence)
+        evidence.PointSource = lead.Magnitude > 1e-8 and 'closest-point-predicted' or 'closest-point'
+        local localPoint, half = closestLocal(part, closest, lead)
         record.pointState = record.pointState or {}
         local last = record.pointState[feature]
         if last and last.part.Parent == record.character and last.axis == closest.Axis and now() - last.time <= 0.2 then
@@ -716,7 +721,14 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart)
         if record.pointState then record.pointState[feature] = nil end
     end
     local basePoint = point
-    local lead = leadOffset(record, feature, part, point, evidence)
+    if lead then
+        -- Verified weapons are hitscan: timing and motion do not depend on the
+        -- local point inside this part. Ground minimum preserves its rig offset.
+        -- Rebase evidence instead of repeating the same support ray.
+        local minimum = rawget(evidence, 'GroundMinimumY')
+        if type(minimum) == 'number' then evidence.GroundMinimumY = minimum + point.Y - part.Position.Y end
+        evidence.BasePoint, evidence.PredictedPoint = vectorData(point), vectorData(point + lead)
+    else lead = leadOffset(record, feature, part, point, evidence) end
     local rawMousePoint = mouse.Hit.Position
     evidence.RawMousePoint = vectorData(rawMousePoint)
     point = point + lead
@@ -1071,14 +1083,7 @@ releaseShotInput = function(preserveShot)
     state.AutomatedTool = nil
 end
 
-local function fire(source, record, point)
-    if state.ShotRelease or state.AutomatedTool then return false end
-    if not equipped or not equipped.Enabled or macro or typing() or now() < state.NextFire then return false end
-    if Input:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and not state.MouseOwned then return false end
-    if not localHumanoid or localHumanoid.Health <= 0 or isKnocked(localCharacter) then return false end
-    local ammo = ammoCount(equipped)
-    if type(ammo) == 'number' and ammo <= 0 then return false end
-    local time, tool = now(), equipped
+local function routedShotPoint(source, record, point)
     local aimFeature, aimRecord = source, record
     if source == 'Triggerbot' and enabled('Silent Aim') and state.Points['Silent Aim'] then
         local selected = state.Targets['Silent Aim']
@@ -1087,6 +1092,19 @@ local function fire(source, record, point)
             point, aimFeature, aimRecord = state.Points['Silent Aim'], 'Silent Aim', selectedRecord
         end
     end
+    return point, aimFeature, aimRecord
+end
+
+local function fire(source, record, point)
+    if state.ShotRelease or state.AutomatedTool then return false end
+    if not equipped or not equipped.Enabled or macro or typing() or now() < state.NextFire then return false end
+    if Input:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and not state.MouseOwned then return false end
+    if not localHumanoid or localHumanoid.Health <= 0 or isKnocked(localCharacter) then return false end
+    local ammo = ammoCount(equipped)
+    if type(ammo) == 'number' and ammo <= 0 then return false end
+    local time, tool = now(), equipped
+    local aimFeature, aimRecord
+    point, aimFeature, aimRecord = routedShotPoint(source, record, point)
     state.LastShotRoute = {Source=source, AimFeature=aimFeature, TriggerTarget=record.player.UserId,
         AimTarget=aimRecord.player.UserId, Point=vectorData(point), Time=time}
     traceEvent('shot-routing', state.LastShotRoute)
@@ -1273,7 +1291,7 @@ local function scaledCursorTarget(hit, onlyRecord, ray)
                 -- only visible limbs left 1.3 no larger than its native hitbox.
                 if nativeBodyPart(part, record.character) then
                     local origin = part.CFrame:PointToObjectSpace(ray.Origin)
-                    local direction = part.CFrame:PointToObjectSpace(ray.Origin + ray.Direction) - origin
+                    local direction = part.CFrame:VectorToObjectSpace(ray.Direction)
                     local entry = Core.rayBox(origin, direction, part.Size * (scale * 0.5))
                     if entry and entry < distance then
                         local p = origin + direction * entry
@@ -1336,7 +1354,9 @@ local function automaticFire(time)
     state.Points.Triggerbot = point
     -- Looten presses immediately, holds for Delay, then releases. Never overlap cycles.
     if state.FiringSource == 'Triggerbot' and (not record or record ~= state.FiringRecord or equipped ~= state.FiringTool) then releaseShotInput() end
-    if record and state.FiringRecord == record and state.FiringSource == 'Triggerbot' then state.ForcedPoint = point end
+    if record and state.FiringRecord == record and state.FiringSource == 'Triggerbot' then
+        state.ForcedPoint = routedShotPoint('Triggerbot', record, point)
+    end
     if record then state.TriggerRandom = random:NextNumber(); fire('Triggerbot', record, point) end
     if pendingPrefire then
         local shot = pendingPrefire

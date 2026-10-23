@@ -1,6 +1,6 @@
 # neoperro - current repair handoff
 
-Current runtime: **1.3.14**, branch **repair/neoperro-evidence**. Main is older.
+Current runtime: **1.3.15**, branch **repair/neoperro-evidence**. Main is older.
 Use the repository-root `neoperro.lua` (editable table plus repair-branch loader)
 or `neoperro-full.lua` (full bundle). Preserve local edits before switching branches.
 
@@ -42,3 +42,5 @@ game tags. Regression/static checks pass. **Do not inject or change the live gam
 the user explicitly requested offline work.** The final collision fix is not live
 verified. An earlier test mistakenly loaded default controls; document that error
 and never restore a presumed user table from a generic starter.
+
+Latest follow-up: [prediction and 3D review](docs/PREDICTION-REVIEW-2026-10-24.md). Final 1.3.15 remains offline-tested only.

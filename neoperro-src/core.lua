@@ -403,9 +403,27 @@ function Core.resolveVelocity(history, raw, fitted, newVector)
         or (raw.X * raw.X + raw.Z * raw.Z < 1 and fitted.X * fitted.X + fitted.Z * fitted.Z > 9)
     local verticalTransition = raw.Y * fitted.Y <= 0 and raw.Y ~= fitted.Y
         or (math.abs(raw.Y) < 1 and math.abs(fitted.Y) > 3)
+    local tail = history[#history - 1]
+    local recent = tail and last.t - tail.t >= 1 / 90 and (last.p - tail.p) / (last.t - tail.t)
+    local recentXZ, recentY = false, false
+    if Core.finiteVector(recent) and recent.Magnitude <= 180 then
+        local rawDX, rawDZ = recent.X - raw.X, recent.Z - raw.Z
+        local fitDX, fitDZ = recent.X - fitted.X, recent.Z - fitted.Z
+        recentXZ = rawDX * rawDX + rawDZ * rawDZ < fitDX * fitDX + fitDZ * fitDZ
+        recentY = math.abs(recent.Y - raw.Y) < math.abs(recent.Y - fitted.Y)
+    end
+    local horizontalTolerance = math.max(3, math.sqrt(raw.X * raw.X + raw.Z * raw.Z) * 0.25)
+    local verticalTolerance = math.max(3, math.abs(raw.Y) * 0.25)
     local rawXZ, fitXZ, rawY, fitY, count = 0, 0, 0, 0, 0
     for _, sample in ipairs(history) do
         local dt = last.t - sample.t
+        -- A short observed segment can establish an acute turn or braking before
+        -- the full fit catches up. A changed raw value alone is not that evidence.
+        if dt >= 0 and dt <= 0.05 and Core.finiteVector(sample.raw) then
+            local dx, dz = raw.X - sample.raw.X, raw.Z - sample.raw.Z
+            if recentXZ and dx * dx + dz * dz > horizontalTolerance * horizontalTolerance then horizontalTransition = true end
+            if recentY and math.abs(raw.Y - sample.raw.Y) > verticalTolerance then verticalTransition = true end
+        end
         if dt >= 0.035 and sample.raw and sample.fitted then
             local a = last.p - (sample.p + sample.raw * dt)
             local b = last.p - (sample.p + sample.fitted * dt)

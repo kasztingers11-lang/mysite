@@ -1,4 +1,4 @@
-# neoperro 1.3.14 settings and development
+# neoperro 1.3.15 settings and development
 
 Edit the table in neoperro.lua, then execute the entire file. The loader at its
 bottom fetches this repair branch. neoperro-full.lua is the equivalent bundle
@@ -31,7 +31,7 @@ text entry and the Roblox menu suppress automation and release owned input.
 Camera Assist aligns the actual cursor ray, including off-center cursors, before
 Silent and Triggerbot perform frame selection. Triggerbot keeps ownership of its
 click and its independent eligibility checks; an eligible active Silent point can
-supply the shot coordinates. Without one, Triggerbot uses its own accepted point.
+supply the shot coordinates. Without one, Triggerbot uses its own accepted point. The same routing rule applies throughout its owned hold.
 Diagnose().LastShotRoute separates click source, aim feature and selected players.
 
 Silent Aim and Aim Assist use Activation. In Auto, Holding=true requires that
@@ -46,9 +46,9 @@ Legacy Keybind Mode and Work With TB names migrate when the new names are absent
 | Section | Behavior |
 | --- | --- |
 | Prediction | Separate Enabled, Auto and Value in all three features. Active target/weapon/ping estimates refresh every 0.5 seconds, immediately on target/weapon changes; velocity response stays fast. Auto ignores Value and uses the larger overlapping RTT estimate, not their sum. Manual Value remains its baseline. Bounded horizontal speed response is always on; no Dynamic switch. |
-| Resolver | The global Resolver exposes Enabled only for all three prediction features. TrueVelocity compares coherent sampled XYZ displacement with a persistent replicated-velocity mismatch. It requires at least four samples, 50 ms of evidence, stable reported components and a recent slope consistent with the fit. New direction changes remain immediate. Short/noisy/teleported histories fall back to the existing adaptive estimate. Disabled uses bounded raw velocity. No universal anti-aim guarantee. |
+| Resolver | The global Resolver exposes Enabled only for all three prediction features. TrueVelocity compares coherent sampled XYZ displacement with a persistent replicated-velocity mismatch. It requires at least four samples, 50 ms of evidence, stable reported components and a recent slope consistent with the fit. A fresh observed segment can confirm acute turns or same-sign braking before the full fit catches up. A changed raw value alone does not establish that motion. Reversals/jump onset retain existing transition behavior. Short/noisy/teleported histories fall back to the existing adaptive estimate. Disabled uses bounded raw velocity. No universal anti-aim guarantee. |
 | Movement | Every prediction path bounds fast horizontal lead. Turn shortening requires recent forecast evidence; it does not add sideways acceleration. Stable measured vertical slopes can compensate jump acceleration. Internal crouch/prone/emote sampling uses rig geometry and game animation IDs; rotated parts use actual world height. Pose changes reset smoothing and active estimates. No projectile speed is invented for hitscan. |
-| Closest | Part compares part centers. Point compares allowed part geometry against the forward cursor ray. Center permits local Y; All permits XYZ. Reduce=0 permits edges; 1 collapses to center. Sharpness is frame-time aware and clamped within the selected part. |
+| Closest | Part compares part centers. Point compares allowed part geometry against the forward cursor ray. Center permits local Y; All permits XYZ. Reduce=0 permits edges; 1 collapses to center. Point selection evaluates the chosen part after its predicted XYZ translation; exact Raycast semantics stay separate. Sharpness is frame-time aware and clamped within the selected part. |
 | Closest.Raycast | A real character/accessory surface under the cursor bypasses Reduce and Sharpness before prediction. Otherwise Part/Point behavior applies. Tool surfaces are excluded. |
 | Y-Axis | Shared Enabled plus SilentAim, Aim Assist and Triggerbot switches. Method=Auto ignores Offset and uses measured vertical motion/support. Custom scales positive vertical lead with Offset. Basic XYZ prediction remains when this extra adjustment is off. Checks.GroundShotCheck has independent Silent/Assist/TB columns. |
 | AntiCurve | Evaluates the final predicted point against camera and native muzzle-to-Mouse.Hit corridors. 3d-angles Max remains studs (2.2 default); Endmath Radius remains pixels (120). It rejects rather than clamps. Max/Radius accept 0.000000001 and larger numbers, including math.huge for unlimited distance/radius. Invalid forward geometry and muzzle obstruction still reject eligible firing paths. |
@@ -75,7 +75,7 @@ Earlier airborne shots had mixed damage results. Full and runtime bundles now pa
 
 No FPS or hit-rate guarantee is made. The separate FlowAuth upload includes a
 provider-grant gate and payload integrity check; it cannot prevent a client owner
-from reversing the code. No webhook logging is included. Final 1.3.14 collision
+from reversing the code. No webhook logging is included. Final 1.3.15 collision
 and posture behavior passes mocks/static analysis but has not been tested live.
 
 ## Source hierarchy and validation

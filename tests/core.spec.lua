@@ -260,6 +260,27 @@ do
     near(resolved.X,22);assert(source=='history-validated','History wins when its earlier forecasts actually fit arriving positions better')
 end
 near(Core.autoY(0,.128,1.6,false),0) -- Live Air + zero vertical motion must not invent -1.6 studs.
+-- A fresh acute turn or same-sign vertical slowdown is still a transition.
+-- Old, otherwise well-validated history cannot describe motion that just began.
+do
+    local h={}
+    for i=0,7 do
+        local raw=V.new(11,20,0)
+        Core.sample(h,V.new(22*i*.02,40*i*.02,0),i*.02,raw)
+        Core.resolveVelocity(h,raw,Core.velocity(h,raw,zero),V.new)
+    end
+    local fit=Core.velocity(h,V.new(11,20,0),zero)
+    local stable=Core.resolveVelocity(h,V.new(11,20,0),fit,V.new)
+    near(stable.X,22);near(stable.Y,40)
+    local unobserved=Core.resolveVelocity(h,V.new(11,10,11),fit,V.new)
+    near(unobserved.X,22);near(unobserved.Y,40);near(unobserved.Z,0)
+    local fresh=V.new(11,10,11)
+    Core.sample(h,h[#h].p+fresh*.02,.16,fresh)
+    fit=Core.velocity(h,fresh,zero)
+    local changed,source=Core.resolveVelocity(h,fresh,fit,V.new)
+    near(changed.X,11);near(changed.Y,10);near(changed.Z,11)
+    assert(source=='raw-transition','Fresh diagonal turn and vertical slowdown must not keep old fitted lead')
+end
 do
     local h={}
     for i=0,7 do

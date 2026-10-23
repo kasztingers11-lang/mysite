@@ -1,4 +1,4 @@
-# neoperro 1.3.14 - testing build
+# neoperro 1.3.15 - testing build
 
 FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
 [build, upload and validation instructions](neoperro-protection/README.md).
@@ -6,7 +6,14 @@ Only the runtime upload is obfuscated; the table remains readable. Generated
 upload files stay outside this public repository. Public development source and
 its history remain available; obfuscation cannot revoke those copies.
 
-This update fixes a cursor/camera mismatch between Assist and Silent/Triggerbot:
+The follow-up prediction/3D review fixes Closest Point on translated predicted
+geometry, preserves fresh observed diagonal turns/braking, and keeps eligible
+Silent routing during a held Triggerbot cycle. Direct vector transforms avoid
+translation in ray directions. Manual/Auto rotated-part and exact-surface cases
+pass for all three features, with one support query per selection. Table values
+and names are unchanged. See the [review](neoperro-handoff/docs/PREDICTION-REVIEW-2026-10-24.md).
+
+The preceding update fixes a cursor/camera mismatch between Assist and Silent/Triggerbot:
 Assist now aligns the actual cursor ray before the other features check it.
 Eligible Silent coordinates can supply a Triggerbot-owned shot without changing
 Triggerbot's activation or selection rules. All eight enabled/disabled feature
@@ -76,7 +83,7 @@ with python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua.
 The historical handoff snapshot/ZIP remains 1.2.0. Preserve local edits.
 No executor credentials belong in the repository.
 
-1.3.14 validation: Core/runtime/protected regression suites pass. Full, runtime,
+1.3.15 validation: Core/runtime/protected regression suites pass. Full, runtime,
 readable starter and protected upload pass REAL static analysis with zero errors
 or warnings. Static analysis does not execute Roblox or authenticate FlowAuth.
 Earlier startup/config-update measurements are recorded separately in the session

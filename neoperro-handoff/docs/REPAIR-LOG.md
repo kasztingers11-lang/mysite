@@ -1,3 +1,18 @@
+# 1.3.15 prediction and 3D follow-up - 2026-10-24
+
+Fixed Closest Point against translated predicted geometry, evidence-gated acute
+turns and same-sign braking, and held Triggerbot/Silent routing. Use direct vector
+transforms for local ray directions. Reuse hitscan forecasts with one support query
+and rebase trace data to the actual selected point. No table values/names changed.
+
+New regressions reproduced failures in the previous implementation and pass now.
+All-feature manual/Auto rotated-part and exact-surface cases pass, as do Core,
+runtime and protected suites. Four REAL static artifacts are clean. No final live
+injection or provider authentication occurred. Details and limitations are in
+PREDICTION-REVIEW-2026-10-24.md. Final upload/starter are under releases/neoperro-1.3.15.
+
+---
+
 # 1.3.14 offline collision repair and session updates - 2026-10-24
 
 Assist previously pointed the camera center at the target while Silent/TB tested
