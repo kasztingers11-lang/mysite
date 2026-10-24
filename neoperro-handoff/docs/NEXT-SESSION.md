@@ -1,3 +1,25 @@
+# Work in progress: v1.3.22 input, shot routing and prediction
+
+The owner requested Silent/prediction and native-click TB cooperation first,
+then keys/config updates, moving the global macro lead cap into AntiCurve,
+less restrictive ground behavior, body-aware uncertainty and TrueVelocity repair.
+
+First checkpoint: reproduced the delayed native Tool.Activated failure on the
+v1.3.21 runtime in a mock. Its earlier aim restore can precede native activation;
+TB did not send the redirected point again. Activation now resolves and sends a
+fresh TB/Silent route. Both TB selection modes pass the delayed-click fixture.
+New key tests cover duplicate begins, processed holds, shared mouse controls,
+case-insensitive multi-character keys and changed toggle modes. A 4 Hz config
+watcher applies replacement/nested public-table edits atomically, rejects bad
+updates without replacing the runtime, and preserves unrelated activation latches.
+
+Core/runtime suites pass. Prediction/geometry/resolver work is still in progress;
+this checkpoint is not the final FlowAuth upload. Production remains v1.3.21.
+REAL is not exposed in the current tool inventory despite the owner's reconnection
+message. No new game execution or native hit result is claimed.
+
+---
+
 # Current continuation: v1.3.21
 
 Read BOX-PERSPECTIVE-WHITELIST-2026-10-24.md first. The user's screenshot clarified

@@ -1,3 +1,12 @@
+# neoperro v1.3.22 - repair in progress
+
+Current checkpoint repairs delayed native TB/Silent activation, input edges and
+same-session configuration updates. Shared prediction, resolver and AntiCurve
+changes are still in progress; use the published v1.3.21 provider build until the
+new protected upload is complete. Core/runtime mocks pass; no new live result.
+
+---
+
 # neoperro 1.3.21 - testing build
 
 Boxes now keep the same proportions around near and far characters. Width/Height

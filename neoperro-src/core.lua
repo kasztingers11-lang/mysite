@@ -234,10 +234,16 @@ function Core.closestRayBox(origin, direction, half, newVector)
         Core.number(p.Z, 0, -half.Z, half.Z)), bestT
 end
 
+function Core.bindingToken(value)
+    return tostring(value or ''):gsub('^Enum%.[^.]+%.', ''):gsub('^%s+', ''):gsub('%s+$', ''):lower()
+end
+
 function Core.input(binding, key, mouse)
     if type(binding) ~= 'table' then return false end
-    if binding[3] == 'Mouse' then return mouse == binding[2] end
-    return type(binding[1]) == 'string' and string.lower(key or '') == string.lower(binding[1])
+    if Core.bindingToken(binding[3]) == 'mouse' then
+        return Core.bindingToken(mouse) == Core.bindingToken(binding[2])
+    end
+    return Core.bindingToken(key) == Core.bindingToken(binding[1])
 end
 
 function Core.delay(config, distance, random)

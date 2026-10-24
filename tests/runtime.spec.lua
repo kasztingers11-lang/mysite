@@ -101,6 +101,12 @@ function methods:Destroy()self.Destroyed=true;self.Parent=nil;for _,c in ipairs(
 
 local Enum=setmetatable({}, {__index=function(t,category)
     local e=setmetatable({}, {__index=function(e,key)local item={Name=key,Value=category=='RenderPriority' and 200 or 0};rawset(e,key,item);return item end})
+    e.GetEnumItems=function()
+        local items={}
+        local names=category=='UserInputType' and {'Keyboard','MouseButton1','MouseButton2','MouseButton3'} or {'P','M','V','Q','T','E','R','C','LeftShift','LeftControl','Space','F1'}
+        for _,name in ipairs(names)do items[#items+1]=e[name] end
+        return items
+    end
     rawset(t,category,e);return e
 end})
 local services={}
@@ -441,6 +447,37 @@ do
     assert(packets[#packets][3]==rt.Points['Silent Aim'],'Disabled setting retains continuous redirection mode')
     tool.Activated:Fire();assert(rt.Stats.AimRestores==count)
     rt:Destroy('test')
+end
+
+-- A native press can return before Tool.Activated. An earlier deferred restore
+-- must not erase the routed shot before the weapon actually activates.
+do
+    local originalDefer,originalPress,oldHit=env.task.defer,env.mouse1press,mouse.Hit
+    local savedAmmo=ammo.Value;ammo.Value=100
+    for _,shaped in ipairs({false,true})do
+        local deferred={};env.task.defer=function(f)deferred[#deferred+1]=f end
+        env.mouse1press=function()Input.keys.MouseButton1=true end
+        mouse.Hit=CF.new(25,2,-50);moveEnemy(0,0,-50)
+        local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
+        cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Prediction.Enabled=false
+        cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=shaped
+        rayHit={Instance=enemyTorso,Position=enemyTorso.Position}
+        local rt=loadRuntime(cfg);step(.04)
+        assert(rt.MouseOwned and rt.Stats.Activations==0,'Fixture defers native weapon activation')
+        for _,f in ipairs(deferred)do f()end;deferred={}
+        assert(packets[#packets][3]==mouse.Hit.Position,'The pre-activation restore has already run')
+        moveEnemy(.25,0,-50);rayHit.Position=enemyTorso.Position
+        local before=rt.Stats.AimPackets;tool.Activated:Fire()
+        assert(rt.Stats.AimPackets==before+1 and rt.LastSend.Point.X==rt.Points['Silent Aim'].X,
+            'Native TB activation must freshly submit the eligible Silent redirection')
+        assert(packets[#packets][3]==rt.Points['Silent Aim'] and rt.LastShot.serverPoint==rt.Points['Silent Aim'])
+        assert(rt.LastShotRoute.AtActivation and rt.LastShotRoute.AimFeature=='Silent Aim')
+        for _,f in ipairs(deferred)do f()end
+        assert(packets[#packets][3]==mouse.Hit.Position,'Restoration follows the actual shot submission')
+        rt:Destroy('test');clearInput()
+    end
+    env.task.defer,env.mouse1press,mouse.Hit=originalDefer,originalPress,oldHit
+    rayHit=nil;ammo.Value=savedAmmo;moveEnemy(0,0,-50)
 end
 
 -- Point selection evaluates allowed part geometry; exact native HB hits bypass smoothing.
@@ -1067,6 +1104,62 @@ do
     rt:Destroy('test')
     assert(not pcall(function()rt:ApplyConfig(cfg)end),'A stopped runtime cannot accept a config update')
     clearInput()
+end
+
+-- An empty assignment list allows all three features; assignment and clearing take effect live.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg['Silent Aim'].Toggle.Keybind={'LeftShift','MouseButton2','Keyboard'}
+    local rt=loadRuntime(cfg)
+    key('LeftShift',true);key('LeftShift',true)
+    assert(not rt.Toggles['Silent Aim'],'Repeated begins cannot toggle twice without a release')
+    cfg['Silent Aim'].Toggle.Holding=true;cfg['Silent Aim'].Toggle.Keybind={' leftshift ','MouseButton2','keyboard'}
+    rt:ApplyConfig(cfg);step(.04)
+    assert(rt.Targets['Silent Aim']==enemy,'Changing toggle mode/binding cannot inherit a stale off latch')
+    key('LeftShift',false);step(.04);assert(not rt.Targets['Silent Aim'])
+    key('LeftShift',true,true);step(.04);assert(not rt.Targets['Silent Aim'],'Physical polling cannot bypass processed input')
+    key('LeftShift',false);key('LeftShift',true);step(.04);assert(rt.Targets['Silent Aim']==enemy)
+    key('LeftShift',false)
+    cfg['Silent Aim'].Toggle.Holding=false;cfg['Aim Assist'].Enabled=true;cfg['Aim Assist'].Activation.Holding=false
+    for _,name in ipairs({'Silent Aim','Aim Assist'})do cfg[name].Toggle.Keybind={'p','mousebutton2','mouse'} end
+    rt:ApplyConfig(cfg);key('MouseButton2',true);key('MouseButton2',true);step(.04)
+    assert(not rt.Toggles['Silent Aim'] and not rt.Toggles['Aim Assist'],'Shared mouse toggles dispatch once independently')
+    key('MouseButton2',false);key('MouseButton2',true);step(.04)
+    assert(rt.Targets['Silent Aim'] and rt.Targets['Aim Assist'])
+    rt:Destroy('test');clearInput()
+end
+
+-- Replacing or editing the public table updates the current session. A rejected
+-- table leaves runtime/input ownership untouched and can be corrected in place.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false
+    local rt=loadRuntime(cfg);step(.04)
+    local count,render=activeConnections(),renderCount()
+    local history=rt.Records[enemy].history
+    env.neoperro=Core.copy(cfg);env.neoperro['2d-Box']['Silent Aim'].Size.Width=9
+    step(.26)
+    assert(rt.Config['2d-Box']['Silent Aim'].Size.Width==9 and rt.ConfigUpdates==1,'A new table applies without rejoining or reloading')
+    env.neoperro['Silent Aim'].Prediction.Value=.18;step(.26)
+    assert(rt.Config['Silent Aim'].Prediction.Value==.18 and rt.ConfigUpdates==2,'Nested edits are detected too')
+    local previous=rt.Config
+    env.neoperro['Aim Assist'].Smoothness='invalid';step(.26)
+    assert(rt.Config==previous and rt.Alive and rt.LastConfigError and rt.ConfigUpdates==2)
+    step(.26);assert(rt.ConfigUpdates==2,'The same rejected table cannot repeatedly reset the runtime')
+    env.neoperro['Aim Assist'].Smoothness=.05;step(.26)
+    assert(rt.ConfigUpdates==3 and not rt.LastConfigError)
+    assert(activeConnections()==count and renderCount()==render and rt.Records[enemy].history==history,'Updates do not stack resources or discard history')
+    rt:Destroy('test');clearInput()
+end
+
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Activation.Holding=false
+    local rt=loadRuntime(cfg);key('MouseButton2',true);key('MouseButton2',false)
+    assert(rt.Held['activation:Triggerbot'])
+    cfg.Triggerbot.Delay=.15;rt:ApplyConfig(cfg)
+    assert(rt.Held['activation:Triggerbot'],'Unrelated table edits preserve the activation latch')
+    cfg.Triggerbot.Activation.Keybind={'F1','MouseButton3','Keyboard'};rt:ApplyConfig(cfg)
+    assert(not rt.Held['activation:Triggerbot'],'Rebinding resets the old activation latch')
+    rt:Destroy('test');clearInput()
 end
 
 -- An empty assignment list allows all three features; assignment and clearing take effect live.
