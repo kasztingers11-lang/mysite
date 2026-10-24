@@ -3,8 +3,10 @@
 See BOX-PERF-TB-REVIEW-2026-10-24.md for the live v1.3.19 capture and offline fixes.
 The user now authorizes REAL inspection. Current client stopped responding;
 do not send it more work until rejoin/re-injection. No live runtime reload occurred.
-v1.3.20 source/protected tests pass; provider upload and new live tests are pending.
-The website remains on v1.3.19 until the owner publishes v1.3.20 to FlowAuth.
+v1.3.20 source/protected tests pass. Owner confirmed publication to FlowAuth.
+Website PR #4 is merged and production serves the exact v1.3.20 bridge (HTTP 200,
+text/plain, no-store). New live runtime/FPS/TB checks remain pending; provider
+authorization was not independently tested after the owner's publication.
 Older instructions/publication notes below are historical, superseded here.
 
 ---
