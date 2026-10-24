@@ -8,7 +8,7 @@ upstream checkout. This project does not vendor the obfuscator.
 
 Rebuild the runtime with `build-neoperro.py`, then run `build-protected.py` with
 `--prometheus` pointing to that checkout. Python requires Lupa's Lua 5.1 backend.
-Outputs default to the sibling `releases/neoperro-1.3.20/` directory, outside Git.
+Outputs default to the sibling `releases/neoperro-1.3.21/` directory, outside Git.
 
 - `neoperro-flowauth-upload.obfuscated.lua`: upload this runtime to your FlowAuth script.
 - `neoperro-flowauth.lua`: editable placeholder key, full table, and your public loader.
@@ -62,25 +62,22 @@ The starter reports download, loader-compile and loader-return timings. Asynchro
 provider initialization may continue after loader return; that number is not a
 complete provider startup measurement.
 
-## Validation for 1.3.18
+## Validation for 1.3.21
 
-Core/runtime and the complete protected-runtime mock suites pass. New checks cover
-Silent current/predicted FOV, native exact surfaces, fresh-point smoothing recovery,
-foreground/background obstruction, screen-edge prediction for all three features,
-distance/FOV-independent dimensions across screen resolutions, named profiles for all configured guns,
-range boundaries, visible ESP size and Macro stall/action-failure cleanup. The
-starter keeps the exact authoritative table, with helpful pixel-unit comments.
+Core/runtime and the complete protected-runtime suites pass. New checks cover
+box coverage relative to the character across distance, zoom and viewport size;
+instant range transitions; ESP/selection agreement; and online-only whitelist
+membership for all three features. The 1.3.20 performance and TB/Silent checks
+remain. REAL static checks are clean for the full bundle and protected upload;
+the latter uses an analyzer-only declaration for the provider grant variable.
 
-No MCP or REAL analyzer was used per instruction. Lua syntax/mock checks do not
-prove Luau/Roblox compatibility, native input, real FPS, remote hits or published
-FlowAuth authentication. Historical static/live observations retain their versions.
+Keep Width=5 / Height=4.3 or your edited values. Boxes follow character perspective,
+with no limb fitting or size interpolation. Gun profiles choose dimensions by range.
+The fixed-pixel sizing in 1.3.18-1.3.20 was a misunderstanding of the user's intent.
 
-Read BOX-UPDATE.md in the release. Keep existing Width=5 / Height=4.3 values.
-One screen-size unit is 16 pixels at 1080p, scaled only by viewport height. Named
-gun fields and legacy pairs use the same numbers. No perspective distance/FOV
-scaling remains; gun profiles select sizes by range. Preserve private keys,
-controls, colors and feature choices. Shared prediction-context expiry and ESP
-visibility invalidation also pass new offline regressions.
+Mocks and static checks do not prove native compatibility, FPS, remote hits or
+FlowAuth authentication. No new live gameplay was performed for this release.
+Publish the protected upload before switching the website bridge to 1.3.21.
 
 ## Historical 1.3.12 native validation
 

@@ -32,7 +32,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.20', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.21', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
@@ -46,12 +46,13 @@ local state = {
     TriggerRandom = nil, LastMousePayload = nil, MouseRemainder = nil, Intro = nil,
     ToolEpoch = 0, AutoPrediction = {Interval = 0.5, Refreshes = 0, Features = {}},
     PostureStats = {Samples = 0, Changes = 0},
-    WhiteLookup = {}, WhiteLookupSource = nil, WhiteLookupCount = -1,
+    WhiteLookup = {}, WhiteLookupSource = nil, WhiteLookupCount = -1, WhiteActiveCount = 0, WhiteOnline = {},
 }
 environment[runtimeKey] = state
 local zero = Vector3.new(0, 0, 0)
 local now = os.clock
 local camera, cursor, cursorRay
+local boxViewportHeight, boxFieldOfView, boxFocal
 local localCharacter, localHumanoid, localRoot, equipped, weaponName, muzzleAttachment
 local releaseShotInput
 local charConnections, toolConnections = {}, {}
@@ -447,9 +448,12 @@ end
 
 local function whitelistLookup()
     if state.WhiteLookupSource ~= state.Whitelist or state.WhiteLookupCount ~= #state.Whitelist then
-        local lookup = {}
-        for _, id in ipairs(state.Whitelist) do lookup[id] = true end
+        local lookup, activeCount = {}, 0
+        for _, id in ipairs(state.Whitelist) do
+            if state.WhiteOnline[id] and not lookup[id] then lookup[id], activeCount = true, activeCount + 1 end
+        end
         state.WhiteLookup, state.WhiteLookupSource, state.WhiteLookupCount = lookup, state.Whitelist, #state.Whitelist
+        state.WhiteActiveCount = activeCount
     end
     return state.WhiteLookup
 end
@@ -460,7 +464,8 @@ local function valid(record, feature, part, skipWall)
     if not character or not character.Parent or not humanoid or not root or not part or not part.Parent then return false end
     if not Core.finiteVector(part.Position) then return false end
     if feature == 'Triggerbot' and config.Triggerbot.TargetOnly and record.player ~= state.Targets['Silent Aim'] then return false end
-    if not Core.whitelisted(config.Whitelist.Enabled, state.WhiteMode, state.Whitelist, record.player.UserId, whitelistLookup()) then return false end
+    local assigned = whitelistLookup()
+    if state.WhiteActiveCount > 0 and not Core.whitelisted(config.Whitelist.Enabled, state.WhiteMode, state.Whitelist, record.player.UserId, assigned) then return false end
     local index = checkIndices[feature]
     local function check(key) return config.Checks[key] and config.Checks[key][index] == true end
     if check('Dead') and (humanoid.Health <= 0 or character:GetAttribute('Dead') == true) then return false end
@@ -663,13 +668,19 @@ local function playerBox(record, feature, standalone)
     if profile and profile.BoxSize then
         width, height = Core.boxDimensions(profile.BoxSize, width, height)
     end
+    local viewportHeight, fieldOfView = camera.ViewportSize.Y, camera.FieldOfView
+    if viewportHeight ~= boxViewportHeight or fieldOfView ~= boxFieldOfView then
+        boxViewportHeight, boxFieldOfView = viewportHeight, fieldOfView
+        boxFocal = viewportHeight / (2 * math.tan(math.rad(fieldOfView) / 2))
+    end
     record.BoxInfo = record.BoxInfo or {}
     local boxInfo = record.BoxInfo[feature] or {}
     record.BoxInfo[feature] = boxInfo
     boxInfo.Width, boxInfo.Height, boxInfo.Distance = width, height, physicalDistance
-    boxInfo.Units = 'fixed screen-size units (16px)'
+    boxInfo.Units = 'character-relative dimensions'
     boxInfo.Weapon, boxInfo.Range, boxInfo.Standalone = weaponName, profile and range or nil, standalone == true
-    local x, y, w, h = Core.projectedBox(projected.X, projected.Y, projected.Z, width, height)
+    local x, y, w, h = Core.projectedBox(projected.X, projected.Y, projected.Z, width, height, boxFocal)
+    boxInfo.Depth, boxInfo.Focal = projected.Z, boxFocal
     boxInfo.PixelWidth, boxInfo.PixelHeight = w, h
     if not x or x+w < 0 or y+h < 0 or x > camera.ViewportSize.X or y > camera.ViewportSize.Y then return nil end
     return Vector2.new(x, y), Vector2.new(w, h)
@@ -1440,6 +1451,7 @@ local function addPlayer(player)
     if player == localPlayer or state.Records[player] then return end
     local record = {player = player, connections = {}, characterConnections = {}, history = {}}
     state.Records[player] = record
+    state.WhiteOnline[player.UserId], state.WhiteLookupSource = true, nil
     connect(player.CharacterAdded, function(character) bindOpponent(record, character) end, record.connections)
     connect(player.CharacterRemoving, function()
         disconnect(record.characterConnections)
@@ -1905,6 +1917,7 @@ local function start()
     for _, player in ipairs(Players:GetPlayers()) do addPlayer(player) end
     connect(Players.PlayerAdded, addPlayer)
     connect(Players.PlayerRemoving, function(player)
+        state.WhiteOnline[player.UserId], state.WhiteLookupSource = nil, nil
         local record = state.Records[player]
         if record then
             disconnect(record.connections); disconnect(record.characterConnections)

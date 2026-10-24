@@ -1,3 +1,25 @@
+# Current continuation: v1.3.21
+
+Read BOX-PERSPECTIVE-WHITELIST-2026-10-24.md first. The user's screenshot clarified
+that fixed pixel boxes were the wrong interpretation. Boxes now keep fixed
+character-relative Width/Height and follow character perspective, without limb
+fitting or size interpolation. Gun profiles still switch dimensions immediately
+at configured physical range boundaries. Circle radii are unchanged.
+
+Whitelist eligibility considers only online assigned users. The last assigned
+departure restores normal eligibility for all three features. Saved IDs remain
+available for rejoin; startup/apply with offline-only IDs cannot block everyone.
+
+Source/protected suites and REAL static checks pass. No new live v1.3.21 gameplay
+or FlowAuth authorization was tested. Production website remains v1.3.20 until
+the owner publishes the v1.3.21 protected upload. Existing table values/keys remain.
+Earlier live client became unresponsive; do not send more work to that old client.
+Do not reload or alter the user's live runtime merely to inspect state.
+
+Older publication notes and pixel-sizing assumptions below are historical.
+
+---
+
 # Current continuation: v1.3.20
 
 See BOX-PERF-TB-REVIEW-2026-10-24.md for the live v1.3.19 capture and offline fixes.

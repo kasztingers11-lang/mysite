@@ -650,10 +650,11 @@ function Core.boxDimensions(size, fallbackWidth, fallbackHeight)
         Core.number(size.Height or size[2], fallbackHeight, 0.01, 1000)
 end
 
--- One size unit is always 16 pixels. Distance only selects a gun profile.
-function Core.projectedBox(x, y, depth, width, height)
+-- Fixed dimensions around the root, projected with the character's perspective.
+function Core.projectedBox(x, y, depth, width, height, focal)
     if depth <= 0.1 then return nil end
-    local w, h = width * 16, height * 16
+    local scale = focal / depth
+    local w, h = width * scale, height * scale
     return x - w / 2, y - h / 2, w, h
 end
 

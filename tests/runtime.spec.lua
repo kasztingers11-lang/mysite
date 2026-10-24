@@ -108,10 +108,12 @@ local game={PlaceId=134196333708867}
 function game:GetService(name)assert(services[name],name);return services[name]end
 local World=obj('Workspace','Workspace'); World.Gravity=196.2
 local camera=obj('Camera','Camera',World); camera.CFrame=CF.new(0,0,0); camera.ViewportSize=V.new(1920,1080); camera.FieldOfView=70
-function camera:ViewportPointToRay(x,y)return {Origin=self.CFrame.Position,Direction=V.new((x-960)/1000,-(y-540)/1000,-1).Unit}end
+local function cameraFocal()return camera.ViewportSize.Y/(2*math.tan(math.rad(camera.FieldOfView)/2))end
+function camera:ViewportPointToRay(x,y)return {Origin=self.CFrame.Position,Direction=V.new((x-self.ViewportSize.X/2)/cameraFocal(),-(y-self.ViewportSize.Y/2)/cameraFocal(),-1).Unit}end
 function camera:WorldToViewportPoint(p)
-    local z=-p.Z
-    return V.new(960+p.X*1000/math.max(z,0.01),540-p.Y*1000/math.max(z,0.01),z),z>0
+    local relative=p-self.CFrame.Position
+    local z=-relative.Z
+    return V.new(self.ViewportSize.X/2+relative.X*cameraFocal()/math.max(z,0.01),self.ViewportSize.Y/2-relative.Y*cameraFocal()/math.max(z,0.01),z),z>0
 end
 World.CurrentCamera=camera
 local rayHit, muzzleBlocked, groundY
@@ -278,7 +280,7 @@ local foreignBeam=obj('Beam','gb');foreignBeam.Attachment0=farA;foreignBeam.Atta
 assert(farB.WorldPosition==V.new(999,0,0),'Another muzzle is not rewritten')
 
 
--- Box selection uses fixed screen pixels; circle stays on the cursor.
+-- Box selection follows character perspective; circle stays on the cursor.
 moveEnemy(1,0,-50);step(0.04)
 assert(second.Points['Silent Aim'].X==1,'Center point mode must not preserve incorrect mouse X')
 second.Config['2d-Box']['Silent Aim'].Size.Width=0.1;step(0.04)
@@ -316,7 +318,7 @@ local standaloneSize
 for _,d in ipairs(drawingObjects)do
     if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then standaloneSize=d.Size end
 end
-assert(standaloneSize and standaloneSize.X==80,'Standalone ESP uses the active weapon profile')
+assert(standaloneSize and math.abs(standaloneSize.X-5*cameraFocal()/50)<1e-6,'Standalone ESP uses the active weapon profile')
 second.Config.Whitelist.Enabled=false;step(0.04)
 assert(#second.Whitelist==0)
 key('R',true);key('R',false);assert(#second.Whitelist==0,'Assignment disabled with whitelist')
@@ -546,6 +548,7 @@ do
         return p,p.Z>0 and p.X>=0 and p.X<=1920 and p.Y>=0 and p.Y<=1080
     end
     Input.GetMouseLocation=function()return V.new(1910,540)end;tool.Enabled=false;enemyHum.WalkSpeed=10
+    local edgeX=(1910-camera.ViewportSize.X/2)*50/cameraFocal()
     for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
         local cfg=Core.copy(Defaults)
         for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
@@ -555,9 +558,9 @@ do
         end
         cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Aim Assist'].Target.Closest.Enabled=false
         cfg['Aim Assist'].Follow='Mouse';cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=true
-        moveEnemy(48.5,0,-50);enemyRoot.AssemblyLinearVelocity=V.new(-10,0,0)
+        moveEnemy(edgeX+1,0,-50);enemyRoot.AssemblyLinearVelocity=V.new(-10,0,0)
         local rt=loadRuntime(cfg);step(.02)
-        assert(rt.Points[feature] and math.abs(rt.Points[feature].X-47.5)<1e-6,
+        assert(rt.Points[feature] and math.abs(rt.Points[feature].X-edgeX)<1e-6,
             'The final visible point must decide viewport eligibility for '..feature)
         rt:Destroy('test')
     end
@@ -1069,6 +1072,8 @@ end
 -- An empty assignment list allows all three features; assignment and clearing take effect live.
 do
     local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)
+    local otherParent,otherPosition=other.Parent,otherRoot.Position
+    other.Parent=Players;otherRoot.Position=V.new(20,0,-50)
     for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'}) do
         local cfg=Core.copy(Defaults)
         cfg.Whitelist.Enabled=true;cfg.Whitelist.Method='Target';cfg.Whitelist.Players={}
@@ -1089,7 +1094,47 @@ do
         assert(rt.Targets[feature]==enemy,'Empty Friend list restores '..feature)
         rt:Destroy('test');clearInput()
     end
+    other.Parent,otherRoot.Position=otherParent,otherPosition
     ammo.Value=savedAmmo
+end
+
+-- Offline assignments cannot strand Target mode. Roster changes invalidate the
+-- cached membership even when the saved assignment list stays unchanged.
+do
+    local assigned=obj('Player','AssignedLeaving',Players);assigned.UserId=79
+    local assignedChar,assignedRoot=character(assigned,-50);assignedRoot.Position=V.new(20,0,-50)
+    local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        for _,mode in ipairs({'Target','Friend'})do
+            assigned.Parent=Players
+            local cfg=Core.copy(Defaults);cfg.Whitelist.Enabled=true;cfg.Whitelist.Method=mode
+            cfg.Whitelist.Players={assigned.UserId,999999}
+            cfg['Aim Assist'].Activation.Holding=false;cfg.Triggerbot.Activation.Enabled=false
+            cfg.Triggerbot.Fov.Enabled=true
+            for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+                cfg[name].Enabled=name==feature;cfg[name].Prediction.Enabled=false
+            end
+            local rt=loadRuntime(cfg);step(.12)
+            assert(rt.WhiteActiveCount==1 and (rt.Targets[feature]==enemy)==(mode=='Friend'))
+            Players.PlayerRemoving:Fire(assigned)
+            step(.12)
+            assert(rt.WhiteActiveCount==0 and rt.Targets[feature]==enemy,
+                'Last assigned departure restores eligibility for '..feature..' in '..mode)
+            assigned.Parent=nil;step(.12)
+            assert(rt.Targets[feature]==enemy and #rt.Whitelist==2,'Saved offline IDs cannot block everyone')
+            assigned.Parent=Players;Players.PlayerAdded:Fire(assigned);step(.12)
+            assert(rt.WhiteActiveCount==1 and (rt.Targets[feature]==enemy)==(mode=='Friend'),
+                'A returning assigned user restores the configured filtering')
+            rt:Destroy('test');clearInput()
+            assigned.Parent=nil
+            rt=loadRuntime(cfg);step(.12)
+            assert(rt.WhiteActiveCount==0 and rt.Targets[feature]==enemy,'An offline-only table allows everyone at startup')
+            rt:ApplyConfig(cfg);step(.12)
+            assert(rt.Targets[feature]==enemy,'Reapplying an offline-only table cannot relock targeting')
+            rt:Destroy('test');clearInput()
+        end
+    end
+    assignedChar:Destroy();assigned:Destroy();ammo.Value=savedAmmo
 end
 
 do
@@ -1613,10 +1658,10 @@ do
         moveEnemy(0,0,-case[1]);step(.04)
         local info=rt:Diagnose().Boxes[tostring(enemy.UserId)]
         assert(info['Silent Aim'].Range==(case[2] or nil) and info['Silent Aim'].Width==case[3] and info['Silent Aim'].Height==case[4])
-        assert(info['Silent Aim'].Units=='fixed screen-size units (16px)')
+        assert(info['Silent Aim'].Units=='character-relative dimensions')
         local found=false
         for _,d in ipairs(drawingObjects)do
-            if not d.removed and d.Visible and d.Kind=='Square' and math.abs(d.Size.X-case[3]*16)<1e-6 and math.abs(d.Size.Y-case[4]*16)<1e-6 then found=true end
+            if not d.removed and d.Visible and d.Kind=='Square' and math.abs(d.Size.X-case[3]*cameraFocal()/case[1])<1e-6 and math.abs(d.Size.Y-case[4]*cameraFocal()/case[1])<1e-6 then found=true end
         end
         assert(found,'ESP must display exactly the same pixel size as the selection profile')
         assert(info['Aim Assist'].Width==5 and info['Aim Assist'].Height==4.3,'Weapon box must not override Assist')
@@ -1629,7 +1674,7 @@ do
         assert(box.Weapon==weapon and box.Width==expected.Width and box.Height==expected.Height)
     end
     tool.Name='[Unknown]';step(.02)
-    assert(rt:Diagnose().Boxes[tostring(enemy.UserId)]['Silent Aim'].Width==7,'Unlisted weapons use the base pixel size')
+    assert(rt:Diagnose().Boxes[tostring(enemy.UserId)]['Silent Aim'].Width==7,'Unlisted weapons use the base dimensions')
     tool.Name=name;rt.Config['Gun Specifications'].Enabled=false
     local fov,viewport=camera.FieldOfView,camera.ViewportSize
     for _,case in ipairs({{10,45,720},{50,70,1080},{200,100,1440},{15,90,2160}})do
@@ -1637,14 +1682,18 @@ do
         moveEnemy(0,0,-case[1]);step(.02)
         local box=rt:Diagnose().Boxes[tostring(enemy.UserId)]['Silent Aim']
         assert(box.Width==7 and box.Height==8 and box.Range==nil,
-            'Distance and camera zoom cannot rescale a fixed-pixel general box')
-        assert(box.PixelWidth==112 and box.PixelHeight==128,
-            'Viewport changes cannot resize a general box when gun profiles are disabled')
+            'Distance and camera zoom cannot change the configured physical dimensions')
+        local bodyLeft=camera:WorldToViewportPoint(enemyRoot.Position-V.new(1,0,0))
+        local bodyRight=camera:WorldToViewportPoint(enemyRoot.Position+V.new(1,0,0))
+        local bodyWidth=bodyRight.X-bodyLeft.X
+        assert(math.abs(box.PixelWidth/bodyWidth-3.5)<1e-6,
+            'Box coverage relative to the character must stay constant across distance, zoom and resolution')
+        assert(math.abs(box.PixelHeight*case[1]/cameraFocal()-8)<1e-6)
         local drawn=false
         for _,d in ipairs(drawingObjects)do
-            if not d.removed and d.Visible and d.Kind=='Square' and d.Thickness==1 and d.Size==V.new(112,128) then drawn=true end
+            if not d.removed and d.Visible and d.Kind=='Square' and d.Thickness==1 and math.abs(d.Size.X-box.PixelWidth)<1e-6 and math.abs(d.Size.Y-box.PixelHeight)<1e-6 then drawn=true end
         end
-        assert(drawn,'Rendered box must use the fixed selection dimensions')
+        assert(drawn,'Rendered box must use the same projection as selection')
     end
     camera.FieldOfView,camera.ViewportSize=fov,viewport
     rt:Destroy('test');moveEnemy(0,0,-50)

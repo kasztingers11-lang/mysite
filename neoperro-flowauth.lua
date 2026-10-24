@@ -216,25 +216,25 @@ getgenv()['neoperro'] = {
         };
     };
 
-    -- Screen-size boxes. Height and Width keep the same size at every distance.
+    -- Boxes with fixed Height and Width around each character. Near characters and their boxes grow together; far ones shrink together.
     ['2d-Box']             = {
         ['Silent Aim'] = {
             ['Visible'] = true;                                                  -- Show this shape on your screen.
             ['Name']    = {true, 'DisplayName'};                                 -- First value shows the name. Second chooses DisplayName, Name, or UserId.
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};              -- First color is the box; second is its outline.
-            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Screen-size height and width; 1 unit is always 16 pixels.
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Fixed Height/Width around the character. The drawing follows perspective.
         };
         ['Aim Assist'] = {
             ['Visible'] = false;                                                 -- Show this shape on your screen.
             ['Name']    = {false, 'DisplayName'};                                -- First value shows the name. Second chooses DisplayName, Name, or UserId.
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};              -- First color is the box; second is its outline.
-            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Screen-size height and width; 1 unit is always 16 pixels.
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Fixed Height/Width around the character. The drawing follows perspective.
         };
         ['Triggerbot'] = {
             ['Visible'] = false;                                                 -- Show this shape on your screen.
             ['Name']    = {false, 'DisplayName'};                                -- First value shows the name. Second chooses DisplayName, Name, or UserId.
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};              -- First color is the box; second is its outline.
-            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Screen-size height and width; 1 unit is always 16 pixels.
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Fixed Height/Width around the character. The drawing follows perspective.
         };
     };
 
@@ -272,29 +272,29 @@ getgenv()['neoperro'] = {
             ['Far']    = 90;                                                     -- Up to this distance uses Far. Beyond it uses the normal box.
         };
         ['Revolver']         = {
-            ['Close']  = {['BoxSize'] = {['Height'] = 5.1; ['Width'] = 5.1}};    -- Screen-size height and width for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {['Height'] = 5.5; ['Width'] = 5.5}};    -- Screen-size height and width for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {['Height'] = 4.5; ['Width'] = 5}};      -- Screen-size height and width for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 5.1; ['Width'] = 5.1}};    -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 5.5; ['Width'] = 5.5}};    -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Far']    = {['BoxSize'] = {['Height'] = 4.5; ['Width'] = 5}};      -- Character-relative Height/Width for this gun in this range; switches instantly.
         };
         ['Double-Barrel SG'] = {
-            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 7}};        -- Screen-size height and width for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {['Height'] = 5; ['Width'] = 6}};        -- Screen-size height and width for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 7}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 5; ['Width'] = 6}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
         };
         ['TacticalShotgun']  = {
-            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};        -- Screen-size height and width for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};        -- Screen-size height and width for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
         };
         ['Shotgun']          = {
-            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};        -- Screen-size height and width for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};        -- Screen-size height and width for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
         };
         ['Usp']              = {
-            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 4}};        -- Screen-size height and width for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 4}};        -- Character-relative Height/Width for this gun in this range; switches instantly.
         };
     };
 };
@@ -303,7 +303,7 @@ getgenv()['neoperro'] = {
 local neoperroEnvironment = getgenv()
 local neoperroRuntime = neoperroEnvironment.__neoperroRuntimeV1
 if type(neoperroRuntime) == 'table' and neoperroRuntime.Alive
-    and neoperroRuntime.Version == '1.3.20'
+    and neoperroRuntime.Version == '1.3.21'
     and neoperroRuntime.Distribution == 'FlowAuth' and type(neoperroRuntime.ApplyConfig) == 'function' then
     script_key = nil -- Configuration updates use the already-running session.
     neoperroRuntime:ApplyConfig(neoperroEnvironment.neoperro)

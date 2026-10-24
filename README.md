@@ -1,11 +1,21 @@
-# neoperro 1.3.20 - testing build
+# neoperro 1.3.21 - testing build
 
-1.3.20 skips body-part scans for out-of-box candidates, skips repeated hidden
-ESP/FOV writes, and lets TB use an eligible Silent point when its otherwise-unused
-prediction fails. Independent activation, actual-body/shape and KO/wall checks remain.
-Fixed pixel boxes and instant gun range changes are unchanged. Source and protected
-mocks pass; live performance improvement remains unverified. See
-[the live capture and repair notes](neoperro-handoff/docs/BOX-PERF-TB-REVIEW-2026-10-24.md).
+Boxes now keep the same proportions around near and far characters. Width/Height
+stay fixed around the root, and the drawing follows the character's perspective.
+This corrects the fixed-pixel interpretation in 1.3.18-1.3.20: those rectangles
+looked much larger relative to distant players. Keep existing 5x4.3 values.
+Gun Specifications changes dimensions immediately at its physical range limits;
+there is no dimension interpolation or animated-limb fitting. ESP and box selection
+share the projection. Circle radii keep their existing screen-pixel units.
+
+Whitelist filtering uses only assigned users currently in the server. If the last
+one leaves, all three features can target other eligible users again. Saved IDs
+resume filtering if the player rejoins. Offline-only IDs cannot block everyone.
+
+The 1.3.20 candidate/drawing optimizations and TB/Silent cooperation remain.
+Source/protected mock suites and REAL static checks pass; live 1.3.21 gameplay,
+performance and provider authorization remain unverified. See the
+[current repair evidence](neoperro-handoff/docs/BOX-PERSPECTIVE-WHITELIST-2026-10-24.md).
 
 FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
 [build, upload and validation instructions](neoperro-protection/README.md).
@@ -13,7 +23,7 @@ Only the runtime upload is obfuscated; the table remains readable. Generated
 upload files stay outside this public repository. Public development source and
 its history remain available; obfuscation cannot revoke those copies.
 
-1.3.18 introduced less restrictive Silent acquisition, screen-size boxes and
+1.3.18 introduced less restrictive Silent acquisition and
 bounded Macro cleanup. Silent circle acquisition accepts the actual or predicted
 point inside the same radius; AntiCurve keeps its configured final-coordinate
 limits. Third-person Raycast can use a native muzzle surface, smoothing can recover
@@ -21,27 +31,11 @@ a fresh valid point, and the first actual target hit is no longer rejected by
 cover behind it. Foreground cover still rejects. Shared edge-of-screen prediction
 and one reused wall query reduce unnecessary rejection/work.
 
-Boxes keep the user's **Height=4.3 / Width=5** values. A screen-size formula uses
-exactly 16 pixels per unit, with no viewport scaling. Actual distance and
-camera FOV never resize dimensions. Gun Specifications choose the same size units
-by Close/Medium/Far distance, and ESP uses exactly those dimensions. Gun BoxSize
-now has named Height/Width fields; legacy numeric pairs preserve their values.
-No old 5x4.3 values need conversion. Macro actions retain normal timing but stale
-phases and tool-action errors cancel cleanly, releasing owned Ctrl and attempting
-restoration. Prediction discards expired ping contexts for all three features;
-ESP visibility refreshes on substantial camera/target movement; duplicate hold-key
-reads were removed. Other existing paths stay under regression.
-
-1.3.19 explicitly removes the remaining viewport-size multiplier. Boxes change
-instantly only on table edits or enabled gun-profile boundaries; no dimension
-interpolation is used. Close/Medium/Far apply through 15/30/90 studs by default;
-beyond Far the normal size returns. With Gun Specifications off, only the normal
-configured size is used. The user reported distance resizing on a v1.3.18 session;
-its exact serving payload and live cause were not verified.
-
-Core/runtime and protected mock suites pass for 1.3.19. REAL was consulted only
-for API documentation; no Roblox execution or live analysis occurred. This is not a live hit-rate,
-FPS or provider-login result. See the [current review](neoperro-handoff/docs/SILENT-PIXEL-MACRO-REVIEW-2026-10-24.md).
+Gun Specifications selects Close/Medium/Far by actual local-player-to-target
+distance. Above Far, the base box returns. With Gun Specifications off, the base
+box applies throughout. Named Height/Width and legacy numeric pairs preserve
+values. Projection uses camera depth, vertical FOV and viewport height so boxes
+follow character perspective; the physical dimensions do not change within a band.
 
 The 1.3.17 update combines predicted XYZ part geometry with both forward camera and
 native muzzle-to-mouse rays for Closest Point in third person. If the first part

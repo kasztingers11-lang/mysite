@@ -385,12 +385,15 @@ assert(not Core.macroActive(V.new(0/0,0,0)))
 
 assert(defaults.Misc['Macro Abuse']['Check Ammo']==nil,'Removed Macro Abuse ammo setting stays absent')
 
--- Screen-pixel boxes remain identical at every positive depth.
+-- Box dimensions stay constant relative to projected character geometry.
 for _,depth in ipairs({1,10,50,1000})do
-    local x,y,width,height=Core.projectedBox(960,540,depth,5,4.3,1080)
-    near(x,920);near(y,505.6);near(width,80);near(height,68.8)
+    local x,y,width,height=Core.projectedBox(960,540,depth,5,4.3,1000)
+    near(x+width/2,960);near(y+height/2,540)
+    near(width*depth/1000,5);near(height*depth/1000,4.3)
+    near(width/(2*1000/depth),2.5)
 end
-assert(Core.projectedBox(960,540,-1,140,180)==nil)
+assert(Core.projectedBox(960,540,-1,5,4.3,1000)==nil)
+assert(Core.projectedBox(960,540,0.1,5,4.3,1000)==nil)
 do
     local migrated=Core.normalizeConfig({['Gun Specifications']={Revolver={Close={BoxSize={82,94}}}}})
     assert(migrated['Gun Specifications'].Revolver.Close.BoxSize.Width==82
@@ -400,6 +403,9 @@ do
 end
 
 for _,resolution in ipairs({720,1080,1440,2160})do
-    local _,_,width,height=Core.projectedBox(960,540,50,5,4.3,resolution)
-    near(width,80);near(height,68.8)
+    for _,fov in ipairs({45,70,90,110})do
+        local focal=resolution/(2*math.tan(math.rad(fov)/2))
+        local _,_,width,height=Core.projectedBox(960,540,50,5,4.3,focal)
+        near(width*50/focal,5);near(height*50/focal,4.3)
+    end
 end
