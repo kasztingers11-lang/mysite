@@ -10,9 +10,11 @@ Whitelist eligibility considers only online assigned users. The last assigned
 departure restores normal eligibility for all three features. Saved IDs remain
 available for rejoin; startup/apply with offline-only IDs cannot block everyone.
 
-Source/protected suites and REAL static checks pass. No new live v1.3.21 gameplay
-or FlowAuth authorization was tested. Production website remains v1.3.20 until
-the owner publishes the v1.3.21 protected upload. Existing table values/keys remain.
+Source/protected suites and REAL static checks pass. The owner confirmed publishing
+the v1.3.21 protected upload. Website PR #5 is merged (fb1b4c52fc9f2bc187c748116a159e9e8a5ffcd9),
+Vercel reports success, and production /loader.lua matches the committed v1.3.21
+bridge byte-for-byte: HTTP 200, text/plain, no-store. New live gameplay and actual
+FlowAuth authorization remain unverified. Existing table values/keys remain.
 Earlier live client became unresponsive; do not send more work to that old client.
 Do not reload or alter the user's live runtime merely to inspect state.
 
