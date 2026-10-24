@@ -16,10 +16,16 @@ activation combinations, in-place config edits, normal/tiny torsos jumping/falli
 strafing at high ping, and AntiCurve in third person across weapons/obstacles.
 Compare selected part/velocity/model/point, sent MOUSE and actual damage separately.
 
-The v1.3.22 protected upload is ready outside Git. Production remains v1.3.21 until
-the owner publishes it to FlowAuth and confirms. Then merge the prepared v1.3.22
-website bridge and verify the raw endpoint. Keep their existing private key/table
-and canonical site loader. No new settings or value conversion are needed.
+The owner confirmed publishing v1.3.22 to FlowAuth. Website PR #6 is merged
+(574bdbed9fb5c9281772c5c880dd3c6c6123cd05); Vercel reports success, and production
+/loader.lua matches v1.3.22 byte-for-byte: HTTP 200, text/plain, no-store.
+REAL tools subsequently reappeared. Its static checker reports zero errors and
+warnings for the full bundle and the protected upload (provider variable declared
+only in analyzer input, never in the release). No live execution or gameplay
+verification occurred. REAL API notes warn that getgenv views can differ between
+chunks; cross-execution config visibility still needs native verification.
+Keep their existing private key/table and canonical site loader. No new settings
+or value conversion are needed.
 
 Earlier checkpoints, publication notes and pixel-sizing assumptions are historical.
 
