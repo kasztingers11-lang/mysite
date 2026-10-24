@@ -1,4 +1,11 @@
-# neoperro 1.3.19 - testing build
+# neoperro 1.3.20 - testing build
+
+1.3.20 skips body-part scans for out-of-box candidates, skips repeated hidden
+ESP/FOV writes, and lets TB use an eligible Silent point when its otherwise-unused
+prediction fails. Independent activation, actual-body/shape and KO/wall checks remain.
+Fixed pixel boxes and instant gun range changes are unchanged. Source and protected
+mocks pass; live performance improvement remains unverified. See
+[the live capture and repair notes](neoperro-handoff/docs/BOX-PERF-TB-REVIEW-2026-10-24.md).
 
 FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
 [build, upload and validation instructions](neoperro-protection/README.md).

@@ -1904,6 +1904,68 @@ do
     enemyTorso.Size,enemyTorso.CFrame=savedSize,savedFrame;ammo.Value=savedAmmo;clearInput()
 end
 
+-- Discard out-of-box players before searching their body parts. Hidden drawings
+-- have no repeated property writes after the visibility transition.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=false;cfg['Silent Aim'].Fov.Method='2d-Box'
+    cfg['Silent Aim'].Target.Closest.Enabled=true;cfg['Gun Specifications'].Enabled=false
+    cfg.ESP.Enabled=false
+    moveEnemy(1000,0,-50)
+    local rt=loadRuntime(cfg)
+    local project=camera.WorldToViewportPoint
+    local projections=0
+    camera.WorldToViewportPoint=function(self,p)projections=projections+1;return project(self,p)end
+    local population=0;for _ in pairs(rt.Records)do population=population+1 end
+    for _=1,8 do clock=clock+1/240;for _,callback in pairs(renders)do callback(1/240)end end
+    assert(not rt.Targets['Silent Aim'] and projections<=population*8+2,
+        'Out-of-box population must not require per-limb projections')
+    assert(rt.Performance.BoxPrefilterRejects>=8)
+    camera.WorldToViewportPoint=project
+    moveEnemy(0,0,-50);rt.Config.ESP.Enabled=true;step(.04)
+    rt.Config['Silent Aim'].Enabled=false;rt.Toggles.ESP=false;step(.04)
+    local writes=0
+    for visual in pairs(rt.Visuals)do
+        local original=visual.Set
+        visual.Set=function(self,p)writes=writes+1;return original(self,p)end
+    end
+    for _=1,8 do clock=clock+1/240;for _,callback in pairs(renders)do callback(1/240)end end
+    assert(writes==0,'Hidden ESP/circles must not be rewritten each render frame')
+    rt.Toggles.ESP=true;step(.04);assert(anyBoxVisible(),'ESP must restore immediately after the hidden fast path')
+    rt:Destroy('test');clearInput()
+end
+
+-- A rejected unused TB prediction cannot prevent a shot that will use the
+-- eligible Silent point. Actual-character and independent KO checks still apply.
+do
+    local savedAmmo,cast=ammo.Value,World.Raycast;ammo.Value=100
+    enemyRoot.AssemblyLinearVelocity=V.new(10,0,0);moveEnemy(0,0,-50)
+    World.Raycast=function(self,origin,direction,params)
+        if direction.Magnitude<1000 and direction.X>.2 then return {Instance=World,Position=origin+direction*.5} end
+        return cast(self,origin,direction,params)
+    end
+    for _,shaped in ipairs({false,true})do
+        local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Resolver.Enabled=false
+        cfg['Silent Aim'].Enabled=false;cfg['Silent Aim'].Prediction.Enabled=false
+        cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Silent Aim'].Ignore=true
+        cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=shaped;cfg.Triggerbot.Fov.Character=1
+        cfg.Triggerbot.Prediction.Auto=false;cfg.Triggerbot.Prediction.Value=.5
+        rayHit={Instance=enemyTorso,Position=enemyTorso.Position}
+        local rt=loadRuntime(cfg);step(.04)
+        assert(rt.Stats.TriggerAttempts==0,'Fixture must reject the independent TB prediction')
+        cfg['Silent Aim'].Enabled=true;rt:ApplyConfig(cfg);step(.12)
+        assert(rt.Stats.TriggerAttempts==1 and rt.LastShotRoute.AimFeature=='Silent Aim'
+            and rt.ForcedPoint==rt.Points['Silent Aim'],'TB must fire using its eligible Silent route')
+        assert(rt.AimTrace.Triggerbot.PointSource=='silent-cooperation')
+        local attempts=rt.Stats.TriggerAttempts
+        if not shaped then rayHit=nil;step(.12);assert(rt.Stats.TriggerAttempts==attempts,'Silent cannot bypass actual-body selection');rayHit={Instance=enemyTorso,Position=enemyTorso.Position}end
+        rt.Config.Checks.Knocked[1]=false;enemyChar.props['attr:Knocked']=true;step(.12)
+        assert(rt.Stats.TriggerAttempts==attempts,'Silent cannot bypass the independent TB knocked check')
+        enemyChar.props['attr:Knocked']=false;rt:Destroy('test');clearInput()
+    end
+    World.Raycast=cast;ammo.Value=savedAmmo;enemyRoot.AssemblyLinearVelocity=V.new();rayHit=nil
+end
+
 -- All eight feature combinations accept a shared hold key; Silent owns eligible shot redirection.
 do
     local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)

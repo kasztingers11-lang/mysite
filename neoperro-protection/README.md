@@ -8,7 +8,7 @@ upstream checkout. This project does not vendor the obfuscator.
 
 Rebuild the runtime with `build-neoperro.py`, then run `build-protected.py` with
 `--prometheus` pointing to that checkout. Python requires Lupa's Lua 5.1 backend.
-Outputs default to the sibling `releases/neoperro-1.3.19/` directory, outside Git.
+Outputs default to the sibling `releases/neoperro-1.3.20/` directory, outside Git.
 
 - `neoperro-flowauth-upload.obfuscated.lua`: upload this runtime to your FlowAuth script.
 - `neoperro-flowauth.lua`: editable placeholder key, full table, and your public loader.

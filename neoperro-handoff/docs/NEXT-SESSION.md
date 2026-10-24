@@ -1,3 +1,14 @@
+# Current continuation: v1.3.20
+
+See BOX-PERF-TB-REVIEW-2026-10-24.md for the live v1.3.19 capture and offline fixes.
+The user now authorizes REAL inspection. Current client stopped responding;
+do not send it more work until rejoin/re-injection. No live runtime reload occurred.
+v1.3.20 source/protected tests pass; provider upload and new live tests are pending.
+The website remains on v1.3.19 until the owner publishes v1.3.20 to FlowAuth.
+Older instructions/publication notes below are historical, superseded here.
+
+---
+
 # 1.3.19 fixed dimensions and instant range changes - 2026-10-24
 
 Current source is published on repair/neoperro-evidence. Protected uploads remain

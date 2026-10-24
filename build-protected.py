@@ -91,7 +91,7 @@ def build(prometheus, output):
                '-- P: Silent toggle | M: Assist toggle | hold Q: Assist | V: Trigger toggle | hold RMB: Trigger | E: stop.\n\n')
     starter += explain_table(config).rstrip() + '\n\n'
     tail = (ROOT / 'neoperro-src/loader-tail.lua').read_text(encoding='utf-8')
-    tail = (tail.replace('__NEOPERRO_VERSION__', '1.3.19')
+    tail = (tail.replace('__NEOPERRO_VERSION__', '1.3.20')
                 .replace('__NEOPERRO_DISTRIBUTION__', 'FlowAuth')
                 .replace('__NEOPERRO_LOADER_URL__', LOADER)
                 .replace('__NEOPERRO_CLEAR_KEY__', 'script_key = nil -- Configuration updates use the already-running session.')
@@ -101,7 +101,7 @@ def build(prometheus, output):
     (output / 'neoperro-flowauth.lua').write_text(starter, encoding='utf-8')
     (output / 'neoperro-flowauth-loader.lua').write_text(tail, encoding='utf-8')
     metadata = {
-        'runtime_version': '1.3.19', 'prometheus_commit': PROMETHEUS_COMMIT,
+        'runtime_version': '1.3.20', 'prometheus_commit': PROMETHEUS_COMMIT,
         'source_sha256': hashlib.sha256(source).hexdigest(),
         'native_payload_sha256': digest,
         'upload_sha256': hashlib.sha256(protected).hexdigest(),
@@ -117,6 +117,6 @@ def build(prometheus, output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prometheus', type=Path, required=True)
-    parser.add_argument('--output', type=Path, default=ROOT.parent / 'releases/neoperro-1.3.19')
+    parser.add_argument('--output', type=Path, default=ROOT.parent / 'releases/neoperro-1.3.20')
     args = parser.parse_args()
     build(args.prometheus.resolve(), args.output.resolve())
