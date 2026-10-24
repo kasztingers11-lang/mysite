@@ -1130,6 +1130,20 @@ do
 end
 
 -- Replacing or editing the public table updates the current session. A rejected
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Method='Target';cfg['Silent Aim'].Activation.Holding=true
+    Input.keys.T=true
+    local rt=loadRuntime(cfg);step(.02)
+    assert(rt.Targets['Silent Aim']==enemy,'A held Target binding can acquire even if the begin preceded execution')
+    key('T',false);step(.02);assert(not rt.Targets['Silent Aim'])
+    cfg['Silent Aim'].Method='Auto';cfg.Whitelist.Enabled=true
+    rt=loadRuntime(cfg);key('R',true);key('R',false)
+    assert(rt.Whitelist[1]==enemy.UserId,'Assignment before the first render captures a fresh view')
+    rt:Destroy('test');clearInput()
+end
+
+-- Replacing or editing the public table updates the current session. A rejected
 -- table leaves runtime/input ownership untouched and can be corrected in place.
 do
     local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false
@@ -1550,9 +1564,12 @@ enemyRoot.AssemblyLinearVelocity=V.new(100,0,0);step(0.04)
 assert(filtered.Points['Silent Aim']==nil,'Endmath rejects outside pixel radius instead of clamping prediction')
 filtered.Config['Silent Aim'].AntiCurve.Endmath.Radius=300;step(0.04)
 local acceptedLead=filtered.Points['Silent Aim'].X
-assert(acceptedLead>0 and filtered.AimTrace['Silent Aim'].FastMotionLimited,'Fast motion uses the permanent horizontal lead guard')
+assert(math.abs(acceptedLead-16)<1e-6 and not filtered.AimTrace['Silent Aim'].FastMotionLimited,
+    'Macro speed keeps the complete forecast; AntiCurve only checks its final geometry')
+assert(filtered.AimTrace['Silent Aim'].MacroRestriction=='anti-curve-final-geometry')
 filtered.Config['Silent Aim'].AntiCurve.Enabled=false;step(.04)
-assert(math.abs(filtered.Points['Silent Aim'].X-acceptedLead)<1e-6,'AntiCurve never clamps the final guarded prediction')
+assert(math.abs(filtered.Points['Silent Aim'].X-acceptedLead)<1e-6 and filtered.AimTrace['Silent Aim'].MacroRestriction==nil,
+    'AntiCurve off leaves no hidden macro restriction')
 filtered.Config['Silent Aim'].AntiCurve.Enabled=true
 filtered.Config['Silent Aim'].AntiCurve.Method='3d-angles';step(0.04)
 assert(filtered.Points['Silent Aim']==nil,'Reject world-space mouse-to-target distance')
@@ -1561,6 +1578,109 @@ filtered.Config.Whitelist.Enabled=true;filtered.WhiteMode='Friend';filtered.Whit
 assert(filtered.Targets['Silent Aim']==nil)
 filtered.WhiteMode='Target';step(0.04);assert(filtered.Targets['Silent Aim']==enemy)
 filtered:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
+
+-- Remote FloorMaterial and a future landing surface do not establish present
+-- Full XYZ forecasts follow measured reference trajectories for every feature.
+-- Changing torso size cannot shorten a correct constant-motion forecast.
+do
+    local savedSize=enemyTorso.Size
+    for _,auto in ipairs({false,true})do
+        for _,rate in ipairs({-3,3})do
+            local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+            cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+            cfg['Y-Axis'].Enabled=true;cfg['Y-Axis'].Method='Auto';cfg.Checks.GroundShotCheck={false,false,false}
+            for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+                cfg[name].Prediction.Auto=auto;cfg[name].Prediction.Value=.12
+            end
+            local rt=loadRuntime(cfg);rt.Network.RTT=.12;rt.Network.DataRTT=.12;rt.Network.NextSample=clock+10
+            local t
+            for i=0,20 do
+                t=i*.02;local angle=rate*t
+                moveEnemy(22*(1-math.cos(angle))/rate,30+40*t-50*t*t,-50+22*math.sin(angle)/rate)
+                enemyRoot.AssemblyLinearVelocity=V.new(22*math.sin(angle),40-100*t,22*math.cos(angle))
+                step(.02)
+            end
+            local future=t+.12
+            local expected=V.new(22*(1-math.cos(rate*future))/rate,30+40*future-50*future*future,-50+22*math.sin(rate*future)/rate)
+            for _,size in ipairs({V.new(2,4,1),V.new(.1,.1,.1)})do
+                enemyTorso.Size=size
+                for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+                    local point,trace=rt:Forecast(enemy,name,'UpperTorso')
+                    assert(trace.MotionModel=='validated-3d-turn' and trace.TurnValidated)
+                    assert((point-expected).Magnitude<1e-6,'XYZ trajectory forecast must match for '..name)
+                    assert(trace.PartDimensions.X==size.X and trace.PartDimensions.Y==size.Y)
+                end
+            end
+            rt:Destroy('test');clearInput()
+        end
+    end
+    enemyTorso.Size=savedSize;enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50)
+end
+
+-- Manual values calibrate to the first valid RTT, then track changes without
+-- modifying Value. Reapplying unrelated settings preserves that calibration.
+do
+    local cfg=Core.copy(Defaults);cfg.Triggerbot.Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do cfg[name].Prediction.Auto=false;cfg[name].Prediction.Value=.12 end
+    enemyRoot.AssemblyLinearVelocity=V.new(22,10,-8)
+    local rt=loadRuntime(cfg);rt.Network.RTT=.1;rt.Network.DataRTT=.1;rt.Network.NextSample=clock+10
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local _,trace=rt:Forecast(enemy,name);assert(trace.BaseLeadTime==.12 and trace.ManualReferenceRTT==.1)
+    end
+    rt.Network.RTT=.16;rt.Network.DataRTT=.16
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local _,trace=rt:Forecast(enemy,name)
+        assert(math.abs(trace.BaseLeadTime-.18)<1e-8 and math.abs(trace.PingAdjustment-.06)<1e-8)
+        assert(rt.Config[name].Prediction.Value==.12)
+    end
+    cfg['2d-Box']['Silent Aim'].Size.Width=9;rt:ApplyConfig(cfg)
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local _,trace=rt:Forecast(enemy,name);assert(trace.ManualReferenceRTT==.1 and math.abs(trace.BaseLeadTime-.18)<1e-8)
+    end
+    rt:Destroy('test');clearInput();enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- A torso smaller than a valid jump lead is not a reason to cap that lead.
+-- The optional ground correction still uses real support geometry afterward.
+do
+    local size=enemyTorso.Size;enemyTorso.Size=V.new(.2,.2,.2)
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false;cfg.Resolver.Enabled=false
+    cfg['Y-Axis'].Enabled=true;cfg['Y-Axis'].Method='Auto'
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do cfg[name].Prediction.Auto=false;cfg[name].Prediction.Value=.2 end
+    moveEnemy(0,20,-50);enemyRoot.AssemblyLinearVelocity=V.new(10,40,-10)
+    local rt=loadRuntime(cfg)
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local point=rt:Forecast(enemy,name);assert(math.abs(point.Y-28)<1e-8,'Airborne linear lead must not be capped to torso height')
+    end
+    groundY=0;moveEnemy(0,4,-50);enemyRoot.AssemblyLinearVelocity=V.new(10,-40,-10)
+    for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local point,trace=rt:Forecast(enemy,name);assert(point.Y==3 and trace.GroundCorrected,'Actual support still prevents a forecast through the floor')
+    end
+    rt:Destroy('test');groundY=nil;clearInput();enemyTorso.Size=size;enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50)
+end
+
+-- Endmath checks the forward final geometry even at the viewport edge, instead
+-- of rejecting a partially visible target solely from an on-screen boolean.
+do
+    local oldProject,oldMouse,oldHit,oldHandle=camera.WorldToViewportPoint,Input.GetMouseLocation,mouse.Hit,handle.Position
+    camera.WorldToViewportPoint=function(self,p)
+        local v=oldProject(self,p)
+        return v,v.Z>0 and v.X>=0 and v.X<=self.ViewportSize.X and v.Y>=0 and v.Y<=self.ViewportSize.Y
+    end
+    Input.GetMouseLocation=function()return V.new(1910,540)end
+    local x=(1930-960)*50/cameraFocal();moveEnemy(x,0,-50);mouse.Hit=CF.new(enemyRoot.Position);handle.Position=V.new(5,1,0)
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Silent Aim'].Prediction.Enabled=false
+    cfg['Silent Aim'].AntiCurve.Enabled=true;cfg['Silent Aim'].AntiCurve.Method='Endmath';cfg['Silent Aim'].AntiCurve.Endmath.Radius=.0001
+    local rt=loadRuntime(cfg);step(.02)
+    assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].AntiCurveReference=='muzzle-to-mouse-ray')
+    assert(rt.AimTrace['Silent Aim'].AntiCurveMuzzlePixels<1e-6)
+    rt:Destroy('test');clearInput()
+    camera.WorldToViewportPoint,Input.GetMouseLocation,mouse.Hit,handle.Position=oldProject,oldMouse,oldHit,oldHandle
+    moveEnemy(0,0,-50)
+end
 
 -- Remote FloorMaterial and a future landing surface do not establish present
 -- support at a jump apex. The measured vertical curve must continue in Auto.

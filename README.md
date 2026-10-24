@@ -1,9 +1,21 @@
-# neoperro v1.3.22 - repair in progress
+# neoperro 1.3.22 - testing build
 
-Current checkpoint repairs delayed native TB/Silent activation, input edges and
-same-session configuration updates. Shared prediction, resolver and AntiCurve
-changes are still in progress; use the published v1.3.21 provider build until the
-new protected upload is complete. Core/runtime mocks pass; no new live result.
+Repairs delayed native TB/Silent shot routing, key edges/holds and same-session
+config updates. Shared prediction now integrates validated signed turns in XYZ,
+uses actual part geometry for model-error scoring, adapts manual lead to later
+ping changes and handles coherent movement with oscillating reported velocity.
+The extra macro lead-time cap and torso-height cap on airborne Auto Y are removed;
+AntiCurve and ground support still evaluate the final geometry. Endmath uses the
+predicted-depth muzzle projection, including aligned viewport-edge points.
+
+Table names/values, the v1.3.21 character-relative boxes and gun range behavior
+remain. Core/runtime/protected mocks and native Luau compilation pass. Pure core
+Luau analysis is clean. REAL is unavailable this turn; no new live shot, FPS or
+provider-authentication result is claimed. See the
+[repair evidence and limitations](neoperro-handoff/docs/INPUT-PREDICTION-REVIEW-2026-10-25.md).
+
+FlowAuth publication and the website version switch are still pending. Keep the
+private edited table/key; only the new protected runtime goes to FlowAuth.
 
 ---
 

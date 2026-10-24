@@ -45,12 +45,14 @@ local state = {
     CursorHit = nil, ShotRelease = nil, AutomatedTool = nil, MacroMotion = nil,
     TriggerRandom = nil, LastMousePayload = nil, MouseRemainder = nil, Intro = nil,
     ToolEpoch = 0, AutoPrediction = {Interval = 0.5, Refreshes = 0, Features = {}},
+    ManualPrediction = {},
     PostureStats = {Samples = 0, Changes = 0},
     WhiteLookup = {}, WhiteLookupSource = nil, WhiteLookupCount = -1, WhiteActiveCount = 0, WhiteOnline = {},
 }
 environment[runtimeKey] = state
 environment.neoperro = launchConfig
 local zero = Vector3.new(0, 0, 0)
+local worldRight, worldUp, worldLook = Vector3.new(1,0,0), Vector3.new(0,1,0), Vector3.new(0,0,-1)
 local now = os.clock
 local camera, cursor, cursorRay
 local boxViewportHeight, boxFieldOfView, boxFocal
@@ -103,7 +105,8 @@ function state:Diagnose()
         ConfigUpdates = self.ConfigUpdates, LastConfigMs = self.LastConfigMs,
         StartupProtection = Core.copy(self.StartupProtection),
         PostureStats = Core.copy(self.PostureStats), ShotRoute = Core.copy(self.LastShotRoute),
-        AutoPrediction = Core.copy(self.AutoPrediction),
+        AutoPrediction = Core.copy(self.AutoPrediction), ManualPrediction = Core.copy(self.ManualPrediction),
+        LastConfigError = self.LastConfigError,
         ShotResult = 'unverified; activation and MOUSE submission do not establish damage'}
     for name, player in pairs(self.Targets) do result.Targets[name] = player.UserId end
     for _, record in pairs(self.Records) do
@@ -510,7 +513,7 @@ local function velocity(record)
     local raw = record.root.AssemblyLinearVelocity
     if not Core.finiteVector(raw) then raw = zero end
     local last = record.history[#record.history]
-    if record.velocityAt ~= (last and last.t) or record.velocityRaw ~= raw or not record.sampledVelocity then
+    if record.velocityAt ~= (last and last.t) or record.velocityRaw ~= raw or record.velocityResolver ~= config.Resolver.Enabled or not record.sampledVelocity then
         record.sampledVelocity = Core.velocity(record.history, raw, zero)
         record.resolvedVelocity, record.velocitySource = Core.resolveVelocity(record.history,
             record.root.AssemblyLinearVelocity, record.sampledVelocity, Vector3.new)
@@ -518,7 +521,9 @@ local function velocity(record)
             record.root.AssemblyLinearVelocity, record.sampledVelocity, record.resolvedVelocity, record.velocitySource, Vector3.new)
         record.velocityAt = last and last.t
         record.velocityRaw = raw
-        record.motion = Core.motion(record.history, record.root.AssemblyLinearVelocity, now())
+        record.velocityResolver = config.Resolver.Enabled
+        if last and config.Resolver.Enabled then last.resolved = record.trueVelocity end
+        record.motion = Core.motion(record.history, config.Resolver.Enabled and record.trueVelocity or record.root.AssemblyLinearVelocity, now())
     end
     if not config.Resolver.Enabled then return Core.limit(raw, 180) end
     return record.trueVelocity
@@ -533,13 +538,25 @@ local function prediction(record, feature, point)
     -- replication age; adding it again caused shot-time lead spikes between ticks.
     local context = state.AutoPrediction.Features[feature]
     local rtt, dataRTT = state.Network.RTT, state.Network.DataRTT
-    if config[feature].Prediction.Auto and context and context.Target == record.player.UserId
+    local settings = config[feature].Prediction
+    local reference
+    if settings.Enabled and not settings.Auto then
+        local manual = state.ManualPrediction[feature]
+        local latency = math.max(Core.number(rtt, 0, 0, 1), Core.number(dataRTT, 0, 0, 1))
+        if not manual or manual.Value ~= settings.Value then
+            manual = {Value = settings.Value}
+            state.ManualPrediction[feature] = manual
+        end
+        if not manual.ReferenceRTT and latency > 0 then manual.ReferenceRTT = latency end
+        reference = manual.ReferenceRTT
+    else state.ManualPrediction[feature] = nil end
+    if settings.Auto and context and context.Target == record.player.UserId
         and context.ToolEpoch == state.ToolEpoch and now() < context.NextSample then
         rtt, dataRTT = context.RTT, context.DataRTT
     end
-    return Core.predictionTime(config[feature].Prediction, rtt, dataRTT,
+    return Core.predictionTime(settings, rtt, dataRTT,
         0, origin and (point - origin).Magnitude or 0, nil,
-        Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed)
+        Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed, reference)
 end
 
 local groundParams = RaycastParams.new()
@@ -587,17 +604,26 @@ local function leadOffset(record, feature, part, point, evidence)
     local pose = samplePosture(record, now())
     local worldHeight = Posture.verticalSize(part)
     local raw = record.root.AssemblyLinearVelocity
-    local leadTime, predictionSource, speedFactor, baseLeadTime = prediction(record, feature, point)
+    local leadTime, predictionSource, speedFactor, baseLeadTime, pingAdjustment = prediction(record, feature, point)
     local vel, motion = velocity(record), record.motion or {}
     baseLeadTime = baseLeadTime or leadTime
-    local turnTime = Core.motionTime(leadTime, motion.TurnRate)
-    local horizontalTime, limited = Core.fastLeadTime(turnTime, Vector3.new(vel.X, 0, vel.Z).Magnitude, record.humanoid.WalkSpeed)
-    local lead = Vector3.new(vel.X * horizontalTime, vel.Y * baseLeadTime, vel.Z * horizontalTime)
+    local right, up, look = part.CFrame.RightVector or worldRight,
+        part.CFrame.UpVector or worldUp, part.CFrame.LookVector or worldLook
+    local half = part.Size * 0.5
+    local turnBudget = Core.bodyExtent(Vector3.new(-vel.Z,0,vel.X), half, right, up, look) * 0.5
+    local verticalBudget = Core.bodyExtent(worldUp, half, right, up, look) * 0.5
+    local turnScore = Core.bodyModelScore(motion.TurnCovariance, half, right, up, look)
+    local linearScore = Core.bodyModelScore(motion.LinearCovariance, half, right, up, look)
+    local useTurn = motion.TurnValidated and turnScore <= linearScore
+    local horizontal = Core.turnLead(vel, leadTime, useTurn and motion.SignedTurnRate or 0, Vector3.new)
+    local lead = Vector3.new(horizontal.X, vel.Y * baseLeadTime, horizontal.Z)
     local beforeY, airborne = lead.Y, record.humanoid.FloorMaterial == Enum.Material.Air
     local ySettings = config['Y-Axis']
     local useY = ySettings.Enabled and ySettings[feature == 'Silent Aim' and 'SilentAim' or feature]
     local groundCheck = config.Checks.GroundShotCheck[checkIndices[feature]] == true
     local verticalRaw, verticalMotion = raw.Y, motion
+    local bodyVerticalUncertain = (motion.VerticalConfidence or 0) >= 0.5 and
+        (motion.VerticalPositionError or math.huge) > verticalBudget
     if config.Resolver.Enabled and record.trueVelocitySource == 'true-velocity'
         and vel.Y ~= record.resolvedVelocity.Y then
         verticalRaw, verticalMotion = vel.Y, nil
@@ -639,8 +665,16 @@ local function leadOffset(record, feature, part, point, evidence)
         evidence.VelocitySource = config.Resolver.Enabled and record.trueVelocitySource or 'raw'
         evidence.Resolver = config.Resolver.Enabled and 'TrueVelocity' or 'Disabled'
         evidence.PredictionSource, evidence.SpeedFactor, evidence.LeadTime = predictionSource, speedFactor, leadTime
-        evidence.BaseLeadTime, evidence.HorizontalLeadTime, evidence.FastMotionLimited = baseLeadTime, horizontalTime, limited
-        evidence.TurnRate, evidence.TurnLeadTime = motion.TurnRate, turnTime
+        evidence.BaseLeadTime, evidence.HorizontalLeadTime, evidence.FastMotionLimited = baseLeadTime, leadTime, false
+        evidence.PingAdjustment = pingAdjustment or 0
+        evidence.ManualReferenceRTT = state.ManualPrediction[feature] and state.ManualPrediction[feature].ReferenceRTT
+        evidence.FastMotionDetected = Core.macroActive(vel)
+        evidence.TurnRate, evidence.TurnLeadTime = useTurn and motion.SignedTurnRate or 0, leadTime
+        evidence.MotionModel = useTurn and 'validated-3d-turn' or 'linear'
+        evidence.TurnPositionError, evidence.TurnErrorBudget = motion.TurnPositionError, turnBudget
+        evidence.BodyLimitedTurn, evidence.BodyVerticalUncertain = motion.TurnValidated and not useTurn or false, bodyVerticalUncertain
+        evidence.BodyTurnScore, evidence.BodyLinearScore = turnScore, linearScore
+        evidence.VerticalErrorBudget, evidence.PartDimensions = verticalBudget, vectorData(part.Size)
         evidence.MeasuredTurnRate, evidence.TurnValidated = motion.MeasuredTurnRate, motion.TurnValidated
         evidence.VerticalAcceleration, evidence.VerticalConfidence = motion.VerticalAcceleration, motion.VerticalConfidence
         evidence.VerticalValidated = motion.VerticalValidated
@@ -878,6 +912,7 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart, select
     -- Final Silent settings never reject camera assistance or independent trigger candidates.
     local anti = feature == 'Silent Aim' and settings.AntiCurve
     if anti and anti.Enabled then
+        evidence.MacroRestriction = evidence.FastMotionDetected and 'anti-curve-final-geometry' or nil
         local cameraGap, cameraPoint = Core.rayDistance(point, cursorRay.Origin, cursorRay.Direction)
         local nativeRay = nativeAimRay()
         local nativeGap, nativePoint
@@ -886,18 +921,19 @@ local function aimPoint(record, feature, hitPart, hitPoint, selectedPart, select
         evidence.NativeAimOrigin = nativeRay and vectorData(nativeRay.Origin)
         evidence.NativeAimDirection = nativeRay and vectorData(nativeRay.Direction)
         if anti.Method == 'Endmath' then
-            local projected, onScreen = camera:WorldToViewportPoint(point)
+            local projected = camera:WorldToViewportPoint(point)
             evidence.AntiCurveUnit, evidence.AntiCurveLimit = 'pixels', Core.curveLimit(anti.Endmath.Radius, 120)
             local screenGap = (Vector2.new(projected.X, projected.Y) - cursor).Magnitude
             local nativeScreenGap
-            if nativePoint then
-                local p = camera:WorldToViewportPoint(nativePoint)
+            local aligned = nativeRay and Core.rayPlane(point, camera.CFrame.LookVector, nativeRay.Origin, nativeRay.Direction)
+            if aligned then
+                local p = camera:WorldToViewportPoint(aligned)
                 if p.Z > 0 then nativeScreenGap = (Vector2.new(projected.X, projected.Y) - Vector2.new(p.X, p.Y)).Magnitude end
             end
             evidence.AntiCurveCameraPixels, evidence.AntiCurveMuzzlePixels = screenGap, nativeScreenGap
             evidence.AntiCurveDistance = math.min(screenGap, nativeScreenGap or math.huge)
             evidence.AntiCurveReference = nativeScreenGap and nativeScreenGap < screenGap and 'muzzle-to-mouse-ray' or 'forward-cursor-ray'
-            if not onScreen or projected.Z <= 0 or
+            if projected.Z <= 0 or
                 evidence.AntiCurveDistance > evidence.AntiCurveLimit then return reject('anti-curve-pixels') end
             if anti.Endmath.WallCheck then
                 if wallClear == nil then wallClear = firingVisible(point, record.character, feature) end
@@ -997,6 +1033,11 @@ local function selectTarget(feature)
         return nearest(feature, false, resolveAimPoint)
     end
     local player = validPlayer(state.Locks[feature])
+    if not player and config[feature].Activation.Holding then
+        local record, point, part = nearest(feature, false, resolveAimPoint)
+        state.Locks[feature] = record and record.player.UserId or nil
+        return record, point, part
+    end
     return player and state.Records[player] or nil
 end
 
@@ -1064,11 +1105,11 @@ local function refreshAutoPrediction(time)
             local distance = origin and (point - origin).Magnitude or 0
             local seconds, source, factor, base = Core.predictionTime(settings, state.Network.RTT, state.Network.DataRTT,
                 0, distance, nil, speed, record.humanoid.WalkSpeed)
-            local horizontal = Core.fastLeadTime(Core.motionTime(seconds, record.motion and record.motion.TurnRate), speed, record.humanoid.WalkSpeed)
             state.AutoPrediction.Features[feature] = {Target = player.UserId, ToolEpoch = state.ToolEpoch,
                 Time = time, NextSample = time + state.AutoPrediction.Interval, Source = source,
                 RTT = state.Network.RTT, DataRTT = state.Network.DataRTT, BaseSeconds = base,
-                SpeedSeconds = seconds, HorizontalSeconds = horizontal, SpeedFactor = factor,
+                SpeedSeconds = seconds, HorizontalSeconds = seconds, SpeedFactor = factor,
+                SignedTurnRate = record.motion and record.motion.SignedTurnRate,
                 RawSpeed = math.sqrt(raw.X * raw.X + raw.Z * raw.Z), ResolvedSpeed = speed,
                 Distance = distance, Weapon = weaponName, Ballistics = weaponName and 'hitscan' or 'unverified',
                 BulletSpeed = nil, TravelSeconds = 0, MuzzleOrigin = vectorData(origin)}
@@ -1820,7 +1861,7 @@ local function inputChanged(input, began, processed)
             end
             if began then
                 if not mode.Holding and mode['Unlock Method'] == 'Normal' and state.Locks[name] then state.Locks[name] = nil
-                else local record = nearest(name); state.Locks[name] = record and record.player.UserId or nil end
+                else local record = captureView() and nearest(name); state.Locks[name] = record and record.player.UserId or nil end
             end
         end
     end
@@ -1835,7 +1876,7 @@ local function inputChanged(input, began, processed)
     end
     if began then
         if config.Whitelist.Enabled and inputMatches(input, config.Whitelist.AssignKey) then
-            local record = nearest('Silent Aim', true)
+            local record = captureView() and nearest('Silent Aim', true)
             if record then
                 local id, found = record.player.UserId, nil
                 for i, value in ipairs(state.Whitelist) do if value == id then found = i; break end end
@@ -1919,6 +1960,7 @@ function state:ApplyConfig(supplied)
         else self.Toggles[name] = initial end
         self.Initial[name] = initial
         if not initial or not validPlayer(self.Locks[name]) then self.Locks[name] = nil end
+        if self.ManualPrediction[name] and not Core.equal(incoming[name].Prediction, config[name].Prediction) then self.ManualPrediction[name] = nil end
     end
     self.Whitelist = incoming.Whitelist.Enabled and (keepWhitelist and self.Whitelist or incomingWhitelist) or {}
     self.WhiteMode = keepWhiteMode and self.WhiteMode or incoming.Whitelist.Method

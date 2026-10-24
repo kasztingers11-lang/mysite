@@ -2,7 +2,7 @@
   "sections": {
     "Checks": "Skip players who fail these checks. Each row is: Silent Aim, Aim Assist, Triggerbot.",
     "Y-Axis": "Extra up/down aim adjustment. The three switches choose which features use it.",
-    "Resolver": "Use recent movement to help when a player's reported speed looks wrong.",
+    "Resolver": "Use coherent observed movement when reported XYZ speed is wrong or keeps flipping.",
     "Anti-AimViewer": "Put normal mouse aim back after the script sends a shot point.",
     "Client Bullets": "Show your bullets going toward your mouse on YOUR screen. Keep the game's normal bullet style.",
     "Silent Aim": "Help your shots aim at the chosen player.",
@@ -13,7 +13,7 @@
     "2d-Box": "Boxes with fixed Height and Width around each character. Near characters and their boxes grow together; far ones shrink together.",
     "Misc": "Extra controls and small helper features.",
     "Gun Specifications": "Pick box Height/Width for each gun at Close, Medium and Far distances. ESP uses the same size.",
-    "Silent Aim/Prediction": "Aim a little ahead of moving players. Auto chooses the time; Value is for manual prediction.",
+    "Silent Aim/Prediction": "Predict XYZ movement from measured motion and ping. Auto chooses time; manual starts from Value.",
     "Aim Assist/Prediction": "Help the camera follow where a moving player is going.",
     "Triggerbot/Prediction": "Use the player's expected next position for Triggerbot checks.",
     "Silent Aim/Target/Closest": "Choose the body part or point nearest your mouse.",
@@ -32,7 +32,7 @@
   "defaults": {
     "Enabled": "Main on/off switch for this option.",
     "Auto": "Choose prediction time for you.",
-    "Value": "Starting time in seconds when Auto is false. Speed still adjusts it a little.",
+    "Value": "Manual baseline in seconds. Speed and later ping changes adapt it without changing this number.",
     "BasePart": "Body part to use when Closest is off.",
     "Raycast": "Use the exact body surface under your mouse when available.",
     "Selection": "Part picks a part center. Point picks a point inside that part.",

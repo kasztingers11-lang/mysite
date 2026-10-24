@@ -8,7 +8,7 @@ upstream checkout. This project does not vendor the obfuscator.
 
 Rebuild the runtime with `build-neoperro.py`, then run `build-protected.py` with
 `--prometheus` pointing to that checkout. Python requires Lupa's Lua 5.1 backend.
-Outputs default to the sibling `releases/neoperro-1.3.21/` directory, outside Git.
+Outputs default to the sibling `releases/neoperro-1.3.22/` directory, outside Git.
 
 - `neoperro-flowauth-upload.obfuscated.lua`: upload this runtime to your FlowAuth script.
 - `neoperro-flowauth.lua`: editable placeholder key, full table, and your public loader.
@@ -62,22 +62,27 @@ The starter reports download, loader-compile and loader-return timings. Asynchro
 provider initialization may continue after loader return; that number is not a
 complete provider startup measurement.
 
-## Validation for 1.3.21
+## Validation for 1.3.22
 
-Core/runtime and the complete protected-runtime suites pass. New checks cover
-box coverage relative to the character across distance, zoom and viewport size;
-instant range transitions; ESP/selection agreement; and online-only whitelist
-membership for all three features. The 1.3.20 performance and TB/Silent checks
-remain. REAL static checks are clean for the full bundle and protected upload;
-the latter uses an analyzer-only declaration for the provider grant variable.
+Core/runtime and the complete protected-runtime suites pass. Checks include a
+reproduced delayed native TB/Silent failure, shared/held/toggle input, same-session
+nested/replacement table edits and recovery after a bad edit. Trajectory fixtures
+cover signed turns, concurrent XYZ jump/fall motion at 60/144/240 simulated render
+rates, tiny/rotated bodies, Auto/manual lead, manual ping calibration, oscillating
+false velocity and final AntiCurve/ground geometry. Existing combination, whitelist,
+ESP/profile, Macro, beam and guard regressions remain.
 
-Keep Width=5 / Height=4.3 or your edited values. Boxes follow character perspective,
-with no limb fitting or size interpolation. Gun profiles choose dimensions by range.
-The fixed-pixel sizing in 1.3.18-1.3.20 was a misunderstanding of the user's intent.
+Official Luau 0.744 compiles the full source and protected uploads. Its analyzer
+reports no findings in pure core.lua. REAL's Roblox-aware analyzer and live tools
+are not available in this turn. Mocks/compilation do not prove native input,
+Roblox compatibility, FPS, remote hits or provider authorization.
 
-Mocks and static checks do not prove native compatibility, FPS, remote hits or
-FlowAuth authentication. No new live gameplay was performed for this release.
-Publish the protected upload before switching the website bridge to 1.3.21.
+Keep the current table and values. A 4 Hz observer applies changed public tables
+in the running session without a provider request or rejoin; the normal matching
+loader path still calls ApplyConfig immediately. Manual Value stays unchanged,
+while later ping changes affect effective lead. No Dynamic switch was added.
+
+Publish the protected upload first, then update the website bridge to v1.3.22.
 
 ## Historical 1.3.12 native validation
 

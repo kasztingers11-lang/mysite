@@ -1,3 +1,30 @@
+# Current continuation: v1.3.22
+
+Read INPUT-PREDICTION-REVIEW-2026-10-25.md first. Delayed native TB/Silent activation
+was reproduced on v1.3.21 in a mock and repaired. Keys, automatic same-session
+config edits, signed XYZ motion, body-frame model selection, manual ping adaptation,
+TrueVelocity oscillation handling and less restrictive Y/Endmath paths are updated.
+The global macro-specific lead-time cap is removed; AntiCurve judges final geometry.
+No table names/values changed. Core/runtime and protected suites pass. Official
+Luau compilation passes; pure core.lua analysis is clean.
+
+REAL is absent from the current tool inventory despite the owner reconnecting it.
+No new live result, native hit rate or FPS is claimed. Prior frozen client state
+must not be probed repeatedly; inspect fresh diagnostics before live changes.
+Next live checks: native TB+Silent clicks with Anti-AimViewer on/off, toggle and
+activation combinations, in-place config edits, normal/tiny torsos jumping/falling/
+strafing at high ping, and AntiCurve in third person across weapons/obstacles.
+Compare selected part/velocity/model/point, sent MOUSE and actual damage separately.
+
+The v1.3.22 protected upload is ready outside Git. Production remains v1.3.21 until
+the owner publishes it to FlowAuth and confirms. Then merge the prepared v1.3.22
+website bridge and verify the raw endpoint. Keep their existing private key/table
+and canonical site loader. No new settings or value conversion are needed.
+
+Earlier checkpoints, publication notes and pixel-sizing assumptions are historical.
+
+---
+
 # Work in progress: v1.3.22 input, shot routing and prediction
 
 The owner requested Silent/prediction and native-click TB cooperation first,

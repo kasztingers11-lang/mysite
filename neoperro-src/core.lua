@@ -295,6 +295,44 @@ function Core.rayDistance(point, origin, direction)
     return (point - closest).Magnitude, closest, t
 end
 
+function Core.rayPlane(point, normal, origin, direction)
+    local denominator = normal:Dot(direction)
+    if math.abs(denominator) < 1e-8 then return nil end
+    local time = normal:Dot(point - origin) / denominator
+    if time < 0 then return nil end
+    return origin + direction * time
+end
+
+function Core.bodyExtent(direction, half, right, up, look)
+    if direction.Magnitude < 1e-8 then return math.min(half.X, half.Y, half.Z) end
+    local unit = direction / direction.Magnitude
+    return math.abs(unit:Dot(right)) * half.X + math.abs(unit:Dot(up)) * half.Y + math.abs(unit:Dot(look)) * half.Z
+end
+
+-- Normalize forecast residuals in the actual oriented part, rather than treating
+-- a narrow torso's X/Z error as interchangeable with its taller dimensions.
+function Core.bodyModelScore(covariance, half, right, up, look)
+    if not covariance then return math.huge end
+    local function axisScore(axis, radius)
+        local variance = axis.X * axis.X * covariance.XX + 2 * axis.X * axis.Z * covariance.XZ + axis.Z * axis.Z * covariance.ZZ
+        return math.max(0, variance) / math.max(radius * radius, 1e-8)
+    end
+    return axisScore(right, half.X) + axisScore(up, half.Y) + axisScore(look, half.Z)
+end
+
+-- Integrate a measured horizontal turn instead of merely shortening straight lead.
+function Core.turnComponents(x, z, seconds, rate)
+    if math.abs(rate or 0) < 1e-5 then return x * seconds, z * seconds end
+    local angle = rate * seconds
+    local forward, sideways = math.sin(angle) / rate, (1 - math.cos(angle)) / rate
+    return x * forward + z * sideways, z * forward - x * sideways
+end
+
+function Core.turnLead(velocity, seconds, rate, newVector)
+    local x, z = Core.turnComponents(velocity.X, velocity.Z, seconds, rate)
+    return newVector(x, 0, z)
+end
+
 -- Rotate a native pellet ray toward local mouse aim without merging endpoints.
 -- Native length, pairwise spread and all Beam styling remain independent.
 function Core.redirectTracer(origin, endpoint, serverPoint, mousePoint, newVector)
@@ -345,7 +383,7 @@ end
 -- RTT sources overlap: use the larger estimate, never add them together.
 -- No assumed projectile speed: travel is included only when supplied by a
 -- verified weapon adapter. Auto deliberately does not read the manual Value.
-function Core.predictionTime(settings, networkRTT, dataRTT, age, distance, speed, movementSpeed, walkSpeed)
+function Core.predictionTime(settings, networkRTT, dataRTT, age, distance, speed, movementSpeed, walkSpeed, referenceRTT)
     if not settings.Enabled then return 0, 'disabled' end
     local factor = 1
     if type(movementSpeed) == 'number' then
@@ -354,25 +392,18 @@ function Core.predictionTime(settings, networkRTT, dataRTT, age, distance, speed
         factor = Core.number(math.sqrt(Core.number(movementSpeed, 0, 0, 180) /
             Core.number(walkSpeed, 22, 1, 180)), 1, 0.75, 1.25)
     end
+    local latency = math.max(Core.number(networkRTT, 0, 0, 1), Core.number(dataRTT, 0, 0, 1))
     if not settings.Auto then
         local base = Core.number(settings.Value, 0.121, 0, 1)
-        return base * factor, 'manual-speed', factor, base
+        local adjustment = base > 0 and latency > 0 and type(referenceRTT) == 'number' and referenceRTT > 0 and latency - referenceRTT or 0
+        local seconds = Core.number(base + adjustment, base, 0, 1)
+        return seconds * factor, adjustment ~= 0 and 'manual-speed-ping' or 'manual-speed', factor, seconds, adjustment
     end
-    local latency = math.max(Core.number(networkRTT, 0, 0, 1), Core.number(dataRTT, 0, 0, 1))
     local source = latency > 0 and 'latency-estimate' or 'fallback-estimate'
     if latency == 0 then latency = 0.1 end
     local travel = type(speed) == 'number' and speed > 0 and math.max(0, distance or 0) / speed or 0
     local base = Core.number(latency + Core.number(age, 0, 0, 0.05) + travel, 0.1, 0, 0.35)
     return Core.number(base * factor, 0.1, 0, 0.35), source, factor, base
-end
-
--- Always-on motion guard. Above the game's observed fast-motion threshold,
--- limit extrapolated travel to one normal/fast-boundary stride over this horizon.
--- It never changes the selected point, direction, vertical motion or manual Value.
-function Core.fastLeadTime(seconds, horizontalSpeed, walkSpeed)
-    local reference = math.max(30, Core.number(walkSpeed, 22, 1, 180))
-    if horizontalSpeed > reference then return seconds * reference / horizontalSpeed, true end
-    return seconds, false
 end
 
 -- A conservative vertical lead, without inventing gravity from FloorMaterial.
@@ -381,8 +412,9 @@ function Core.autoVertical(sampled, raw)
     -- A position-history fit describes the recent interval, so it can still rise
     -- after the replicated velocity turns downward at the jump apex (and vice versa).
     -- Use the current direction only when it is finite and outside resting noise.
-    if type(raw) == 'number' and raw == raw and math.abs(raw) > 3 and math.abs(raw) <= 180
-        and sampled * raw < 0 then return raw, 'raw-direction-change' end
+    local current = type(raw) == 'number' and tonumber(raw)
+    if current and current == current and math.abs(current) > 3 and math.abs(current) <= 180
+        and sampled * current < 0 then return current, 'raw-direction-change' end
     return sampled, 'resolved'
 end
 
@@ -475,6 +507,9 @@ function Core.trueVelocity(history, raw, fitted, fallback, source, newVector)
     local fitXZ = math.sqrt(fitted.X * fitted.X + fitted.Z * fitted.Z)
     local rawXZ = math.sqrt(raw.X * raw.X + raw.Z * raw.Z)
     local xzStable, yStable, xzError, yError = last.t, last.t, 0, 0
+    local xzChanges, yChanges, xzBad, yBad, observed = 0, 0, 0, 0, 0
+    local previousRaw
+    local previousDX, previousDZ, previousDY
     local xzTail, yTail, recent
     for i = #history, 1, -1 do
         local sample = history[i]
@@ -486,6 +521,21 @@ function Core.trueVelocity(history, raw, fitted, fallback, source, newVector)
         if not sample.raw or not Core.finiteVector(sample.raw) then
             xzTail, yTail = true, true
         else
+            if previousRaw then
+                local changeX, changeZ = sample.raw.X - previousRaw.X, sample.raw.Z - previousRaw.Z
+                if previousDX and changeX * changeX + changeZ * changeZ > math.max(3, fitXZ * 0.25) ^ 2
+                    and changeX * previousDX + changeZ * previousDZ < -0.5 * math.sqrt((changeX*changeX+changeZ*changeZ)*(previousDX*previousDX+previousDZ*previousDZ)) then xzChanges = xzChanges + 1 end
+                local changeY = sample.raw.Y - previousRaw.Y
+                if previousDY and math.abs(changeY) > math.max(3, math.abs(fitted.Y) * 0.25) and changeY * previousDY < 0 then yChanges = yChanges + 1 end
+                previousDX, previousDZ, previousDY = changeX, changeZ, changeY
+            end
+            previousRaw = sample.raw
+            if dt >= 0.035 then
+                local rawError = last.p - sample.p - sample.raw * dt
+                if rawError.X * rawError.X + rawError.Z * rawError.Z > error.X * error.X + error.Z * error.Z + 0.0025 then xzBad = xzBad + 1 end
+                if rawError.Y * rawError.Y > error.Y * error.Y + 0.0025 then yBad = yBad + 1 end
+                observed = observed + 1
+            end
             local dx, dz = sample.raw.X - raw.X, sample.raw.Z - raw.Z
             if dx * dx + dz * dz > math.max(1, rawXZ * 0.1) ^ 2 then xzTail = true end
             if math.abs(sample.raw.Y - raw.Y) > math.max(2, math.abs(raw.Y) * 0.1) then yTail = true end
@@ -496,11 +546,13 @@ function Core.trueVelocity(history, raw, fitted, fallback, source, newVector)
     if not recent then return fallback, source end
     local dx, dz = recent.X - fitted.X, recent.Z - fitted.Z
     local mismatchX, mismatchZ = raw.X - fitted.X, raw.Z - fitted.Z
-    local useXZ = fitXZ >= 1 and last.t - xzStable >= 0.05
+    local persistentXZ = last.t - xzStable >= 0.05 or span >= 0.08 and xzChanges >= 3 and xzBad >= 3 and xzBad >= observed * 0.75
+    local persistentY = last.t - yStable >= 0.05 or span >= 0.08 and yChanges >= 3 and yBad >= 3 and yBad >= observed * 0.75
+    local useXZ = (fitXZ >= 1 or xzChanges >= 3) and persistentXZ
         and xzError <= math.max(0.05, fitXZ * span * 0.15)
         and dx * dx + dz * dz <= math.max(3, fitXZ * 0.25) ^ 2
         and mismatchX * mismatchX + mismatchZ * mismatchZ >= math.max(3, fitXZ * 0.25) ^ 2
-    local useY = math.abs(fitted.Y) >= 1 and last.t - yStable >= 0.05
+    local useY = (math.abs(fitted.Y) >= 1 or yChanges >= 3) and persistentY
         and yError <= math.max(0.05, math.abs(fitted.Y) * span * 0.15)
         and math.abs(recent.Y - fitted.Y) <= math.max(3, math.abs(fitted.Y) * 0.25)
         and math.abs(raw.Y - fitted.Y) >= math.max(3, math.abs(fitted.Y) * 0.25)
@@ -512,7 +564,7 @@ end
 -- Fit only measured replicated velocities. A stable slope is useful at a jump
 -- apex; sparse updates, a one-frame impulse and noisy slopes are not gravity.
 function Core.motion(history, raw, time)
-    local model = {VerticalAcceleration = 0, VerticalConfidence = 0, VerticalValidated = false, TurnRate = 0}
+    local model = {VerticalAcceleration = 0, VerticalConfidence = 0, VerticalValidated = false, TurnRate = 0, SignedTurnRate = 0}
     if #history < 4 or not Core.finiteVector(raw) or raw.Magnitude > 180 then return model end
     local last, first = history[#history], history[1]
     local span = last.t - first.t
@@ -570,6 +622,9 @@ function Core.motion(history, raw, time)
         end
     end
     local speed = math.sqrt(raw.X * raw.X + raw.Z * raw.Z)
+    local signedRate = 0
+    local endpoint = last.raw
+    local endpointSpeed = math.sqrt(endpoint.X * endpoint.X + endpoint.Z * endpoint.Z)
     if speed >= 3 then
         for i = #history - 1, 1, -1 do
             local sample = history[i]
@@ -577,29 +632,51 @@ function Core.motion(history, raw, time)
             if dt >= 0.05 then
                 local old = sample.raw
                 local oldSpeed = math.sqrt(old.X * old.X + old.Z * old.Z)
-                if oldSpeed >= 3 then
-                    local dot = Core.number((raw.X * old.X + raw.Z * old.Z) / (speed * oldSpeed), 1, -1, 1)
-                    model.TurnRate = math.acos(dot) / dt
+                if oldSpeed >= 3 and endpointSpeed >= 3 then
+                    local dot = Core.number((endpoint.X * old.X + endpoint.Z * old.Z) / (endpointSpeed * oldSpeed), 1, -1, 1)
+                    local cross = (old.Z * endpoint.X - old.X * endpoint.Z) / (endpointSpeed * oldSpeed)
+                    local atan2 = math.atan2 or math.atan
+                    signedRate = atan2(cross, dot) / dt
+                    model.TurnRate = math.abs(signedRate)
+                    model.MeasuredTurnRate = math.acos(Core.number((raw.X*old.X+raw.Z*old.Z)/(speed*oldSpeed),1,-1,1)) / dt
                 end
                 break
             end
         end
     end
     last.turnRate = model.TurnRate
-    model.MeasuredTurnRate = model.TurnRate
+    last.signedTurnRate = signedRate
+    model.MeasuredTurnRate = model.MeasuredTurnRate or model.TurnRate
     local straightError, turnError, forecasts = 0, 0, 0
+    local linearXX, linearZZ, linearXZ, turnXX, turnZZ, turnXZ = 0, 0, 0, 0, 0, 0
     for _, sample in ipairs(history) do
         local dt = last.t - sample.t
         local velocity = sample.resolved or sample.raw
-        if dt >= 0.035 and sample.turnRate and sample.turnRate > 0 and velocity then
-            local time = Core.motionTime(dt, sample.turnRate)
-            local straight, turned = last.p - sample.p - velocity * dt, last.p - sample.p - velocity * time
+        if dt >= 0.035 and sample.signedTurnRate and math.abs(sample.signedTurnRate) > 0 and velocity then
+            local dx, dz = Core.turnComponents(velocity.X, velocity.Z, dt, sample.signedTurnRate)
+            local straight = last.p - sample.p - velocity * dt
+            local turnX, turnZ = last.p.X - sample.p.X - dx, last.p.Z - sample.p.Z - dz
             straightError = straightError + straight.X * straight.X + straight.Z * straight.Z
-            turnError = turnError + turned.X * turned.X + turned.Z * turned.Z
+            turnError = turnError + turnX * turnX + turnZ * turnZ
+            linearXX, linearZZ, linearXZ = linearXX + straight.X*straight.X, linearZZ + straight.Z*straight.Z, linearXZ + straight.X*straight.Z
+            turnXX, turnZZ, turnXZ = turnXX + turnX*turnX, turnZZ + turnZ*turnZ, turnXZ + turnX*turnZ
             forecasts = forecasts + 1
         end
     end
     model.TurnValidated = forecasts >= 2 and turnError < straightError
+    model.TurnPositionError = forecasts > 0 and math.sqrt(turnError / forecasts) or math.huge
+    model.TurnLinearError = forecasts > 0 and math.sqrt(straightError / forecasts) or math.huge
+    if forecasts > 0 then
+        model.TurnCovariance = {XX=turnXX/forecasts, ZZ=turnZZ/forecasts, XZ=turnXZ/forecasts}
+        model.LinearCovariance = {XX=linearXX/forecasts, ZZ=linearZZ/forecasts, XZ=linearXZ/forecasts}
+    end
+    if model.TurnValidated then
+        local atan2 = math.atan2 or math.atan
+        local angle = atan2(endpoint.Z * raw.X - endpoint.X * raw.Z, endpoint.X * raw.X + endpoint.Z * raw.Z)
+        local turnReadAngle = signedRate * sampleAge
+        model.TurnCurrentError = math.max(0, math.min(0,turnReadAngle)-angle, angle-math.max(0,turnReadAngle))
+        if model.TurnCurrentError <= 0.15 then model.SignedTurnRate = signedRate else model.TurnValidated = false end
+    end
     if not model.TurnValidated then model.TurnRate = 0 end
     return model
 end
@@ -636,7 +713,7 @@ function Core.verticalLead(vertical, rawY, seconds, height, grounded, model, sup
         end
         correction = vertical * duration + 0.5 * acceleration * duration * duration - vertical * seconds
     end
-    return Core.number(vertical * seconds + correction, 0, -height, height * 2), correction, mode
+    return Core.number(vertical * seconds + correction, 0), correction, mode
 end
 
 -- State changes in the supplied config win; otherwise keep the running toggle.

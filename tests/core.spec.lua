@@ -193,6 +193,48 @@ near(Core.velocity(history, zero, zero).X, 1)
 assert(not Core.finiteVector(V.new(0/0, 0, 0)))
 assert(not Core.finiteVector(V.new(math.huge, 0, 0)))
 local defaults = dofile('neoperro-src/defaults.lua')
+-- Analytic reference trajectories: both turn directions at different sample and
+-- render phases. Y follows a measured parabola independently of the XZ arc.
+do
+    for _,fps in ipairs({60,144,240})do
+        for _,rate in ipairs({-10,-2,2,10})do
+            local samples,elapsed={},0
+            for frame=0,math.floor(fps*.5)do
+                local t=frame/fps;local angle=rate*t
+                local p=V.new(22*(1-math.cos(angle))/rate,30+40*t-50*t*t,22*math.sin(angle)/rate)
+                local raw=V.new(22*math.sin(angle),40-100*t,22*math.cos(angle))
+                elapsed=elapsed+1/fps
+                if elapsed>=1/60 then
+                    elapsed=elapsed%(1/60);Core.sample(samples,p,t,raw)
+                end
+                Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero),V.new)
+                local model=Core.motion(samples,raw,t)
+                if t>=.3 then
+                    assert(model.TurnValidated,'Coherent turn must validate at '..fps..' FPS')
+                    near(model.SignedTurnRate,rate,1e-6)
+                    local lead=Core.turnLead(raw,.12,model.SignedTurnRate,V.new)
+                    local future=t+.12;local expected=V.new(22*(1-math.cos(rate*future))/rate,0,22*math.sin(rate*future)/rate)
+                    near(lead.X,expected.X-p.X,1e-6);near(lead.Z,expected.Z-p.Z,1e-6)
+                    local vertical=Core.verticalLead(raw.Y,raw.Y,.12,.1,false,model)
+                    near(vertical,40*.12-100*t*.12-50*.12*.12,1e-6)
+                end
+            end
+        end
+    end
+    local right,up,look=V.new(1,0,0),V.new(0,1,0),V.new(0,0,-1)
+    near(Core.bodyExtent(right,V.new(.1,2,.5),right,up,look),.1)
+    near(Core.bodyExtent(right,V.new(.1,2,.5),up,right,look),2)
+    local turnCov,linearCov={XX=.04,ZZ=.0001,XZ=0},{XX=.0001,ZZ=.09,XZ=0}
+    assert(Core.bodyModelScore(turnCov,V.new(.1,2,2),right,up,look)>Core.bodyModelScore(linearCov,V.new(.1,2,2),right,up,look))
+    assert(Core.bodyModelScore(turnCov,V.new(2,2,.1),right,up,look)<Core.bodyModelScore(linearCov,V.new(2,2,.1),right,up,look))
+    local s=math.sqrt(.5)
+    near(Core.bodyModelScore({XX=1,ZZ=1,XZ=1},V.new(.1,2,2),V.new(s,0,s),up,V.new(-s,0,s)),200,1e-6)
+    local p=Core.rayPlane(V.new(5,2,-50),V.new(0,0,-1),V.new(10,0,0),V.new(-.1,.04,-1))
+    near(p.X,5);near(p.Y,2);near(p.Z,-50)
+    assert(Core.rayPlane(V.new(0,0,-50),look,zero,V.new(1,0,0))==nil)
+    assert(Core.rayPlane(V.new(0,0,-50),look,zero,V.new(0,0,1))==nil)
+end
+
 do
     local function estimate(samples,raw)
         local fit=Core.velocity(samples,raw,zero)
@@ -217,6 +259,19 @@ do
     Core.sample(samples,V.new(1000,0,0),.16,zero)
     resolved,source=estimate(samples,zero)
     near(resolved.Magnitude,0);assert(#samples==1 and source~='true-velocity','A teleport discards the previous correction')
+    for _,actual in ipairs({V.new(22,-10,-8),zero})do
+        local samples,raw={},zero
+        for i=0,7 do
+            raw=V.new(i%2==0 and 100 or -100,i%2==0 and 60 or -60,i%2==0 and -70 or 70)
+            Core.sample(samples,actual*(i*.02),i*.02,raw)
+        end
+        local value,kind=estimate(samples,raw)
+        near((value-actual).Magnitude,0)
+        assert(kind=='true-velocity','Coherent positions reject persistent oscillating XYZ velocity')
+    end
+    samples={}
+    for i=0,7 do Core.sample(samples,zero,i*.02,V.new(22,0,0))end
+    near(estimate(samples,V.new(22,0,0)).X,22)
 end
 Core.validate(defaults, defaults)
 assert(defaults.EndMath==nil and defaults['Silent Aim'].EndMath==nil)
@@ -273,9 +328,12 @@ do
     assert(cfg.Value==.121 and cfg.Dynamic==nil,'Dynamic behavior has no extra setting and does not mutate Value')
     cfg.Auto=true;near(Core.predictionTime(cfg,.1,.1,0,0,nil,22,22),.1)
     cfg.Value=1;near(Core.predictionTime(cfg,.1,.1,0,0,nil,22,22),.1)
-    local time,limited=Core.fastLeadTime(.121,200,22)
-    assert(limited and time*200<=.121*30+1e-8,'Fast-motion horizontal lead cannot grow unbounded')
-    near(Core.fastLeadTime(.121,22,22),.121)
+    cfg.Auto=false;cfg.Value=.121
+    near(Core.predictionTime(cfg,.2,.2,0,0,nil,22,22,.2),.121)
+    near(Core.predictionTime(cfg,.25,.25,0,0,nil,22,22,.2),.171)
+    near(Core.predictionTime(cfg,.15,.15,0,0,nil,22,22,.2),.071)
+    assert(cfg.Value==.121,'Ping adaptation never rewrites the manual value')
+    cfg.Value=0;near(Core.predictionTime(cfg,.3,.3,0,0,nil,22,22,.2),0)
 end
 do
     local samples={}

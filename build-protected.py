@@ -86,7 +86,8 @@ def build(prometheus, output):
                '-- Prediction can lead a moving player in X, Y and Z. Auto ignores Value.\n'
                '-- Empty Whitelist lists allow everyone. There is no assignment cap.\n'
                '-- Crouch, lying and emote pose measurements run automatically.\n'
-               '-- Table edits reuse the current same-build session; a fresh load still uses FlowAuth.\n'
+               '-- Table replacements and nested edits apply in this session, checked four times per second.\n'
+               '-- Manual Value calibrates at the current ping; later ping changes adapt the lead.\n'
                '-- The intro plays once per client session. There are no intro settings.\n'
                '-- P: Silent toggle | M: Assist toggle | hold Q: Assist | V: Trigger toggle | hold RMB: Trigger | E: stop.\n\n')
     starter += explain_table(config).rstrip() + '\n\n'

@@ -4,7 +4,8 @@ script_key = "FLOW-REPLACE-WITH-YOUR-KEY";
 -- Prediction can lead a moving player in X, Y and Z. Auto ignores Value.
 -- Empty Whitelist lists allow everyone. There is no assignment cap.
 -- Crouch, lying and emote pose measurements run automatically.
--- Table edits reuse the current same-build session; a fresh load still uses FlowAuth.
+-- Table replacements and nested edits apply in this session, checked four times per second.
+-- Manual Value calibrates at the current ping; later ping changes adapt the lead.
 -- The intro plays once per client session. There are no intro settings.
 -- P: Silent toggle | M: Assist toggle | hold Q: Assist | V: Trigger toggle | hold RMB: Trigger | E: stop.
 
@@ -30,7 +31,7 @@ getgenv()['neoperro'] = {
         ['Triggerbot'] = true;                                                   -- Let Triggerbot use this Y-Axis section.
     };
 
-    -- Use recent movement to help when a player's reported speed looks wrong.
+    -- Use coherent observed movement when reported XYZ speed is wrong or keeps flipping.
     ['Resolver']           = {
         ['Enabled'] = true;                                                      -- Main on/off switch for this option.
     };
@@ -48,11 +49,11 @@ getgenv()['neoperro'] = {
     -- Help your shots aim at the chosen player.
     ['Silent Aim']         = {
         ['Enabled']    = true;                                                   -- Main on/off switch for this option.
-        -- Aim a little ahead of moving players. Auto chooses the time; Value is for manual prediction.
+        -- Predict XYZ movement from measured motion and ping. Auto chooses time; manual starts from Value.
         ['Prediction'] = {
             ['Enabled'] = true;                                                  -- Main on/off switch for this option.
             ['Auto']    = true;                                                  -- Choose prediction time for you.
-            ['Value']   = 0.128;                                                 -- Starting time in seconds when Auto is false. Speed still adjusts it a little.
+            ['Value']   = 0.128;                                                 -- Manual baseline in seconds. Speed and later ping changes adapt it without changing this number.
         };
         ['Method']     = 'Auto';                                                 -- Auto keeps looking for a player. Target uses the player you pick.
         ['Ignore']     = false;                                                  -- Skip Silent Aim's FOV limit when true.
@@ -112,7 +113,7 @@ getgenv()['neoperro'] = {
         ['Prediction'] = {
             ['Enabled'] = true;                                                  -- Main on/off switch for this option.
             ['Auto']    = true;                                                  -- Choose prediction time for you.
-            ['Value']   = 0.121;                                                 -- Starting time in seconds when Auto is false. Speed still adjusts it a little.
+            ['Value']   = 0.121;                                                 -- Manual baseline in seconds. Speed and later ping changes adapt it without changing this number.
         };
         ['Method']     = 'Auto';                                                 -- Auto keeps looking for a player. Target uses the player you pick.
         ['Follow']     = 'Camera';                                               -- Camera moves your view. Mouse moves your mouse.
@@ -161,7 +162,7 @@ getgenv()['neoperro'] = {
         ['Prediction']  = {
             ['Enabled'] = true;                                                  -- Main on/off switch for this option.
             ['Auto']    = true;                                                  -- Choose prediction time for you.
-            ['Value']   = 0.121;                                                 -- Starting time in seconds when Auto is false. Speed still adjusts it a little.
+            ['Value']   = 0.121;                                                 -- Manual baseline in seconds. Speed and later ping changes adapt it without changing this number.
         };
         ['TargetOnly']  = false;                                                 -- Only let Triggerbot shoot Silent Aim's selected player.
         ['Delay']       = 0.1;                                                   -- How long to hold shoot after starting a shot, in seconds.
@@ -303,7 +304,7 @@ getgenv()['neoperro'] = {
 local neoperroEnvironment = getgenv()
 local neoperroRuntime = neoperroEnvironment.__neoperroRuntimeV1
 if type(neoperroRuntime) == 'table' and neoperroRuntime.Alive
-    and neoperroRuntime.Version == '1.3.21'
+    and neoperroRuntime.Version == '1.3.22'
     and neoperroRuntime.Distribution == 'FlowAuth' and type(neoperroRuntime.ApplyConfig) == 'function' then
     script_key = nil -- Configuration updates use the already-running session.
     neoperroRuntime:ApplyConfig(neoperroEnvironment.neoperro)
