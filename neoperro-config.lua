@@ -189,19 +189,19 @@ getgenv()['neoperro'] = {
             ['Visible'] = true;
             ['Name']    = {true, 'DisplayName'};
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
-            ['Size']    = {['Width'] = 5; ['Height'] = 4.3};
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};
         };
         ['Aim Assist'] = {
             ['Visible'] = false;
             ['Name']    = {false, 'DisplayName'};
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
-            ['Size']    = {['Width'] = 5; ['Height'] = 4.3};
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};
         };
         ['Triggerbot'] = {
             ['Visible'] = false;
             ['Name']    = {false, 'DisplayName'};
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};
-            ['Size']    = {['Width'] = 5; ['Height'] = 4.3};
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};
         };
     };
 
@@ -234,29 +234,29 @@ getgenv()['neoperro'] = {
             ['Far']    = 90;
         };
         ['Revolver']         = {
-            ['Close']  = {['BoxSize'] = {5.1, 5.1}};
-            ['Medium'] = {['BoxSize'] = {5.5, 5.5}};
-            ['Far']    = {['BoxSize'] = {5, 4.5}};
+            ['Close']  = {['BoxSize'] = {['Height'] = 5.1; ['Width'] = 5.1}};
+            ['Medium'] = {['BoxSize'] = {['Height'] = 5.5; ['Width'] = 5.5}};
+            ['Far']    = {['BoxSize'] = {['Height'] = 4.5; ['Width'] = 5}};
         };
         ['Double-Barrel SG'] = {
-            ['Close']  = {['BoxSize'] = {7, 6}};
-            ['Medium'] = {['BoxSize'] = {6, 5}};
-            ['Far']    = {['BoxSize'] = {5, 5}};
+            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 7}};
+            ['Medium'] = {['BoxSize'] = {['Height'] = 5; ['Width'] = 6}};
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};
         };
         ['TacticalShotgun']  = {
-            ['Close']  = {['BoxSize'] = {7, 7}};
-            ['Medium'] = {['BoxSize'] = {6, 6}};
-            ['Far']    = {['BoxSize'] = {5, 5}};
+            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};
         };
         ['Shotgun']          = {
-            ['Close']  = {['BoxSize'] = {7, 7}};
-            ['Medium'] = {['BoxSize'] = {6, 6}};
-            ['Far']    = {['BoxSize'] = {5, 5}};
+            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};
         };
         ['Usp']              = {
-            ['Close']  = {['BoxSize'] = {5, 6}};
-            ['Medium'] = {['BoxSize'] = {5, 6}};
-            ['Far']    = {['BoxSize'] = {4, 5}};
+            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 4}};
         };
     };
 };

@@ -8,7 +8,7 @@ upstream checkout. This project does not vendor the obfuscator.
 
 Rebuild the runtime with `build-neoperro.py`, then run `build-protected.py` with
 `--prometheus` pointing to that checkout. Python requires Lupa's Lua 5.1 backend.
-Outputs default to the sibling `releases/neoperro-1.3.17/` directory, outside Git.
+Outputs default to the sibling `releases/neoperro-1.3.19/` directory, outside Git.
 
 - `neoperro-flowauth-upload.obfuscated.lua`: upload this runtime to your FlowAuth script.
 - `neoperro-flowauth.lua`: editable placeholder key, full table, and your public loader.
@@ -62,24 +62,25 @@ The starter reports download, loader-compile and loader-return timings. Asynchro
 provider initialization may continue after loader return; that number is not a
 complete provider startup measurement.
 
-## Validation for 1.3.17
+## Validation for 1.3.18
 
-Core/runtime/protected regressions pass. Coverage includes off-center camera/cursor
-alignment, all eight Silent/Assist/Triggerbot combinations, FOV-off character tests,
-50 repeated table updates, unlimited IDs/assignments, posture transitions and ESP
-tags. Added tests cover predicted XYZ Closest Point, 18 rotated-part/manual/Auto
-feature cases and 18 exact Raycast cases, observed acute turns/braking, one support
-query per first accepted candidate and held-trigger routing. Auto Y adds current/future footprint, stale floor state, continuous ramps,
-resolved/raw acceleration isolation and 30/60/144/240 sampling-phase regressions.
-The latest pass adds real-part fallback for all three Y settings, native-ray
-Closest Point in third person, 30 arbitrary-camera/physics/activation-send cases,
-position evidence for vertical acceleration, native Triggerbot fallback and helper
-height isolation. Settings are unchanged. See the airborne/3D review in the handoff.
-The protected suite uses synthetic grants and hashing, not FlowAuth auth.
-Full, runtime, readable starter and protected upload pass REAL static analysis with
-zero errors/warnings. The final collision fix has not been injected/live tested,
-following the user's instruction to work offline. Provider publication remains
-untested. Mocks and static checks do not establish Roblox compatibility or hit rate.
+Core/runtime and the complete protected-runtime mock suites pass. New checks cover
+Silent current/predicted FOV, native exact surfaces, fresh-point smoothing recovery,
+foreground/background obstruction, screen-edge prediction for all three features,
+distance/FOV-independent dimensions across screen resolutions, named profiles for all configured guns,
+range boundaries, visible ESP size and Macro stall/action-failure cleanup. The
+starter keeps the exact authoritative table, with helpful pixel-unit comments.
+
+No MCP or REAL analyzer was used per instruction. Lua syntax/mock checks do not
+prove Luau/Roblox compatibility, native input, real FPS, remote hits or published
+FlowAuth authentication. Historical static/live observations retain their versions.
+
+Read BOX-UPDATE.md in the release. Keep existing Width=5 / Height=4.3 values.
+One screen-size unit is 16 pixels at 1080p, scaled only by viewport height. Named
+gun fields and legacy pairs use the same numbers. No perspective distance/FOV
+scaling remains; gun profiles select sizes by range. Preserve private keys,
+controls, colors and feature choices. Shared prediction-context expiry and ESP
+visibility invalidation also pass new offline regressions.
 
 ## Historical 1.3.12 native validation
 

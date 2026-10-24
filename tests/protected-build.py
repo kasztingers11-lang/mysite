@@ -7,7 +7,7 @@ from lupa.lua54 import LuaRuntime
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--release', type=Path, default=root.parent / 'releases/neoperro-1.3.17')
+parser.add_argument('--release', type=Path, default=root.parent / 'releases/neoperro-1.3.19')
 args = parser.parse_args()
 release = args.release.resolve()
 upload = (release / 'neoperro-flowauth-upload.obfuscated.lua').read_text(encoding='utf-8')
@@ -123,7 +123,7 @@ game={HttpGet=function(self,url)
     return '__authCalls=__authCalls+1;return ...'
 end}
 loadstring=load
-__neoperroRuntimeV1={Alive=true,Version='1.3.17',Distribution='FlowAuth',LastConfigMs=0,
+__neoperroRuntimeV1={Alive=true,Version='1.3.19',Distribution='FlowAuth',LastConfigMs=0,
     ApplyConfig=function(self,config)__applies=__applies+1 end}
 ''')
 lua.execute(starter)
@@ -136,7 +136,7 @@ lua.globals().__neoperroRuntimeV1.Alive=False
 lua.execute(starter)
 assert lua.globals().__downloads == 2 and lua.globals().__authCalls == 2
 lua.globals().__neoperroRuntimeV1.Alive=True
-lua.globals().__neoperroRuntimeV1.Version='1.3.17'
+lua.globals().__neoperroRuntimeV1.Version='1.3.19'
 lua.globals().__neoperroRuntimeV1.Distribution='Development'
 lua.execute(starter)
 assert lua.globals().__downloads == 3 and lua.globals().__authCalls == 3

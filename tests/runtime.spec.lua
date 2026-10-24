@@ -278,7 +278,7 @@ local foreignBeam=obj('Beam','gb');foreignBeam.Attachment0=farA;foreignBeam.Atta
 assert(farB.WorldPosition==V.new(999,0,0),'Another muzzle is not rewritten')
 
 
--- Box selection is centered on a player and sizes are world units; circle stays on the cursor.
+-- Box selection uses fixed screen pixels; circle stays on the cursor.
 moveEnemy(1,0,-50);step(0.04)
 assert(second.Points['Silent Aim'].X==1,'Center point mode must not preserve incorrect mouse X')
 second.Config['2d-Box']['Silent Aim'].Size.Width=0.1;step(0.04)
@@ -316,7 +316,7 @@ local standaloneSize
 for _,d in ipairs(drawingObjects)do
     if not d.removed and d.Kind=='Square' and d.Visible and d.Thickness==1 then standaloneSize=d.Size end
 end
-assert(standaloneSize and math.abs(standaloneSize.X-5*1080/(2*math.tan(math.rad(70)/2))/50)<=0.5,'Standalone ESP uses the active weapon profile')
+assert(standaloneSize and standaloneSize.X==80,'Standalone ESP uses the active weapon profile')
 second.Config.Whitelist.Enabled=false;step(0.04)
 assert(#second.Whitelist==0)
 key('R',true);key('R',false);assert(#second.Whitelist==0,'Assignment disabled with whitelist')
@@ -520,6 +520,105 @@ do
     enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
 end
 
+-- Silent acquisition accepts the current point or predicted point inside the
+-- same configured circle. AntiCurve remains a separate final-coordinate limit.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local s=cfg['Silent Aim'];s.Target.Closest.Enabled=false;s.Prediction.Auto=false;s.Prediction.Value=.1
+    s.Fov.Method='2d-Circle';s.Fov['2d-Circle'].Size=10
+    enemyRoot.AssemblyLinearVelocity=V.new(20,0,0)
+    local rt=loadRuntime(cfg);step(.02)
+    assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].FovReference=='base-point',
+        'Ordinary lead must not discard a character already acquired inside the circle')
+    moveEnemy(3,0,-50);step(.02);assert(not rt.Points['Silent Aim'],'Neither point inside means no acquisition')
+    moveEnemy(0,0,-50);rt.Config['Silent Aim'].AntiCurve.Enabled=true
+    rt.Config['Silent Aim'].AntiCurve['3d-angles'].Max=.25;step(.02)
+    assert(not rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].Reason=='anti-curve-studs',
+        'Less restrictive acquisition must not expand the configured AntiCurve limit')
+    rt:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new();clearInput()
+end
+
+-- A projected center just outside the viewport can forecast into a visible FOV.
+do
+    local project,oldMouse,oldEnabled,oldWalk=camera.WorldToViewportPoint,Input.GetMouseLocation,tool.Enabled,enemyHum.WalkSpeed
+    camera.WorldToViewportPoint=function(self,point)
+        local p=project(self,point)
+        return p,p.Z>0 and p.X>=0 and p.X<=1920 and p.Y>=0 and p.Y<=1080
+    end
+    Input.GetMouseLocation=function()return V.new(1910,540)end;tool.Enabled=false;enemyHum.WalkSpeed=10
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local cfg=Core.copy(Defaults)
+        for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+            cfg[name].Enabled=name==feature;cfg[name].Activation.Holding=false
+            cfg[name].Prediction.Auto=false;cfg[name].Prediction.Value=.1
+            cfg[name].Fov.Method='2d-Circle';cfg[name].Fov['2d-Circle'].Size=15
+        end
+        cfg['Silent Aim'].Target.Closest.Enabled=false;cfg['Aim Assist'].Target.Closest.Enabled=false
+        cfg['Aim Assist'].Follow='Mouse';cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=true
+        moveEnemy(48.5,0,-50);enemyRoot.AssemblyLinearVelocity=V.new(-10,0,0)
+        local rt=loadRuntime(cfg);step(.02)
+        assert(rt.Points[feature] and math.abs(rt.Points[feature].X-47.5)<1e-6,
+            'The final visible point must decide viewport eligibility for '..feature)
+        rt:Destroy('test')
+    end
+    camera.WorldToViewportPoint=project;Input.GetMouseLocation=oldMouse;tool.Enabled=oldEnabled;enemyHum.WalkSpeed=oldWalk
+    enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- Exact third-person native hits retain their surface before any prediction.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.Target.Closest.Raycast=true
+    s.Target.Closest.Selection='Point';s.Target.Closest.Reduce.All=1;s.Target.Closest.Sharpness=.01
+    local cast,hit=World.Raycast,mouse.Hit;handle.Position=V.new(5,1,0);mouse.Hit=CF.new(0,0,-100)
+    moveEnemy(3,.6,-40);local surface=enemyTorso.Position+V.new(-.3,.2,.4)
+    World.Raycast=function(self,origin,direction,params)
+        if origin.X==0 then return {Instance=World,Position=V.new(0,0,-5)} end
+        return {Instance=enemyTorso,Position=surface}
+    end
+    local rt=loadRuntime(cfg);step(.02)
+    assert(rt.Points['Silent Aim']==surface and rt.AimTrace['Silent Aim'].PointSource=='native-surface',
+        'A blocked camera ray must not discard a valid exact native muzzle surface')
+    rt:Destroy('test');World.Raycast=cast;mouse.Hit=hit;handle.Position=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- A target hit before background cover is unobstructed; foreground cover rejects.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg.Checks.Wall[1]=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.Target.Closest.Enabled=false
+    s.AntiCurve.Enabled=true;s.AntiCurve.Method='Endmath'
+    local cast=World.Raycast;local blocked=false;local queries=0
+    World.Raycast=function(self,origin,direction,params)
+        queries=queries+1
+        if blocked then return {Instance=World,Position=V.new(0,0,-5)} end
+        for _,part in ipairs(params.FilterDescendantsInstances or {})do
+            if part==enemyChar then return {Instance=World,Position=V.new(0,0,-49.8)} end
+        end
+        return {Instance=enemyTorso,Position=V.new(0,0,-49.5)}
+    end
+    local rt=loadRuntime(cfg);step(.02)
+    assert(rt.Points['Silent Aim'],'The real first target hit must not be rejected by background-only cover')
+    assert(queries==2,'Cursor selection plus one final muzzle query must cover Endmath and mandatory wall checks')
+    blocked=true;step(.02)
+    assert(not rt.Points['Silent Aim'],'Foreground geometry must still block the final muzzle path')
+    rt:Destroy('test');World.Raycast=cast;clearInput()
+end
+
+-- An accepted point can move inside the part faster than Sharpness catches up.
+-- A stale smoothed point must not suppress a fresh valid point under hard limits.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    local s=cfg['Silent Aim'];s.Ignore=true;s.Prediction.Enabled=false;s.AntiCurve.Enabled=true
+    s.AntiCurve['3d-angles'].Max=.02;s.Target.Closest.Selection='Point';s.Target.Closest.Axis='All'
+    s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=.01
+    moveEnemy(1,0,-50);local rt=loadRuntime(cfg);step(.02);assert(rt.Points['Silent Aim'])
+    moveEnemy(-1,0,-50);step(.02)
+    assert(rt.Points['Silent Aim'] and rt.AimTrace['Silent Aim'].SmoothingBypassed,
+        'Fresh allowed geometry can recover from a rejected stale smoothing anchor')
+    rt:Destroy('test');moveEnemy(0,0,-50);clearInput()
+end
+
 -- Reusing a hitscan forecast must rebase support diagnostics to the final local
 -- point, including when the ground guard removes falling lead.
 do
@@ -676,14 +775,21 @@ do
             enemyRoot.AssemblyLinearVelocity=V.new(0,20,0)
             local rt=loadRuntime(cfg);step(.02)
             local point,trace=rt.Points[feature],rt.AimTrace[feature]
-            assert(point and math.abs(point.Y-2)<1e-6 and trace.Part=='UpperTorso' and trace.CandidateAttempt>=2,
-                'Try a usable predicted body part before discarding '..feature..' with Y '..y)
+            if feature=='Silent Aim' then
+                assert(point and math.abs(point.Y-4)<1e-6 and trace.Part=='Head' and trace.FovReference=='base-point',
+                    'Silent retains the actual acquired part while prediction supplies its shot point')
+            else
+                assert(point and math.abs(point.Y-2)<1e-6 and trace.Part=='UpperTorso' and trace.CandidateAttempt>=2,
+                    'Try a usable predicted body part before discarding '..feature..' with Y '..y)
+            end
             local target=(feature=='Aim Assist' and rt.Config[feature] or rt.Config['Silent Aim']).Target
             target.Closest.Enabled=false;target.BasePart='Head';step(.02)
-            assert(not rt.Points[feature],'Fixed BasePart must not silently switch to an easier part')
+            assert(feature=='Silent Aim' and rt.AimTrace[feature].Part=='Head' and rt.AimTrace[feature].CandidateAttempt==1
+                or feature~='Silent Aim' and not rt.Points[feature], 'Fixed BasePart must not silently switch to an easier part')
             target.Closest.Enabled=true;target.Closest.Raycast=true
             rayHit={Instance=head,Position=head.Position};step(.02)
-            assert(not rt.Points[feature] and rt.AimTrace[feature].SurfacePart=='Head',
+            assert((feature=='Silent Aim' or not rt.Points[feature]) and rt.AimTrace[feature].SurfacePart=='Head'
+                and rt.AimTrace[feature].CandidateAttempt==1,
                 'Exact surface contract cannot be replaced by an alternate body point')
             rt:Destroy('test');rayHit=nil
         end
@@ -1045,6 +1151,24 @@ step(.07);step(.08);step(.08)
 myHead.AssemblyLinearVelocity=V.new();step(.15);tool.Activated:Fire();step(.05)
 assert(tool.Parent==myChar and not macroRuntime.LastMacroCheck.Detected,'Expired pre-shot speed cannot authorize a later stationary shot')
 myHead:Destroy()
+-- Long frames do not replay a stale macro or leave owned Ctrl/tool state stuck.
+myRoot.AssemblyLinearVelocity=V.new(45,0,0)
+tool.Activated:Fire();step(.05);step(.07);assert(Input.keys.LeftControl)
+step(.8)
+assert(not Input.keys.LeftControl and tool.Parent==myChar and macroRuntime.MacroStatus.Result=='stalled',
+    'A stalled phase must release owned Ctrl and restore its tool at the next update')
+local unequip=myHum.UnequipTools;local failures=0
+myHum.UnequipTools=function()failures=failures+1;error('mock unequip rejection')end
+tool.Activated:Fire();assert(pcall(step,.05));step(.05)
+assert(failures==1 and not macroRuntime.MacroStatus.Active and macroRuntime.MacroStatus.Result=='unequip-failed',
+    'A failed action cannot throw every frame and stall other features')
+myHum.UnequipTools=unequip
+local equip=myHum.EquipTool
+tool.Activated:Fire();step(.05);step(.07);assert(Input.keys.LeftControl)
+myHum.EquipTool=function()error('mock equip rejection')end
+assert(pcall(step,.08))
+assert(not Input.keys.LeftControl and not macroRuntime.MacroStatus.Active and macroRuntime.MacroStatus.Result=='equip-failed')
+myHum.EquipTool=equip;myHum:EquipTool(tool)
 macroRuntime.Config.Misc.Panic.Enabled=false
 key('E',true);key('E',false);assert(macroRuntime.Alive,'Panic false honors its switch')
 macroRuntime.Config.Misc.Panic.Enabled=true;key('E',true);key('E',false)
@@ -1476,16 +1600,53 @@ end
 -- Gun ranges use physical distance and only override Silent box dimensions.
 do
     local cfg=Core.copy(Defaults);cfg['Gun Specifications'].Enabled=true
-    cfg['Gun Specifications'].Ranges={Close=20,Medium=60,Far=100}
-    cfg['Gun Specifications'].Revolver={Close={BoxSize={5.1,5.1}},Medium={BoxSize={5.5,5.5}},Far={BoxSize={5,4.5}}}
+    cfg['Gun Specifications'].Ranges={Close=15,Medium=30,Far=90}
+    cfg['Gun Specifications'].Revolver={Close={BoxSize={Height=5.1,Width=5.1}},
+        Medium={BoxSize={Height=5.5,Width=5.5}},Far={BoxSize={Height=4.5,Width=5}}}
+    cfg['2d-Box']['Silent Aim'].Size={Height=8,Width=7}
+    cfg['2d-Box']['Silent Aim'].Visible=true
     cfg['2d-Box']['Aim Assist'].Visible=true
     local rt=loadRuntime(cfg)
-    for _, case in ipairs({{10,'Close',5.1,5.1},{40,'Medium',5.5,5.5},{80,'Far',5,4.5}}) do
+    for _, case in ipairs({{10,'Close',5.1,5.1},{15,'Close',5.1,5.1},{15.01,'Medium',5.5,5.5},
+        {20,'Medium',5.5,5.5},{30,'Medium',5.5,5.5},{30.01,'Far',5,4.5},{90,'Far',5,4.5},
+        {90.01,false,7,8},{200,false,7,8},{30,'Medium',5.5,5.5},{15,'Close',5.1,5.1}}) do
         moveEnemy(0,0,-case[1]);step(.04)
         local info=rt:Diagnose().Boxes[tostring(enemy.UserId)]
-        assert(info['Silent Aim'].Range==case[2] and info['Silent Aim'].Width==case[3] and info['Silent Aim'].Height==case[4])
+        assert(info['Silent Aim'].Range==(case[2] or nil) and info['Silent Aim'].Width==case[3] and info['Silent Aim'].Height==case[4])
+        assert(info['Silent Aim'].Units=='fixed screen-size units (16px)')
+        local found=false
+        for _,d in ipairs(drawingObjects)do
+            if not d.removed and d.Visible and d.Kind=='Square' and math.abs(d.Size.X-case[3]*16)<1e-6 and math.abs(d.Size.Y-case[4]*16)<1e-6 then found=true end
+        end
+        assert(found,'ESP must display exactly the same pixel size as the selection profile')
         assert(info['Aim Assist'].Width==5 and info['Aim Assist'].Height==4.3,'Weapon box must not override Assist')
     end
+    local name=tool.Name
+    for _,weapon in ipairs({'Double-Barrel SG','TacticalShotgun','Shotgun','Usp'})do
+        tool.Name='['..weapon..']';moveEnemy(0,0,-10);step(.02)
+        local box=rt:Diagnose().Boxes[tostring(enemy.UserId)]['Silent Aim']
+        local expected=rt.Config['Gun Specifications'][weapon].Close.BoxSize
+        assert(box.Weapon==weapon and box.Width==expected.Width and box.Height==expected.Height)
+    end
+    tool.Name='[Unknown]';step(.02)
+    assert(rt:Diagnose().Boxes[tostring(enemy.UserId)]['Silent Aim'].Width==7,'Unlisted weapons use the base pixel size')
+    tool.Name=name;rt.Config['Gun Specifications'].Enabled=false
+    local fov,viewport=camera.FieldOfView,camera.ViewportSize
+    for _,case in ipairs({{10,45,720},{50,70,1080},{200,100,1440},{15,90,2160}})do
+        camera.FieldOfView=case[2];camera.ViewportSize=V.new(viewport.X,case[3])
+        moveEnemy(0,0,-case[1]);step(.02)
+        local box=rt:Diagnose().Boxes[tostring(enemy.UserId)]['Silent Aim']
+        assert(box.Width==7 and box.Height==8 and box.Range==nil,
+            'Distance and camera zoom cannot rescale a fixed-pixel general box')
+        assert(box.PixelWidth==112 and box.PixelHeight==128,
+            'Viewport changes cannot resize a general box when gun profiles are disabled')
+        local drawn=false
+        for _,d in ipairs(drawingObjects)do
+            if not d.removed and d.Visible and d.Kind=='Square' and d.Thickness==1 and d.Size==V.new(112,128) then drawn=true end
+        end
+        assert(drawn,'Rendered box must use the fixed selection dimensions')
+    end
+    camera.FieldOfView,camera.ViewportSize=fov,viewport
     rt:Destroy('test');moveEnemy(0,0,-50)
 end
 
@@ -1522,6 +1683,43 @@ do
     rt.Config['Silent Aim'].Method='Target';rt.Locks['Silent Aim']=enemy.UserId;step(.04)
     assert(rt.Targets['Silent Aim']==nil,'Explicit target lock must not silently switch players')
     rt:Destroy('test');secondChar:Destroy();second:Destroy();enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- Expired ping estimates cannot supply a stale forecast before the render-side
+-- refresh runs. The same target/weapon's unexpired half-second cache is retained.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    enemyRoot.AssemblyLinearVelocity=V.new(22,0,0)
+    local rt=loadRuntime(cfg);rt.Network.RTT=.2;rt.Network.DataRTT=.2
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        rt.AutoPrediction.Features[feature]={Target=enemy.UserId,ToolEpoch=rt.ToolEpoch,
+            RTT=.06,DataRTT=.06,NextSample=clock+.1}
+        local _,trace=rt:Forecast(enemy,feature);assert(math.abs(trace.BaseLeadTime-.06)<1e-6)
+    end
+    clock=clock+.11
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local _,trace=rt:Forecast(enemy,feature)
+        assert(math.abs(trace.BaseLeadTime-.2)<1e-6,'Expired estimates must use current ping for '..feature)
+    end
+    rt:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
+-- ESP does not retain an occlusion result after the camera/target moved to a
+-- materially different ray, even within the normal 80ms static-cache interval.
+do
+    local cfg=Core.copy(Defaults);cfg['Silent Aim'].Enabled=false;cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg.ESP.VisibleCheck=true
+    local cast,view=World.Raycast,camera.CFrame
+    World.Raycast=function(self,origin,direction,params)
+        if origin.X>1 or enemyRoot.Position.X>.5 then return {Instance=World,Position=V.new(0,0,-5)} end
+    end
+    local rt=loadRuntime(cfg);step(.02);assert(anyBoxVisible())
+    camera.CFrame=CF.new(5,0,0);step(.005)
+    assert(not anyBoxVisible(),'Camera movement invalidates stale visible ESP before the cache expires')
+    camera.CFrame=view;step(.005);assert(anyBoxVisible())
+    moveEnemy(.6,0,-50);step(.005)
+    assert(not anyBoxVisible(),'Target movement invalidates stale visible ESP before the cache expires')
+    rt:Destroy('test');World.Raycast=cast;camera.CFrame=view;moveEnemy(0,0,-50)
 end
 
 -- Live-observed adapter names, fresh cursor precedence, and per-feature prediction.

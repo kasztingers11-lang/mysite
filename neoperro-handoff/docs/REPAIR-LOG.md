@@ -1,3 +1,51 @@
+# 1.3.19 fixed dimensions and instant range changes - 2026-10-24
+
+User reports boxes resizing with player distance, Gun Specifications off, startup
+version v1.3.18. That identifies the reported version, not the exact serving bytes.
+Local v1.3.18 was already depth/FOV independent and passed mocks. The live cause
+has not been established. Do not claim viewport scaling caused the report.
+
+1.3.19 removes the remaining viewport-size multiplier entirely: Width*16 and
+Height*16 are fixed pixels for ESP and selection. Body position can still move
+on each render frame; no box-size interpolation or limb-fit resizing is present.
+Gun Specifications off always uses the base size. When on, dimensions switch
+immediately at configured physical range boundaries; default <=15 Close, <=30
+Medium, <=90 Far, then base size. No proportional scaling within a band. Keep all
+user table names, values, keybinds and independent feature behavior unchanged.
+
+Core/runtime and the complete protected-runtime suites pass, including forward
+and reverse range crossings and rendered pixel dimensions while distance, FOV
+and viewport size change. The obfuscated upload matches BUILD.json. REAL API
+reference only was read; no injection, live visual capture, provider login or
+FlowAuth publication was performed. The user must publish the v1.3.19 protected
+upload to FlowAuth; a website change alone cannot update that provider payload.
+
+---
+
+# 1.3.18 Silent acquisition, fixed pixel boxes and Macro cleanup - 2026-10-24
+
+Prioritize Silent: allow actual OR predicted circle acquisition, exact native
+muzzle surfaces in third person and fresh-point recovery after rejected smoothing.
+Use first-hit muzzle visibility and reuse duplicate wall results. Keep final
+AntiCurve limits, foreground blocking, whitelist/KO and exact/fixed-part semantics.
+
+Per latest user instruction box values remain 5x4.3 with screen-size units:
+16 pixels/unit at 1080p, scaled only by viewport height. Physical distance selects
+gun profiles but never rescales dimensions; current camera FOV is irrelevant.
+Named BoxSize fields and legacy pairs preserve numerical values. ESP/selection
+share the same formula. No private keys/controls/colors/switches are replaced.
+Shared review fixes Auto context expiry and movement-aware ESP visibility caches,
+and removes duplicate hold-state reads. Existing feature/cleanup suites pass.
+
+Macro cancels stale phases/overlong cycles and catches tool errors, releasing owned
+Ctrl and attempting restoration. Normal delays and existing movement detection
+remain. Shared full regression and protected-runtime suites pass. No MCP, REAL
+static analysis, Roblox execution or real credentials were used. Live lag/hits/FPS
+and published provider output remain unverified. See the current review.
+Protected release is releases/neoperro-1.3.18 outside Git.
+
+---
+
 # 1.3.17 airborne Silent, third-person XYZ and Triggerbot - 2026-10-24
 
 Prioritize Silent, then TB. Closest Point solves predicted XYZ geometry against

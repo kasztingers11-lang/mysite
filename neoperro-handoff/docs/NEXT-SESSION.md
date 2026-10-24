@@ -1,4 +1,28 @@
-# Continue from 1.3.17
+# 1.3.19 fixed dimensions and instant range changes - 2026-10-24
+
+User reports boxes resizing with player distance, Gun Specifications off, startup
+version v1.3.18. That identifies the reported version, not the exact serving bytes.
+Local v1.3.18 was already depth/FOV independent and passed mocks. The live cause
+has not been established. Do not claim viewport scaling caused the report.
+
+1.3.19 removes the remaining viewport-size multiplier entirely: Width*16 and
+Height*16 are fixed pixels for ESP and selection. Body position can still move
+on each render frame; no box-size interpolation or limb-fit resizing is present.
+Gun Specifications off always uses the base size. When on, dimensions switch
+immediately at configured physical range boundaries; default <=15 Close, <=30
+Medium, <=90 Far, then base size. No proportional scaling within a band. Keep all
+user table names, values, keybinds and independent feature behavior unchanged.
+
+Core/runtime and the complete protected-runtime suites pass, including forward
+and reverse range crossings and rendered pixel dimensions while distance, FOV
+and viewport size change. The obfuscated upload matches BUILD.json. REAL API
+reference only was read; no injection, live visual capture, provider login or
+FlowAuth publication was performed. The user must publish the v1.3.19 protected
+upload to FlowAuth; a website change alone cannot update that provider payload.
+
+---
+
+# Continue from 1.3.18
 
 Use repair/neoperro-evidence and repository-root sources. Main and historical
 snapshot/ZIP are older. Preserve local edits and the accepted table. Current user
@@ -102,3 +126,52 @@ fit residuals and confidence, applied acceleration, final point, muzzle, MOUSE
 payload, native firing/ammo and observed damage separately. Model/sampler tests
 are not real FPS, replication or hit-rate evidence. Do not inject under the current
 instruction.
+
+
+## Current 1.3.18: user explicitly requested no MCP
+
+Read SILENT-PIXEL-MACRO-REVIEW-2026-10-24.md. Silent was prioritized before fixed
+pixel boxes and Macro cleanup. No MCP tools, live interaction or REAL analyzer
+were used. Full Core/runtime/protected mock suites and syntax checks pass. Preserve
+this distinction from older static/live results. Shared checks still pass in mocks;
+this is not proof that every feature is improved or live-compatible.
+
+Release files are under releases/neoperro-1.3.18 outside Git. Keep box values
+Width=5 / Height=4.3: 1 unit is 16 pixels at 1080p, scaled only by viewport height.
+Distance and camera FOV never scale dimensions; gun profiles select size values
+by weapon/range. Named gun fields are canonical; legacy pairs preserve numbers.
+No old numerical size conversion is needed. BOX-UPDATE.md and raw
+neoperro-protection/box-formula.lua explain the formula. Preserve private keys,
+bindings, colors, switches and other preferences. Publish only the obfuscated
+runtime to FlowAuth; loader/table stay readable. No real keys are needed.
+
+Silent circle acquisition accepts actual or predicted points in the same radius;
+configured AntiCurve, whitelist, KO/dead, exact-surface and foreground wall rules
+remain. No fake gravity or upward constant was added. Macro late phases cancel
+instead of replaying stale input; normal timing is unchanged. Real game lag,
+server damage, 3D remote behavior, populated ESP timing and provider output still
+need newly authorized testing. Do not use MCP or inject under the current request.
+
+Latest shared review: expired Auto contexts cannot override fresh ping before
+render refresh for Silent/Assist/TB. ESP cached visibility invalidates on camera/
+target movement >0.5 world units, retaining its normal static 80ms cache. Removed
+duplicate selection hold reads; all existing activation/combination checks pass.
+Client bullets, aim restoration, Prefire, AntiAfk/AntiFling, whitelist, posture and
+intro remain covered/preserved; no invented new algorithm is claimed for every
+feature. No MCP or live results were added.
+
+
+## Publication state after this pass
+
+1.3.18 is built and committed locally, but Git CLI push could not authenticate.
+The normal credential manager requested interactive login; a noninteractive retry
+confirmed no usable Git CLI credentials. No MCP fallback or credential collection
+was used. The remote repair branch still points to b45ba55 (1.3.17). Do not treat
+its development loader/table as this release until publication succeeds. The local
+full bundle and release's protected FlowAuth upload contain the actual 1.3.18 code.
+
+After Git is authenticated, publish the reviewed local tree as a fast-forward
+child of the remote head; do not force local divergent commit history over it.
+Local and API-authored 1.3.17 commits have identical trees but different parents.
+Publication message/SHA helpers are outside the repo under work/release18-*.
+No user/customer key or executor credential is needed for these build artifacts.

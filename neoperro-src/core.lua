@@ -81,6 +81,21 @@ function Core.normalizeConfig(supplied)
             end
         end
     end
+    local specifications = result['Gun Specifications']
+    if type(specifications) == 'table' then
+        for name, weapon in pairs(specifications) do
+            if name ~= 'Ranges' and type(weapon) == 'table' then
+                for _, range in pairs(weapon) do
+                    local size = type(range) == 'table' and range.BoxSize
+                    if type(size) == 'table' then
+                        if size.Width == nil then size.Width = size[1] end
+                        if size.Height == nil then size.Height = size[2] end
+                        size[1], size[2] = nil, nil
+                    end
+                end
+            end
+        end
+    end
     local macro = result.Misc and result.Misc['Macro Abuse']
     if type(macro) == 'table' then alias(macro, 'Work With TB', 'Triggerbot check') end
     return result
@@ -629,10 +644,16 @@ function Core.macroActive(velocity)
     return Core.finiteVector(velocity) and velocity.X * velocity.X + velocity.Z * velocity.Z > 30 * 30
 end
 
--- Integer-like viewport geometry in world units, independent of limb animation.
-function Core.projectedBox(x, y, depth, width, height, focal)
+function Core.boxDimensions(size, fallbackWidth, fallbackHeight)
+    size = type(size) == 'table' and size or {}
+    return Core.number(size.Width or size[1], fallbackWidth, 0.01, 1000),
+        Core.number(size.Height or size[2], fallbackHeight, 0.01, 1000)
+end
+
+-- One size unit is always 16 pixels. Distance only selects a gun profile.
+function Core.projectedBox(x, y, depth, width, height)
     if depth <= 0.1 then return nil end
-    local w, h = width * focal / depth, height * focal / depth
+    local w, h = width * 16, height * 16
     return x - w / 2, y - h / 2, w, h
 end
 

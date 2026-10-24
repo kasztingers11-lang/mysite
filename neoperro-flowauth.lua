@@ -216,25 +216,25 @@ getgenv()['neoperro'] = {
         };
     };
 
-    -- Box looks and size. Boxes stay on the real player, are unfilled, and have solid outlines.
+    -- Screen-size boxes. Height and Width keep the same size at every distance.
     ['2d-Box']             = {
         ['Silent Aim'] = {
             ['Visible'] = true;                                                  -- Show this shape on your screen.
             ['Name']    = {true, 'DisplayName'};                                 -- First value shows the name. Second chooses DisplayName, Name, or UserId.
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};              -- First color is the box; second is its outline.
-            ['Size']    = {['Width'] = 5; ['Height'] = 4.3};                     -- Box width and height in game studs.
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Screen-size height and width; 1 unit is always 16 pixels.
         };
         ['Aim Assist'] = {
             ['Visible'] = false;                                                 -- Show this shape on your screen.
             ['Name']    = {false, 'DisplayName'};                                -- First value shows the name. Second chooses DisplayName, Name, or UserId.
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};              -- First color is the box; second is its outline.
-            ['Size']    = {['Width'] = 5; ['Height'] = 4.3};                     -- Box width and height in game studs.
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Screen-size height and width; 1 unit is always 16 pixels.
         };
         ['Triggerbot'] = {
             ['Visible'] = false;                                                 -- Show this shape on your screen.
             ['Name']    = {false, 'DisplayName'};                                -- First value shows the name. Second chooses DisplayName, Name, or UserId.
             ['Color']   = {['Box'] = {{255, 255, 255}, {0, 0, 0}}};              -- First color is the box; second is its outline.
-            ['Size']    = {['Width'] = 5; ['Height'] = 4.3};                     -- Box width and height in game studs.
+            ['Size']    = {['Height'] = 4.3; ['Width'] = 5};                     -- Screen-size height and width; 1 unit is always 16 pixels.
         };
     };
 
@@ -263,7 +263,7 @@ getgenv()['neoperro'] = {
         };
     };
 
-    -- Give Silent Aim a different box size for each gun and distance. ESP shows that size too.
+    -- Pick box Height/Width for each gun at Close, Medium and Far distances. ESP uses the same size.
     ['Gun Specifications'] = {
         ['Enabled']          = false;                                            -- Main on/off switch for this option.
         ['Ranges']           = {
@@ -272,29 +272,29 @@ getgenv()['neoperro'] = {
             ['Far']    = 90;                                                     -- Up to this distance uses Far. Beyond it uses the normal box.
         };
         ['Revolver']         = {
-            ['Close']  = {['BoxSize'] = {5.1, 5.1}};                             -- Box width and height for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {5.5, 5.5}};                             -- Box width and height for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {5, 4.5}};                               -- Box width and height for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 5.1; ['Width'] = 5.1}};    -- Screen-size height and width for this gun at this distance.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 5.5; ['Width'] = 5.5}};    -- Screen-size height and width for this gun at this distance.
+            ['Far']    = {['BoxSize'] = {['Height'] = 4.5; ['Width'] = 5}};      -- Screen-size height and width for this gun at this distance.
         };
         ['Double-Barrel SG'] = {
-            ['Close']  = {['BoxSize'] = {7, 6}};                                 -- Box width and height for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {6, 5}};                                 -- Box width and height for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {5, 5}};                                 -- Box width and height for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 7}};        -- Screen-size height and width for this gun at this distance.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 5; ['Width'] = 6}};        -- Screen-size height and width for this gun at this distance.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
         };
         ['TacticalShotgun']  = {
-            ['Close']  = {['BoxSize'] = {7, 7}};                                 -- Box width and height for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {6, 6}};                                 -- Box width and height for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {5, 5}};                                 -- Box width and height for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};        -- Screen-size height and width for this gun at this distance.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};        -- Screen-size height and width for this gun at this distance.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
         };
         ['Shotgun']          = {
-            ['Close']  = {['BoxSize'] = {7, 7}};                                 -- Box width and height for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {6, 6}};                                 -- Box width and height for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {5, 5}};                                 -- Box width and height for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 7; ['Width'] = 7}};        -- Screen-size height and width for this gun at this distance.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 6}};        -- Screen-size height and width for this gun at this distance.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
         };
         ['Usp']              = {
-            ['Close']  = {['BoxSize'] = {5, 6}};                                 -- Box width and height for this gun at this distance.
-            ['Medium'] = {['BoxSize'] = {5, 6}};                                 -- Box width and height for this gun at this distance.
-            ['Far']    = {['BoxSize'] = {4, 5}};                                 -- Box width and height for this gun at this distance.
+            ['Close']  = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
+            ['Medium'] = {['BoxSize'] = {['Height'] = 6; ['Width'] = 5}};        -- Screen-size height and width for this gun at this distance.
+            ['Far']    = {['BoxSize'] = {['Height'] = 5; ['Width'] = 4}};        -- Screen-size height and width for this gun at this distance.
         };
     };
 };
@@ -303,7 +303,7 @@ getgenv()['neoperro'] = {
 local neoperroEnvironment = getgenv()
 local neoperroRuntime = neoperroEnvironment.__neoperroRuntimeV1
 if type(neoperroRuntime) == 'table' and neoperroRuntime.Alive
-    and neoperroRuntime.Version == '1.3.17'
+    and neoperroRuntime.Version == '1.3.19'
     and neoperroRuntime.Distribution == 'FlowAuth' and type(neoperroRuntime.ApplyConfig) == 'function' then
     script_key = nil -- Configuration updates use the already-running session.
     neoperroRuntime:ApplyConfig(neoperroEnvironment.neoperro)

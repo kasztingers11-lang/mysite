@@ -1,4 +1,4 @@
-# neoperro 1.3.17 - testing build
+# neoperro 1.3.19 - testing build
 
 FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
 [build, upload and validation instructions](neoperro-protection/README.md).
@@ -6,7 +6,37 @@ Only the runtime upload is obfuscated; the table remains readable. Generated
 upload files stay outside this public repository. Public development source and
 its history remain available; obfuscation cannot revoke those copies.
 
-Silent now combines predicted XYZ part geometry with both forward camera and
+1.3.18 introduced less restrictive Silent acquisition, screen-size boxes and
+bounded Macro cleanup. Silent circle acquisition accepts the actual or predicted
+point inside the same radius; AntiCurve keeps its configured final-coordinate
+limits. Third-person Raycast can use a native muzzle surface, smoothing can recover
+a fresh valid point, and the first actual target hit is no longer rejected by
+cover behind it. Foreground cover still rejects. Shared edge-of-screen prediction
+and one reused wall query reduce unnecessary rejection/work.
+
+Boxes keep the user's **Height=4.3 / Width=5** values. A screen-size formula uses
+exactly 16 pixels per unit, with no viewport scaling. Actual distance and
+camera FOV never resize dimensions. Gun Specifications choose the same size units
+by Close/Medium/Far distance, and ESP uses exactly those dimensions. Gun BoxSize
+now has named Height/Width fields; legacy numeric pairs preserve their values.
+No old 5x4.3 values need conversion. Macro actions retain normal timing but stale
+phases and tool-action errors cancel cleanly, releasing owned Ctrl and attempting
+restoration. Prediction discards expired ping contexts for all three features;
+ESP visibility refreshes on substantial camera/target movement; duplicate hold-key
+reads were removed. Other existing paths stay under regression.
+
+1.3.19 explicitly removes the remaining viewport-size multiplier. Boxes change
+instantly only on table edits or enabled gun-profile boundaries; no dimension
+interpolation is used. Close/Medium/Far apply through 15/30/90 studs by default;
+beyond Far the normal size returns. With Gun Specifications off, only the normal
+configured size is used. The user reported distance resizing on a v1.3.18 session;
+its exact serving payload and live cause were not verified.
+
+Core/runtime and protected mock suites pass for 1.3.19. REAL was consulted only
+for API documentation; no Roblox execution or live analysis occurred. This is not a live hit-rate,
+FPS or provider-login result. See the [current review](neoperro-handoff/docs/SILENT-PIXEL-MACRO-REVIEW-2026-10-24.md).
+
+The 1.3.17 update combines predicted XYZ part geometry with both forward camera and
 native muzzle-to-mouse rays for Closest Point in third person. If the first part
 fails final geometry checks, Closest can try another real body part; fixed BasePart
 and exact Raycast surfaces stay fixed. Rejected points no longer seed smoothing.
@@ -51,7 +81,7 @@ Use [neoperro.lua](neoperro.lua): edit the table and execute the whole file.
 Its bottom loader fetches **repair/neoperro-evidence**. Main is older.
 [neoperro-full.lua](neoperro-full.lua) contains the same table and runtime.
 
-This repair fixes standalone ESP weapon profiles, removes the 60 Hz drawing and aim-selection caps,
+Earlier repairs fixed standalone ESP weapon profiles, removes the 60 Hz drawing and aim-selection caps,
 recovers physically held activation keys, and adds shared muzzle/camera geometry.
 Prediction uses bounded speed response, validated turn compensation and measured
 vertical acceleration. Decelerating falls stop at rest instead of inventing a new
@@ -101,7 +131,7 @@ with python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua.
 The historical handoff snapshot/ZIP remains 1.2.0. Preserve local edits.
 No executor credentials belong in the repository.
 
-1.3.17 validation: Core/runtime/protected regression suites pass. Full, runtime,
+Historical 1.3.17 validation: Core/runtime/protected regression suites pass. Full, runtime,
 readable starter and protected upload pass REAL static analysis with zero errors
 or warnings. Static analysis does not execute Roblox or authenticate FlowAuth.
 Earlier startup/config-update measurements are recorded separately in the session
