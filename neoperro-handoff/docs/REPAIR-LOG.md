@@ -453,3 +453,11 @@ Real MCP shown by the user is a Windows-local server. This cloud machine cannot 
 ## Latest continuation status
 
 See [NEXT-SESSION.md](NEXT-SESSION.md). The user is moving to a local Codex chat with Real MCP to diagnose Auto Y ground shots and improve Silent Aim from Looten evidence. No runtime changes were made as part of this handoff refresh.
+
+
+REAL static checks also pass with zero errors/warnings for the full v1.3.20 bundle.
+The protected upload passes with a static-only local declaration for FlowAuth's
+LRM_IsUserPremium variable, supplied from varargs; that declaration is not written
+into the release file and supplies no real authorization. Initial checker findings
+identified the missing ESPHidden state declaration (fixed in the runtime) and the
+provider global absent from REAL's standalone definitions (modeled only for checking).

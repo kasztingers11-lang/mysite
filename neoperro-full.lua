@@ -1590,7 +1590,7 @@ local state = {
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
     InitialWhitelist = Core.ids(config.Whitelist.Players), InitialWhiteMode = config.Whitelist.Method,
-    Epoch = 0, Visuals = {}, Focused = true,
+    Epoch = 0, Visuals = {}, Focused = true, ESPHidden = false,
     Stats = {AimPackets = 0, AimSendReturns = 0, AimSendErrors = 0, AimSendSkipped = 0, AimRestores = 0, AimRestoreErrors = 0, Activations = 0, TriggerAttempts = 0, AmmoDrops = 0},
     AimTrace = {}, Trace = {Events = {}, Sequence = 0, Until = 0, Limit = 128},
     Network = {NextSample = 0}, Performance = {Updates = 0, TotalMs = 0, MaxMs = 0, AimUpdates = 0, AimTotalMs = 0, AimMaxMs = 0},

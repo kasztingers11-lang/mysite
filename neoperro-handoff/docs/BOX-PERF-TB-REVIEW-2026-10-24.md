@@ -38,3 +38,11 @@ Silent point in both FOV modes. Actual-body and independent knocked checks remai
 All configuration values and names remain unchanged. No live result for v1.3.20
 or provider publication is claimed. Source edits and protected artifacts alone do
 not prove a live FPS improvement or that the perceived sizing issue is resolved.
+
+
+REAL static checks also pass with zero errors/warnings for the full v1.3.20 bundle.
+The protected upload passes with a static-only local declaration for FlowAuth's
+LRM_IsUserPremium variable, supplied from varargs; that declaration is not written
+into the release file and supplies no real authorization. Initial checker findings
+identified the missing ESPHidden state declaration (fixed in the runtime) and the
+provider global absent from REAL's standalone definitions (modeled only for checking).
