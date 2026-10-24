@@ -1,4 +1,4 @@
-# neoperro 1.3.15 - testing build
+# neoperro 1.3.16 - testing build
 
 FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
 [build, upload and validation instructions](neoperro-protection/README.md).
@@ -6,7 +6,15 @@ Only the runtime upload is obfuscated; the table remains readable. Generated
 upload files stay outside this public repository. Public development source and
 its history remain available; obfuscation cannot revoke those copies.
 
-The follow-up prediction/3D review fixes Closest Point on translated predicted
+Auto Y now separates current contact from predicted landing support, ignores
+remote FloorMaterial as a grounding decision, and follows verified continuous
+ramp geometry in X/Z. Acceleration confidence no longer flickers with history/
+render sampling phase, and a resolved Y velocity cannot inherit acceleration
+from the rejected raw velocity. Custom/Offset behavior and table values remain
+unchanged. See the [Auto Y review](neoperro-handoff/docs/AUTO-Y-REVIEW-2026-10-24.md).
+No final live injection or hit-rate claim is made.
+
+The preceding prediction/3D review fixes Closest Point on translated predicted
 geometry, preserves fresh observed diagonal turns/braking, and keeps eligible
 Silent routing during a held Triggerbot cycle. Direct vector transforms avoid
 translation in ray directions. Manual/Auto rotated-part and exact-surface cases
@@ -83,7 +91,7 @@ with python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua.
 The historical handoff snapshot/ZIP remains 1.2.0. Preserve local edits.
 No executor credentials belong in the repository.
 
-1.3.15 validation: Core/runtime/protected regression suites pass. Full, runtime,
+1.3.16 validation: Core/runtime/protected regression suites pass. Full, runtime,
 readable starter and protected upload pass REAL static analysis with zero errors
 or warnings. Static analysis does not execute Roblox or authenticate FlowAuth.
 Earlier startup/config-update measurements are recorded separately in the session

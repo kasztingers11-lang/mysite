@@ -266,7 +266,7 @@ getgenv()['neoperro'] = {
 local neoperroEnvironment = getgenv()
 local neoperroRuntime = neoperroEnvironment.__neoperroRuntimeV1
 if type(neoperroRuntime) == 'table' and neoperroRuntime.Alive
-    and neoperroRuntime.Version == '1.3.15'
+    and neoperroRuntime.Version == '1.3.16'
     and neoperroRuntime.Distribution == 'Development' and type(neoperroRuntime.ApplyConfig) == 'function' then
     -- No key is used by the development loader.
     neoperroRuntime:ApplyConfig(neoperroEnvironment.neoperro)

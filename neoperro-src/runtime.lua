@@ -32,7 +32,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.15', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.16', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
@@ -481,7 +481,7 @@ local function velocity(record)
             record.root.AssemblyLinearVelocity, record.sampledVelocity, record.resolvedVelocity, record.velocitySource, Vector3.new)
         record.velocityAt = last and last.t
         record.velocityRaw = raw
-        record.motion = Core.motion(record.history, record.root.AssemblyLinearVelocity)
+        record.motion = Core.motion(record.history, record.root.AssemblyLinearVelocity, now())
     end
     if not config.Resolver.Enabled then return Core.limit(raw, 180) end
     return record.trueVelocity
@@ -508,7 +508,7 @@ local groundParams = RaycastParams.new()
 groundParams.FilterType = Enum.RaycastFilterType.Exclude
 groundParams.IgnoreWater = true
 groundParams.RespectCanCollide = true
-local function support(record, point, lead, fallLimit)
+local function support(record, point, lead, fallLimit, checkCurrent, verticalVelocity)
     local root, humanoid = record.root, record.humanoid
     local stand = Core.number(humanoid.HipHeight, 2, 0, 10) + root.Size.Y / 2
     local leg = record.character:FindFirstChild('Left Leg')
@@ -516,12 +516,32 @@ local function support(record, point, lead, fallLimit)
     if record.pose and record.pose.SupportHeight then stand = math.min(stand, record.pose.SupportHeight) end
     groundParams.FilterDescendantsInstances = {record.character, localCharacter, camera}
     local origin = root.Position + Vector3.new(lead.X, 0, lead.Z)
-    local hit = World:Raycast(origin, Vector3.new(0, -(stand + math.max(0, -lead.Y, fallLimit or 0) + 1), 0), groundParams)
-    if not hit or not hit.Normal or hit.Normal.Y < 0.45 then return nil, false end
-    local clearance = root.Position.Y - hit.Position.Y
-    local standing = clearance <= stand + 0.3 and math.abs(root.AssemblyLinearVelocity.Y) < 3
+    local function floorHit(hit)
+        return hit and hit.Normal and hit.Normal.Y >= 0.45 and hit or nil
+    end
+    local hit = floorHit(World:Raycast(origin,
+        Vector3.new(0, -(stand + math.max(0, -lead.Y, fallLimit or 0) + 1), 0), groundParams))
+    local info = {PredictedOrigin=vectorData(origin), PredictedGroundY=hit and hit.Position.Y,
+        CurrentProbed=false, RootSupportHeight=stand}
+    local standing = false
+    if checkCurrent and math.abs(verticalVelocity) < 3 then
+        local contact
+        if lead.X * lead.X + lead.Z * lead.Z < 1e-8 then contact = hit
+        else contact = floorHit(World:Raycast(root.Position, Vector3.new(0, -(stand + 0.3), 0), groundParams)) end
+        info.CurrentProbed, info.CurrentOrigin = true, vectorData(root.Position)
+        info.CurrentClearance = contact and root.Position.Y - contact.Position.Y
+        standing = contact ~= nil and info.CurrentClearance >= 0 and info.CurrentClearance <= stand + 0.3
+        if standing and hit and contact and hit.Instance == contact.Instance then
+            local delta = hit.Position - contact.Position
+            -- Follow a measured continuous plane, never teleport onto a separate
+            -- raised step merely because it lies below the future footprint.
+            if hit.Normal:Dot(contact.Normal) > 0.98 and math.abs(contact.Normal:Dot(delta)) <= 0.05 then
+                info.SupportLead = delta.Y
+            end
+        end
+    end
     -- Retain the selected point's offset within the real rig, including foot points.
-    return hit.Position.Y + stand + (point.Y - root.Position.Y), standing
+    return hit and hit.Position.Y + stand + (point.Y - root.Position.Y), standing, info
 end
 
 -- Shared forecast for selection, shot coordinates and unselected predicted boxes.
@@ -539,22 +559,32 @@ local function leadOffset(record, feature, part, point, evidence)
     local ySettings = config['Y-Axis']
     local useY = ySettings.Enabled and ySettings[feature == 'Silent Aim' and 'SilentAim' or feature]
     local groundCheck = config.Checks.GroundShotCheck[checkIndices[feature]] == true
-    local minY, supportedGround
+    local verticalRaw, verticalMotion = raw.Y, motion
+    if config.Resolver.Enabled and record.trueVelocitySource == 'true-velocity'
+        and vel.Y ~= record.resolvedVelocity.Y then
+        verticalRaw, verticalMotion = vel.Y, nil
+    end
+    local minY, supportedGround, groundContact
     local needsGround = lead.Y ~= 0 or raw.Y ~= 0 or (motion.VerticalConfidence or 0) >= 0.5
     if needsGround and (groundCheck or (useY and ySettings.Method == 'Auto')) then
-        minY, supportedGround = support(record, point, lead, worldHeight)
+        minY, supportedGround, groundContact = support(record, point, lead, worldHeight,
+            useY and ySettings.Method == 'Auto', verticalRaw)
     end
     local vertical, source, correction, accelerationMode
-    local verticalRaw = raw.Y
-    if config.Resolver.Enabled and record.trueVelocitySource == 'true-velocity'
-        and vel.Y ~= record.resolvedVelocity.Y then verticalRaw = vel.Y end
+    local appliedAcceleration = 0
     if useY and ySettings.Method == 'Custom' then
         if vel.Y > 0 then lead = Vector3.new(lead.X, lead.Y * Core.number(ySettings.Offset, 1, 0, 5), lead.Z) end
     elseif useY then
-        local grounded = supportedGround or (not airborne and math.abs(raw.Y) < 3)
+        -- Remote FloorMaterial is not replicated. Only current-footprint contact
+        -- can stop Auto Y; future XZ support is reserved for the landing clamp.
+        local grounded = supportedGround == true
         vertical, source = Core.autoVertical(vel.Y, verticalRaw)
         local y
-        y, correction, accelerationMode = Core.verticalLead(vertical, verticalRaw, baseLeadTime, worldHeight, grounded, motion)
+        y, correction, accelerationMode = Core.verticalLead(vertical, verticalRaw, baseLeadTime, worldHeight, grounded, verticalMotion,
+            groundContact and groundContact.SupportLead)
+        if verticalMotion and (accelerationMode == 'measured-acceleration' or accelerationMode == 'braking-stop') then
+            appliedAcceleration = verticalMotion.VerticalAcceleration * verticalMotion.VerticalConfidence
+        end
         lead = Vector3.new(lead.X, y, lead.Z)
     end
     local groundCorrected
@@ -575,6 +605,9 @@ local function leadOffset(record, feature, part, point, evidence)
         evidence.TurnRate, evidence.TurnLeadTime = motion.TurnRate, turnTime
         evidence.MeasuredTurnRate, evidence.TurnValidated = motion.MeasuredTurnRate, motion.TurnValidated
         evidence.VerticalAcceleration, evidence.VerticalConfidence = motion.VerticalAcceleration, motion.VerticalConfidence
+        evidence.AppliedVerticalAcceleration = appliedAcceleration
+        evidence.VerticalModelSource = verticalMotion and 'raw-velocity-fit' or 'linear-resolved-motion'
+        evidence.VerticalModelSampleAge = motion.SampleAge
         evidence.AutoVerticalVelocity, evidence.AutoVerticalSource, evidence.AccelerationCorrection = vertical, source, correction
         evidence.AccelerationMode = accelerationMode
         evidence.HistoryCount = #record.history
@@ -585,6 +618,7 @@ local function leadOffset(record, feature, part, point, evidence)
         evidence.MuzzleOrigin, evidence.CameraOrigin = vectorData(muzzle()), vectorData(camera.CFrame.Position)
         evidence.YMethod = useY and ySettings.Method or 'Disabled'
         evidence.GroundCorrected, evidence.GroundMinimumY, evidence.GroundedByGeometry = groundCorrected, minY, supportedGround
+        evidence.GroundContact = groundContact
         evidence.LeadBeforeY = vectorData(Vector3.new(lead.X, beforeY, lead.Z))
         evidence.LeadAfterY, evidence.PredictedPoint = vectorData(lead), vectorData(point + lead)
         evidence.VerticalAdjustment = lead.Y - beforeY

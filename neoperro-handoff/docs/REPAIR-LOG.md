@@ -1,3 +1,20 @@
+# 1.3.16 Auto Y - 2026-10-24
+
+Separate current footprint contact from predicted XZ landing support. Remove remote
+FloorMaterial grounding fallback. Follow bounded measured continuous-plane height
+changes while grounded; never treat a separate raised step as an upward offset.
+Suppress raw-derived acceleration after TrueVelocity replaces Y. Validate coherent
+acceleration over a bounded sampling-time envelope, without adding age to lead.
+Add ground/model diagnostics. Keep table values, Custom behavior and prior fixes.
+
+New regressions reproduced the old failures and pass now. Core/runtime/protected
+suites and four REAL static artifacts pass. Idealized 1,452-case replay isolates
+sampling-phase improvement; it is not Roblox or shot-accuracy proof. No injection,
+provider authentication or live damage test occurred. See AUTO-Y-REVIEW-2026-10-24.md.
+Protected release files remain outside Git under releases/neoperro-1.3.16.
+
+---
+
 # 1.3.15 prediction and 3D follow-up - 2026-10-24
 
 Fixed Closest Point against translated predicted geometry, evidence-gated acute

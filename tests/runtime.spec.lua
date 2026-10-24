@@ -1115,6 +1115,150 @@ assert(filtered.Targets['Silent Aim']==nil)
 filtered.WhiteMode='Target';step(0.04);assert(filtered.Targets['Silent Aim']==enemy)
 filtered:Destroy('test');enemyRoot.AssemblyLinearVelocity=V.new()
 
+-- Remote FloorMaterial and a future landing surface do not establish present
+-- support at a jump apex. The measured vertical curve must continue in Auto.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+    cfg['Y-Axis'].Enabled=true;cfg['Y-Axis'].Method='Auto'
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        cfg[feature].Prediction.Auto=false;cfg[feature].Prediction.Value=.1
+    end
+    cfg.Checks.GroundShotCheck={false,false,false}
+    local savedSize,savedWalk=enemyTorso.Size,enemyHum.WalkSpeed
+    enemyTorso.Size=V.new(2,4,1);enemyHum.WalkSpeed=22
+    moveEnemy(0,30,-50);enemyRoot.AssemblyLinearVelocity=V.new(22,0,0)
+    enemyHum.FloorMaterial=Enum.Material.Plastic
+    local rt=loadRuntime(cfg);step(.02)
+    local record=rt.Records[enemy]
+    local function apexHistory(phase)
+        record.history={};record.sampledVelocity=nil
+        for i=0,7 do
+            local t=(i-7)*.02-(phase or 0)
+            Core.sample(record.history,V.new(22*t,30-100*t*t,-50),clock+t,V.new(22,-200*t,0))
+        end
+    end
+    for _,phase in ipairs({0,.004,.008,.0125})do
+        apexHistory(phase)
+        for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+            local point,evidence=rt:Forecast(enemy,feature,'UpperTorso')
+            assert(math.abs(point.Y-29)<1e-6 and not evidence.GroundedByGeometry,
+                'Stale FloorMaterial or sampling phase cannot erase the measured apex forecast for '..feature)
+            assert(math.abs(evidence.VerticalModelSampleAge-phase)<1e-7 and evidence.VerticalConfidence>.999)
+        end
+    end
+    local savedRaycast=World.Raycast
+    World.Raycast=function(self,origin,direction,params)
+        if params.RespectCanCollide then
+            local floor=origin.X>1 and 27 or 0
+            if origin.Y>=floor and origin.Y+direction.Y<=floor then
+                return {Instance=World,Position=V.new(origin.X,floor,origin.Z),Normal=V.new(0,1,0)}
+            end
+            return nil
+        end
+        return savedRaycast(self,origin,direction,params)
+    end
+    apexHistory()
+    local point,evidence=rt:Forecast(enemy,'Silent Aim','UpperTorso')
+    assert(math.abs(point.Y-29)<1e-6 and not evidence.GroundedByGeometry,
+        'A future raised landing surface cannot classify the current apex as grounded')
+    assert(evidence.GroundContact.CurrentProbed and evidence.GroundContact.PredictedGroundY==27)
+    rt.Config['Y-Axis'].Method='Custom';rt.Config['Y-Axis'].Offset=2
+    record.history={};record.sampledVelocity=nil;enemyRoot.AssemblyLinearVelocity=V.new(22,10,0)
+    point=rt:Forecast(enemy,'Silent Aim','UpperTorso')
+    assert(math.abs(point.Y-32)<1e-6,'Custom retains its separate positive-lead multiplier')
+    rt.Config['Y-Axis'].Method='Auto';rt.Config['Y-Axis'].Offset=5
+    enemyRoot.AssemblyLinearVelocity=V.new(22,0,0);apexHistory(.0125)
+    point=rt:Forecast(enemy,'Silent Aim','UpperTorso')
+    assert(math.abs(point.Y-29)<1e-6,'Auto still ignores Custom Offset')
+    rt:Destroy('test');World.Raycast=savedRaycast;enemyTorso.Size=savedSize;enemyHum.WalkSpeed=savedWalk
+    enemyRoot.AssemblyLinearVelocity=V.new();enemyHum.FloorMaterial=Enum.Material.Plastic
+    moveEnemy(0,0,-50);clearInput()
+end
+
+-- Current contact does not mean zero world-Y motion on a continuous ramp.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+    cfg['Y-Axis'].Enabled=true;cfg['Y-Axis'].Method='Auto'
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        cfg[feature].Prediction.Auto=false;cfg[feature].Prediction.Value=.1
+    end
+    local savedRaycast,savedWalk,savedSize=World.Raycast,enemyHum.WalkSpeed,enemyTorso.Size
+    enemyHum.WalkSpeed=22;enemyTorso.Size=V.new(2,4,1)
+    local sx,sz=.09,0
+    World.Raycast=function(self,origin,direction,params)
+        if params.RespectCanCollide then
+            local floor=sx*origin.X+sz*(origin.Z+50)
+            if origin.Y>=floor and origin.Y+direction.Y<=floor then
+                return {Instance=World,Position=V.new(origin.X,floor,origin.Z),Normal=V.new(-sx,1,-sz).Unit}
+            end
+            return nil
+        end
+        return savedRaycast(self,origin,direction,params)
+    end
+    for _,case in ipairs({{22,0,.09,0},{-22,0,.09,0},{0,22,0,.09},{0,-22,0,.09}})do
+        sx,sz=case[3],case[4]
+        moveEnemy(0,3,-50);enemyRoot.AssemblyLinearVelocity=V.new(case[1],sx*case[1]+sz*case[2],case[2])
+        local rt=loadRuntime(cfg);step(.02)
+        for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+            local point,evidence=rt:Forecast(enemy,feature,'UpperTorso')
+            local expected=3+(sx*case[1]+sz*case[2])*.1
+            assert(math.abs(point.Y-expected)<1e-6 and evidence.GroundedByGeometry,
+                'Auto must follow continuous support in world XYZ for '..feature)
+            assert(evidence.AccelerationMode=='support-follow')
+        end
+        rt:Destroy('test')
+    end
+    -- Equal normals on different horizontal heights are not a continuous plane.
+    World.Raycast=function(self,origin,direction,params)
+        if params.RespectCanCollide then
+            local floor=origin.X>1 and 2 or 0
+            if origin.Y+direction.Y<=floor then
+                return {Instance=World,Position=V.new(origin.X,floor,origin.Z),Normal=V.new(0,1,0)}
+            end
+            return nil
+        end
+        return savedRaycast(self,origin,direction,params)
+    end
+    moveEnemy(0,3,-50);enemyRoot.AssemblyLinearVelocity=V.new(22,1,0)
+    local rt=loadRuntime(cfg);step(.02)
+    local point,evidence=rt:Forecast(enemy,'Silent Aim','UpperTorso')
+    assert(point.Y==3 and evidence.GroundedByGeometry and evidence.GroundContact.SupportLead==nil,
+        'A raised step cannot become an automatic upward offset')
+    rt:Destroy('test')
+    World.Raycast=savedRaycast;enemyHum.WalkSpeed=savedWalk;enemyTorso.Size=savedSize
+    enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- Raw-derived acceleration cannot be attached to a different vertical velocity
+-- that TrueVelocity recovered from coherent position history.
+do
+    local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+    cfg['Y-Axis'].Enabled=true;cfg['Y-Axis'].Method='Auto'
+    cfg.Checks.GroundShotCheck={false,false,false}
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        cfg[feature].Prediction.Auto=false;cfg[feature].Prediction.Value=.1
+    end
+    local savedSize=enemyTorso.Size;enemyTorso.Size=V.new(2,4,1)
+    moveEnemy(0,30,-50);enemyRoot.AssemblyLinearVelocity=V.new(0,-7.2,0)
+    local rt=loadRuntime(cfg);step(.02)
+    local record=rt.Records[enemy];record.history={};record.sampledVelocity=nil
+    for i=0,7 do
+        local t=(i-7)*.02
+        Core.sample(record.history,V.new(0,30+10*t,-50),clock+t,V.new(0,-10+20*(t+.14),0))
+    end
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        local point,evidence=rt:Forecast(enemy,feature,'UpperTorso')
+        assert(evidence.VelocitySource=='true-velocity' and math.abs(evidence.ResolvedVelocity.Y-10)<1e-6)
+        assert(math.abs(point.Y-31)<1e-6 and evidence.AppliedVerticalAcceleration==0,
+            'A resolved constant climb cannot inherit the rejected raw acceleration for '..feature)
+    end
+    rt:Destroy('test');enemyTorso.Size=savedSize;enemyRoot.AssemblyLinearVelocity=V.new()
+    moveEnemy(0,0,-50);clearInput()
+end
+
 -- Circle gating uses the final predicted point, including leads entering the circle.
 do
     local cfg=Core.copy(Defaults)

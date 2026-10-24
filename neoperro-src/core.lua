@@ -490,12 +490,15 @@ end
 
 -- Fit only measured replicated velocities. A stable slope is useful at a jump
 -- apex; sparse updates, a one-frame impulse and noisy slopes are not gravity.
-function Core.motion(history, raw)
+function Core.motion(history, raw, time)
     local model = {VerticalAcceleration = 0, VerticalConfidence = 0, TurnRate = 0}
     if #history < 4 or not Core.finiteVector(raw) or raw.Magnitude > 180 then return model end
     local last, first = history[#history], history[1]
     local span = last.t - first.t
     if span < 0.05 or span > 0.2 then return model end
+    local sampleAge = type(time) == 'number' and time - last.t or 0
+    if sampleAge ~= sampleAge or sampleAge < 0 or sampleAge > 0.05 then return model end
+    model.SampleAge = sampleAge
     local count, timeMean, meanY, changes = 0, 0, 0, 0
     local prior
     for _, sample in ipairs(history) do
@@ -518,7 +521,12 @@ function Core.motion(history, raw)
     end
     local tolerance = math.max(2.5, math.abs(acceleration) * span * 0.2)
     local rms = math.sqrt(errorSum / count)
-    local endpointError = math.abs(raw.Y - (meanY + acceleration * (last.t - timeMean)))
+    -- A live velocity can be either held at the latest sampled tick or updated
+    -- within this short sampling interval. Validate that bounded range instead
+    -- of making confidence flicker with render phase. Never add this age to lead.
+    local atSample = meanY + acceleration * (last.t - timeMean)
+    local atRead = atSample + acceleration * sampleAge
+    local endpointError = math.max(0, math.min(atSample, atRead) - raw.Y, raw.Y - math.max(atSample, atRead))
     if changes >= 3 and math.abs(acceleration) >= 5 and math.abs(acceleration) <= 600 and
         rms < tolerance and endpointError < tolerance then
         model.VerticalAcceleration = acceleration
@@ -571,8 +579,11 @@ function Core.curveLimit(value, fallback)
     return Core.number(value, fallback, 0.000000001)
 end
 
-function Core.verticalLead(vertical, rawY, seconds, height, grounded, model)
-    if grounded then return 0, 0, 'grounded' end
+function Core.verticalLead(vertical, rawY, seconds, height, grounded, model, supportLead)
+    if grounded then
+        local lead = Core.number(supportLead, 0, -height, height * 2)
+        return lead, 0, lead ~= 0 and 'support-follow' or 'grounded'
+    end
     local confidence = model and model.VerticalConfidence or 0
     local correction, mode = 0, 'resolved'
     if confidence >= 0.5 then

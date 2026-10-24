@@ -2,16 +2,16 @@
   "docs/BUGS-AND-FIXES.md": "30635c27304cb882c7b1c1c6417e0e42acfc62f5e6d1513a1622776a6039abc9",
   "docs/IMAGES.md": "a2b22ee553f10f8e436724cd4d0a276eb188b0d1cd937ba9e6068f0c74fef15a",
   "docs/LOOTEN.md": "b55d00bea541c8c5f6bb2a580b5bd00a90b99b7e30a61b51f12c16de624d780d",
-  "docs/NEXT-SESSION.md": "a2cb018d97c813a4ea4a02b76ca610deb155512fedcf309a1d2554844599fb6a",
-  "docs/REPAIR-LOG.md": "46f3d9adc1dcbfbf5db099ed3448d0da0fb4047e5a6af341600981222d3aad68",
+  "docs/NEXT-SESSION.md": "9a6dec7290c426253b4ed969190b03f0e66a3c434ed73f377180fe738aa530cc",
+  "docs/REPAIR-LOG.md": "d58ce0a5892c51d4959b7bc11f6cc5b718a0e9f0ef3b677e48a486d02dd017be",
   "docs/REQUIREMENTS.md": "12ad6243573167af3b2ea0fc89bde1bf43bce9828692ec7587dc82d168bf7117",
   "docs/SESSION-2026-10-22.md": "807dd88a3bf53a0f3868f1b9cca20f3b94ff91d2abc40df79ce9d0653313a60d",
-  "docs/SESSION-2026-10-23.md": "84fd480a8350f88ffc9f6c5b400ef93f327b06caac07496c2199ddc6f356c06a",
+  "docs/SESSION-2026-10-23.md": "d0dd5fe62fcc22f3963c734d496001189cbf40e88e6aae74fc3ba65f658a9965",
   "images/image(20261021-182726).png": "68722e03aa060d2a1b3f28ee5903c04480e3762a2f0f34f6954a1cf95c022f45",
   "images/image(20261021-182814).png": "246d33885cedf548051a7944c0f4ad09c162c74708e86a542057a6d80666435f",
   "images/image(20261021-182848).png": "85f5053e02042889e20c9f2577f09d9750d74bac94f873b3bf630d4b1217c2f4",
   "images/image(20261021-182940).png": "104997ebe40e12868fa30f36623ca3ee7c9958eb8940bfbec564b3118aa3d51b",
-  "README.md": "8a361c2c5d40d5d67cb5a0c684477e51e47d5844436d6418d563c2fe29d1e268",
+  "README.md": "5b27444e319c5a03f3d27235ac9626aaf53120775f82fdfcf619c74712dc9792",
   "references/goodnight.reference.lua": "57d411791bf0e8be4302f1a98b5ba05f59d59813203e0fad5d8a9cda1717aadc",
   "references/Looten.reference.lua": "72e27248f78348f195b2e4bdacffa5d9b9038dcb2883340aeba6144944d00633",
   "reviews/table-comparison.md": "b4aa7e65ec4e91543ee3e1a8e8d6107a2f22b643c45b35f6dcd4eac7356a2e1c",
@@ -29,5 +29,6 @@
   "source-snapshot/tests/core.spec.lua": "1a6fbc4e245a5661792330a14256fde440e4b9b3cef7a67dc9432aae688c8fe2",
   "source-snapshot/tests/run-lua.py": "41085e38b653611da747b19298cf208fa1b672b6973f36cf1e288fb51752baef",
   "source-snapshot/tests/runtime.spec.lua": "1c7a93ff653dd0591f98580dab35bac3d83f113e429c4e154cc8286deb55d6ca",
-  "docs/PREDICTION-REVIEW-2026-10-24.md": "381ce5149e64784c4864b43235a092af98a9ad2e5b37c02e40b80d77282fc76d"
+  "docs/PREDICTION-REVIEW-2026-10-24.md": "381ce5149e64784c4864b43235a092af98a9ad2e5b37c02e40b80d77282fc76d",
+  "docs/AUTO-Y-REVIEW-2026-10-24.md": "056c0ed34a96419dfe54b57055747949238a9fed5daa55493ac93715acd912c4"
 }

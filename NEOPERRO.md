@@ -1,4 +1,4 @@
-# neoperro 1.3.15 settings and development
+# neoperro 1.3.16 settings and development
 
 Edit the table in neoperro.lua, then execute the entire file. The loader at its
 bottom fetches this repair branch. neoperro-full.lua is the equivalent bundle
@@ -50,7 +50,7 @@ Legacy Keybind Mode and Work With TB names migrate when the new names are absent
 | Movement | Every prediction path bounds fast horizontal lead. Turn shortening requires recent forecast evidence; it does not add sideways acceleration. Stable measured vertical slopes can compensate jump acceleration. Internal crouch/prone/emote sampling uses rig geometry and game animation IDs; rotated parts use actual world height. Pose changes reset smoothing and active estimates. No projectile speed is invented for hitscan. |
 | Closest | Part compares part centers. Point compares allowed part geometry against the forward cursor ray. Center permits local Y; All permits XYZ. Reduce=0 permits edges; 1 collapses to center. Point selection evaluates the chosen part after its predicted XYZ translation; exact Raycast semantics stay separate. Sharpness is frame-time aware and clamped within the selected part. |
 | Closest.Raycast | A real character/accessory surface under the cursor bypasses Reduce and Sharpness before prediction. Otherwise Part/Point behavior applies. Tool surfaces are excluded. |
-| Y-Axis | Shared Enabled plus SilentAim, Aim Assist and Triggerbot switches. Method=Auto ignores Offset and uses measured vertical motion/support. Custom scales positive vertical lead with Offset. Basic XYZ prediction remains when this extra adjustment is off. Checks.GroundShotCheck has independent Silent/Assist/TB columns. |
+| Y-Axis | Shared Enabled plus SilentAim, Aim Assist and Triggerbot switches. Method=Auto ignores Offset and uses measured vertical motion/current-footprint support. Future XZ ground only supplies the separate landing guard. Continuous same-surface planes may supply measured ramp height changes; different raised steps cannot add an upward offset. Remote FloorMaterial stays diagnostic only. Raw-derived acceleration is suppressed when TrueVelocity replaced Y. Sampling age only bounds confidence validation, never extends prediction time. Custom scales positive vertical lead with Offset. Basic XYZ prediction remains when this extra adjustment is off. Checks.GroundShotCheck has independent Silent/Assist/TB columns. |
 | AntiCurve | Evaluates the final predicted point against camera and native muzzle-to-Mouse.Hit corridors. 3d-angles Max remains studs (2.2 default); Endmath Radius remains pixels (120). It rejects rather than clamps. Max/Radius accept 0.000000001 and larger numbers, including math.huge for unlimited distance/radius. Invalid forward geometry and muzzle obstruction still reject eligible firing paths. |
 | Checks | Columns are Silent Aim, Aim Assist, Triggerbot. Wall checks use the firing muzzle for Silent/TB and the camera for Assist. Silent final wall checks are internal and always active; they do not control independent features. The removed EndMath block is ignored. |
 | Triggerbot | Fov.Enabled=false requires a real ray hit or scaled native body/HB bounds; Character=1 is native, 1.2 is 20% larger, 0.8 smaller. Selection is local only. Camera and native muzzle rays support third-person parallax without bypassing intervening walls. Fov.Enabled=true uses the chosen circle/box. |
@@ -75,7 +75,7 @@ Earlier airborne shots had mixed damage results. Full and runtime bundles now pa
 
 No FPS or hit-rate guarantee is made. The separate FlowAuth upload includes a
 provider-grant gate and payload integrity check; it cannot prevent a client owner
-from reversing the code. No webhook logging is included. Final 1.3.15 collision
+from reversing the code. No webhook logging is included. Final 1.3.16 collision
 and posture behavior passes mocks/static analysis but has not been tested live.
 
 ## Source hierarchy and validation

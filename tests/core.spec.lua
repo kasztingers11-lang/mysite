@@ -142,6 +142,33 @@ do
     end
     assert(model.TurnValidated and Core.motionTime(.121,model.TurnRate)<.121,'Validated curved motion shortens extrapolation')
 end
+-- Sampling phase is not replication latency. Perfect measured acceleration must
+-- not flicker off between 60 Hz history samples in a faster render loop.
+do
+    for _,fps in ipairs({30,60,144,240})do
+        for _,gravity in ipairs({100,196.2,300})do
+            local samples,elapsed={},0
+            for frame=0,math.floor(fps*.45)do
+                local t=frame/fps;local raw=V.new(10,60-gravity*t,-10)
+                elapsed=elapsed+1/fps
+                if elapsed>=1/60 then
+                    elapsed=elapsed%(1/60)
+                    Core.sample(samples,V.new(10*t,30+60*t-.5*gravity*t*t,-10*t),t,raw)
+                end
+                if t>=.2 then
+                    local model=Core.motion(samples,raw,t)
+                    assert(model.VerticalConfidence>.999,'Sampling phase cannot erase a coherent measured curve at '..fps..' FPS')
+                    near(model.VerticalAcceleration,-gravity,1e-6)
+                    local held=Core.motion(samples,samples[#samples].raw,t)
+                    assert(held.VerticalConfidence>.999,'A held replicated velocity is also inside the sample-time envelope')
+                end
+            end
+            local last=samples[#samples]
+            assert(Core.motion(samples,last.raw,last.t+.1).VerticalConfidence==0,'A stale model cannot use an unbounded timing envelope')
+        end
+    end
+end
+
 for i = 0, 7 do Core.sample(history, V.new(i * 16 / 30, 0, 0), i / 30) end
 near(Core.velocity(history, zero, zero).X, 16)
 assert(#history <= 8)

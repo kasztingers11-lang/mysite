@@ -1,4 +1,4 @@
-# Continue from 1.3.15
+# Continue from 1.3.16
 
 Use repair/neoperro-evidence and repository-root sources. Main and historical
 snapshot/ZIP are older. Preserve local edits and the accepted table. Current user
@@ -44,7 +44,7 @@ user's private config. Preserve their key/table and replace only the bottom load
 
 ## Release and remaining work
 
-Protected release files live outside Git under releases/neoperro-1.3.15. Upload
+Protected release files live outside Git under releases/neoperro-1.3.16. Upload
 neoperro-flowauth-upload.obfuscated.lua into the existing FlowAuth script, publish,
 require keys and enable Auto-obfuscate with keyless disabled. The loader-only file
 upgrades the user's private starter without replacing their key/table. Never
@@ -64,3 +64,14 @@ broad third-person weapon/obstacle cases, and published FlowAuth cold/warm timin
 No new live intro/audio, full combination or hit-rate result is claimed. Existing
 aim restoration, native pellets, Macro Abuse, gun profiles and once-per-session
 intro remain protected by regressions. No new webhook logging was added.
+
+
+Latest Auto Y changes are in AUTO-Y-REVIEW-2026-10-24.md. Current grounding uses
+current-footprint geometry, independently of the future landing surface and remote
+FloorMaterial. Continuous plane support can follow low vertical motion on ramps.
+A corrected TrueVelocity Y cannot use acceleration fitted from rejected raw Y.
+The motion fit accepts a bounded sample-time velocity envelope (maximum 50 ms),
+without adding history age to prediction. Stale models reject. All prior suites
+and four REAL static artifacts pass; table values/Custom behavior remain unchanged.
+No live injection occurred. Mixed-rate/replay results are mathematical fixtures,
+not remote replication, moving-platform, server damage or FPS measurements.
