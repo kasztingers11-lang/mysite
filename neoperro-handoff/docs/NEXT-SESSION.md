@@ -1,5 +1,10 @@
 # 1.3.19 fixed dimensions and instant range changes - 2026-10-24
 
+Current source is published on repair/neoperro-evidence. Protected uploads remain
+outside Git in releases/neoperro-1.3.19. The website bridge expects v1.3.19; the
+owner must still publish that runtime to FlowAuth. Older publication-pending
+notes below are historical. No live Roblox verification was performed.
+
 User reports boxes resizing with player distance, Gun Specifications off, startup
 version v1.3.18. That identifies the reported version, not the exact serving bytes.
 Local v1.3.18 was already depth/FOV independent and passed mocks. The live cause
