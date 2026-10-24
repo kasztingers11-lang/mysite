@@ -1,10 +1,20 @@
-# neoperro 1.3.16 - testing build
+# neoperro 1.3.17 - testing build
 
 FlowAuth distribution: [editable key/table/loader](neoperro-flowauth.lua) and
 [build, upload and validation instructions](neoperro-protection/README.md).
 Only the runtime upload is obfuscated; the table remains readable. Generated
 upload files stay outside this public repository. Public development source and
 its history remain available; obfuscation cannot revoke those copies.
+
+Silent now combines predicted XYZ part geometry with both forward camera and
+native muzzle-to-mouse rays for Closest Point in third person. If the first part
+fails final geometry checks, Closest can try another real body part; fixed BasePart
+and exact Raycast surfaces stay fixed. Rejected points no longer seed smoothing.
+Auto Y acceleration additionally needs matching position evidence. Triggerbot
+checks a camera candidate completely before falling back to a native muzzle ray,
+and uses real body height instead of helper hitbox height for Y math. Table values
+are unchanged. See the [airborne/3D review](neoperro-handoff/docs/AIRBORNE-TRIGGER-REVIEW-2026-10-24.md).
+All new results are offline; no new live accuracy result is claimed.
 
 Auto Y now separates current contact from predicted landing support, ignores
 remote FloorMaterial as a grounding decision, and follows verified continuous
@@ -18,7 +28,7 @@ The preceding prediction/3D review fixes Closest Point on translated predicted
 geometry, preserves fresh observed diagonal turns/braking, and keeps eligible
 Silent routing during a held Triggerbot cycle. Direct vector transforms avoid
 translation in ray directions. Manual/Auto rotated-part and exact-surface cases
-pass for all three features, with one support query per selection. Table values
+pass for all three features, with one support query per accepted first candidate. Table values
 and names are unchanged. See the [review](neoperro-handoff/docs/PREDICTION-REVIEW-2026-10-24.md).
 
 The preceding update fixes a cursor/camera mismatch between Assist and Silent/Triggerbot:
@@ -91,7 +101,7 @@ with python tests/run-lua.py tests/core.spec.lua tests/runtime.spec.lua.
 The historical handoff snapshot/ZIP remains 1.2.0. Preserve local edits.
 No executor credentials belong in the repository.
 
-1.3.16 validation: Core/runtime/protected regression suites pass. Full, runtime,
+1.3.17 validation: Core/runtime/protected regression suites pass. Full, runtime,
 readable starter and protected upload pass REAL static analysis with zero errors
 or warnings. Static analysis does not execute Roblox or authenticate FlowAuth.
 Earlier startup/config-update measurements are recorded separately in the session

@@ -491,7 +491,7 @@ end
 -- Fit only measured replicated velocities. A stable slope is useful at a jump
 -- apex; sparse updates, a one-frame impulse and noisy slopes are not gravity.
 function Core.motion(history, raw, time)
-    local model = {VerticalAcceleration = 0, VerticalConfidence = 0, TurnRate = 0}
+    local model = {VerticalAcceleration = 0, VerticalConfidence = 0, VerticalValidated = false, TurnRate = 0}
     if #history < 4 or not Core.finiteVector(raw) or raw.Magnitude > 180 then return model end
     local last, first = history[#history], history[1]
     local span = last.t - first.t
@@ -529,8 +529,24 @@ function Core.motion(history, raw, time)
     local endpointError = math.max(0, math.min(atSample, atRead) - raw.Y, raw.Y - math.max(atSample, atRead))
     if changes >= 3 and math.abs(acceleration) >= 5 and math.abs(acceleration) <= 600 and
         rms < tolerance and endpointError < tolerance then
-        model.VerticalAcceleration = acceleration
-        model.VerticalConfidence = 1 - math.max(rms, endpointError) / tolerance
+        local straightError, curveError, forecasts = 0, 0, 0
+        for _, sample in ipairs(history) do
+            local dt = last.t - sample.t
+            if dt >= 0.035 and sample.raw then
+                local straight = last.p.Y - sample.p.Y - sample.raw.Y * dt
+                local curved = straight - 0.5 * acceleration * dt * dt
+                straightError, curveError = straightError + straight * straight, curveError + curved * curved
+                forecasts = forecasts + 1
+            end
+        end
+        model.VerticalPositionError = forecasts > 0 and math.sqrt(curveError / forecasts) or math.huge
+        model.VerticalLinearError = forecasts > 0 and math.sqrt(straightError / forecasts) or math.huge
+        model.VerticalValidated = forecasts >= 2 and curveError < straightError
+            and model.VerticalPositionError <= math.max(0.05, tolerance * span * 0.25)
+        if model.VerticalValidated then
+            model.VerticalAcceleration = acceleration
+            model.VerticalConfidence = 1 - math.max(rms, endpointError) / tolerance
+        end
     end
     local speed = math.sqrt(raw.X * raw.X + raw.Z * raw.Z)
     if speed >= 3 then

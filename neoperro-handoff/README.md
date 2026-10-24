@@ -1,6 +1,6 @@
 # neoperro - current repair handoff
 
-Current runtime: **1.3.16**, branch **repair/neoperro-evidence**. Main is older.
+Current runtime: **1.3.17**, branch **repair/neoperro-evidence**. Main is older.
 Use the repository-root `neoperro.lua` (editable table plus repair-branch loader)
 or `neoperro-full.lua` (full bundle). Preserve local edits before switching branches.
 
@@ -46,3 +46,8 @@ and never restore a presumed user table from a generic starter.
 Latest follow-up: [prediction and 3D review](docs/PREDICTION-REVIEW-2026-10-24.md). Final 1.3.15 remains offline-tested only.
 
 Latest: [Auto Y review](docs/AUTO-Y-REVIEW-2026-10-24.md). Final 1.3.16 is offline-tested only; the no-injection instruction remains active.
+
+Current: [airborne Silent / third-person geometry and Triggerbot review](docs/AIRBORNE-TRIGGER-REVIEW-2026-10-24.md).
+1.3.17 combines predicted XYZ closest geometry with native muzzle alignment,
+accepted-part fallback and position-validated vertical acceleration. Both Triggerbot
+selection paths have new regressions. No fresh live execution occurred.

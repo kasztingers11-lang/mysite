@@ -142,6 +142,18 @@ do
     end
     assert(model.TurnValidated and Core.motionTime(.121,model.TurnRate)<.121,'Validated curved motion shortens extrapolation')
 end
+-- A smooth raw velocity ramp alone does not establish real vertical acceleration.
+do
+    local samples={}
+    for i=0,7 do
+        local t=i*.02
+        Core.sample(samples,V.new(22*t,30,0),t,V.new(22,28-200*t,0))
+    end
+    local model=Core.motion(samples,V.new(22,0,0),.14)
+    assert(model.VerticalConfidence==0 and not model.VerticalValidated,
+        'Raw gravity-like numbers cannot invent a fall while observed positions remain level')
+end
+
 -- Sampling phase is not replication latency. Perfect measured acceleration must
 -- not flicker off between 60 Hz history samples in a faster render loop.
 do

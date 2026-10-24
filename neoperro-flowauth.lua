@@ -303,7 +303,7 @@ getgenv()['neoperro'] = {
 local neoperroEnvironment = getgenv()
 local neoperroRuntime = neoperroEnvironment.__neoperroRuntimeV1
 if type(neoperroRuntime) == 'table' and neoperroRuntime.Alive
-    and neoperroRuntime.Version == '1.3.16'
+    and neoperroRuntime.Version == '1.3.17'
     and neoperroRuntime.Distribution == 'FlowAuth' and type(neoperroRuntime.ApplyConfig) == 'function' then
     script_key = nil -- Configuration updates use the already-running session.
     neoperroRuntime:ApplyConfig(neoperroEnvironment.neoperro)

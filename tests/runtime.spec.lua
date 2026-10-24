@@ -655,6 +655,191 @@ do
     key('MouseButton2',false);rt:Destroy('test');clearInput();moveEnemy(0,0,-50)
 end
 
+-- A present-position nearest part can leave the circle after airborne lead while
+-- another real part enters it. Fixed BasePart and exact surfaces stay fixed.
+do
+    local oldMouse,oldEnabled=Input.GetMouseLocation,tool.Enabled
+    Input.GetMouseLocation=function()return V.new(960,500)end;tool.Enabled=false
+    local head=obj('Part','Head',enemyChar);head.Size=V.new(2,2,1)
+    for _,feature in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+        for _,y in ipairs({'Auto','Custom','Disabled'})do
+            local cfg=Core.copy(Defaults)
+            for _,name in ipairs({'Silent Aim','Aim Assist','Triggerbot'})do
+                cfg[name].Enabled=name==feature;cfg[name].Activation.Holding=false
+                cfg[name].Prediction.Auto=false;cfg[name].Prediction.Value=.1
+                cfg[name].Fov.Method='2d-Circle';cfg[name].Fov['2d-Circle'].Size=10
+            end
+            cfg['Y-Axis'].Enabled=y~='Disabled';cfg['Y-Axis'].Method=y=='Custom' and 'Custom' or 'Auto'
+            cfg['Silent Aim'].AntiCurve.Enabled=false;cfg['Aim Assist'].Follow='Mouse'
+            cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Enabled=true
+            moveEnemy(0,0,-50);head.Position=V.new(0,2,-50);head.CFrame=CF.new(head.Position)
+            enemyRoot.AssemblyLinearVelocity=V.new(0,20,0)
+            local rt=loadRuntime(cfg);step(.02)
+            local point,trace=rt.Points[feature],rt.AimTrace[feature]
+            assert(point and math.abs(point.Y-2)<1e-6 and trace.Part=='UpperTorso' and trace.CandidateAttempt>=2,
+                'Try a usable predicted body part before discarding '..feature..' with Y '..y)
+            local target=(feature=='Aim Assist' and rt.Config[feature] or rt.Config['Silent Aim']).Target
+            target.Closest.Enabled=false;target.BasePart='Head';step(.02)
+            assert(not rt.Points[feature],'Fixed BasePart must not silently switch to an easier part')
+            target.Closest.Enabled=true;target.Closest.Raycast=true
+            rayHit={Instance=head,Position=head.Position};step(.02)
+            assert(not rt.Points[feature] and rt.AimTrace[feature].SurfacePart=='Head',
+                'Exact surface contract cannot be replaced by an alternate body point')
+            rt:Destroy('test');rayHit=nil
+        end
+    end
+    head:Destroy();Input.GetMouseLocation=oldMouse;tool.Enabled=oldEnabled
+    enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- Third-person Closest Point solves the translated XYZ part against the native
+-- muzzle-to-mouse ray. It does not loosen tight AntiCurve or tunnel through cover.
+do
+    local savedHit,savedWalk,savedSize=mouse.Hit,enemyHum.WalkSpeed,enemyTorso.Size
+    local savedRaycast=World.Raycast
+    enemyHum.WalkSpeed=math.sqrt(200);enemyTorso.Size=V.new(2,4,1)
+    for _,y in ipairs({'Auto','Custom','Disabled'})do
+        for _,auto in ipairs({false,true})do
+            for _,side in ipairs({-1,1})do
+                local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+                local s=cfg['Silent Aim'];s.Ignore=true;s.AntiCurve.Enabled=true
+                s.AntiCurve['3d-angles'].Max=.001;s.Prediction.Auto=auto;s.Prediction.Value=.1
+                s.Target.Closest.Selection='Point';s.Target.Closest.Axis='All'
+                s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
+                cfg['Y-Axis'].Enabled=y~='Disabled';cfg['Y-Axis'].Method=y=='Custom' and 'Custom' or 'Auto'
+                cfg.Checks.GroundShotCheck[1]=false
+                handle.Position=V.new(5*side,2,0);mouse.Hit=CF.new(0,0,-100)
+                local motion=V.new(-10*side,5,10);local horizon=auto and .18 or .1
+                local center=V.new(3*side,1.2,-40)
+                moveEnemy(center.X-motion.X*horizon,center.Y-motion.Y*horizon,center.Z-motion.Z*horizon)
+                enemyRoot.AssemblyLinearVelocity=motion
+                local rt=loadRuntime(cfg);rt.Network.RTT=.18;rt.Network.DataRTT=.18;rt.Network.NextSample=clock+10
+                step(.02)
+                local trace=rt.AimTrace['Silent Aim'];local point=rt.Points['Silent Aim']
+                assert(point and trace.PointRay=='muzzle' and trace.AntiCurveDistance<.001,
+                    'Third-person predicted XYZ point must retain native alignment for Y '..y)
+                local base=V.new(trace.BasePoint.X,trace.BasePoint.Y,trace.BasePoint.Z)-enemyTorso.Position
+                assert(math.abs(base.X)<=1+1e-6 and math.abs(base.Y)<=2+1e-6 and math.abs(base.Z)<=.5+1e-6)
+                World.Raycast=function(self,origin,direction,params)
+                    if params.RespectCanCollide then return nil end
+                    if origin.X==handle.Position.X then return {Instance=World,Position=origin+direction*.2} end
+                end
+                step(.02);assert(not rt.Points['Silent Aim'],'Muzzle cover must still reject the native-aligned prediction')
+                rt:Destroy('test');World.Raycast=savedRaycast
+            end
+        end
+    end
+    mouse.Hit=savedHit;enemyHum.WalkSpeed=savedWalk;enemyTorso.Size=savedSize
+    handle.Position=V.new();enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- Integrate measured jump physics, XYZ translation, arbitrary camera bases,
+-- native muzzle alignment and the actual mocked MOUSE send at activation.
+do
+    local savedView,savedRay,savedProject=camera.CFrame,camera.ViewportPointToRay,camera.WorldToViewportPoint
+    local savedHit,savedWalk,savedSize=mouse.Hit,enemyHum.WalkSpeed,enemyTorso.Size
+    function camera:ViewportPointToRay(x,y)
+        local c=self.CFrame
+        local direction=c.LookVector+c.RightVector*((x-960)/1000)+c.UpVector*(-(y-540)/1000)
+        return {Origin=c.Position,Direction=direction.Unit}
+    end
+    function camera:WorldToViewportPoint(p)
+        local c=self.CFrame;local d=p-c.Position;local z=d:Dot(c.LookVector)
+        return V.new(960+d:Dot(c.RightVector)*1000/math.max(z,.01),540-d:Dot(c.UpVector)*1000/math.max(z,.01),z),z>0
+    end
+    local bases={
+        {V.new(1,0,0),V.new(0,1,0),V.new(0,0,-1)},
+        {V.new(-1,0,0),V.new(0,1,0),V.new(0,0,1)},
+        {V.new(0,0,1),V.new(0,1,0),V.new(1,0,0)},
+        {V.new(1,0,0),V.new(0,.8,-.6),V.new(0,-.6,-.8)},
+        {V.new(0,1,0),V.new(-1,0,0),V.new(0,0,-1)},
+    }
+    enemyHum.WalkSpeed=math.sqrt(164);enemyTorso.Size=V.new(2,4,1)
+    for _,basis in ipairs(bases)do
+        for _,y in ipairs({'Auto','Custom','Disabled'})do
+            for _,auto in ipairs({false,true})do
+                local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+                local s=cfg['Silent Aim'];s.Ignore=true;s.AntiCurve.Enabled=true;s.AntiCurve['3d-angles'].Max=.001
+                s.Prediction.Auto=auto;s.Prediction.Value=.1
+                s.Target.Closest.Selection='Point';s.Target.Closest.Axis='All'
+                s.Target.Closest.Reduce.All=0;s.Target.Closest.Sharpness=1
+                cfg['Y-Axis'].Enabled=y~='Disabled';cfg['Y-Axis'].Method=y=='Custom' and 'Custom' or 'Auto'
+                cfg.Checks.GroundShotCheck[1]=false
+                local right,up,look=basis[1],basis[2],basis[3];local origin=V.new(12,8,15)
+                camera.CFrame={Position=origin,RightVector=right,UpVector=up,LookVector=look}
+                handle.Position=origin+right*5+up*2;mouse.Hit=CF.new(origin+look*100)
+                local horizon=auto and .18 or .1;local motion=V.new(10,12,-8)
+                local lead=motion*horizon
+                if y=='Auto' then lead=lead+V.new(0,-90*horizon*horizon,0) end
+                local center=origin+look*40+right*3+up*1.2;local current=center-lead
+                moveEnemy(current.X,current.Y,current.Z);enemyRoot.AssemblyLinearVelocity=motion
+                local rt=loadRuntime(cfg);rt.Network.RTT=.18;rt.Network.DataRTT=.18;rt.Network.NextSample=clock+10
+                local record=rt.Records[enemy];record.history={};record.sampledVelocity=nil
+                for i=0,7 do
+                    local t=(i-7)*.02
+                    Core.sample(record.history,current+motion*t+V.new(0,-90*t*t,0),clock+t,motion+V.new(0,-180*t,0))
+                end
+                tool.Activated:Fire()
+                local point,trace=rt.Points['Silent Aim'],rt.AimTrace['Silent Aim']
+                assert(point and trace.PointRay=='muzzle' and trace.AntiCurveDistance<.001,
+                    'Native XYZ alignment must survive side/rear/elevated/rolled camera bases')
+                assert(trace.VerticalValidated and math.abs(trace.LeadAfterY.Y-lead.Y)<1e-6)
+                assert((rt.LastSend.Point.X-point.X)^2+(rt.LastSend.Point.Y-point.Y)^2+(rt.LastSend.Point.Z-point.Z)^2<1e-12,
+                    'The mock MOUSE payload must equal the validated final XYZ point')
+                assert(rt.LastShot.serverPoint==point and rt.LastSend.Returned)
+                rt:Destroy('test')
+            end
+        end
+    end
+    camera.CFrame=savedView;camera.ViewportPointToRay=savedRay;camera.WorldToViewportPoint=savedProject
+    mouse.Hit=savedHit;enemyHum.WalkSpeed=savedWalk;enemyTorso.Size=savedSize
+    handle.Position=V.new();enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- Helper dimensions are selection geometry, not the real body's Y-motion limit.
+do
+    local cfg=Core.copy(Defaults);cfg['Silent Aim'].Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Character=1
+    cfg['Y-Axis'].Enabled=true;cfg['Y-Axis'].Method='Auto';cfg.Checks.GroundShotCheck[3]=false
+    cfg.Triggerbot.Prediction.Auto=false;cfg.Triggerbot.Prediction.Value=.1
+    local oldSize,oldEnabled,oldMouse=enemyTorso.Size,tool.Enabled,Input.GetMouseLocation
+    enemyTorso.Size=V.new(2,4,1);tool.Enabled=false
+    Input.GetMouseLocation=function()return V.new(960,340)end
+    moveEnemy(0,10,-50);enemyRoot.AssemblyLinearVelocity=V.new(0,-30,0)
+    local hb=obj('Part','HB',enemyChar);hb.Position=enemyRoot.Position;hb.CFrame=CF.new(hb.Position)
+    local rt=loadRuntime(cfg)
+    for _,height in ipairs({1,40})do
+        hb.Size=V.new(2,height,1);rayHit={Instance=hb,Position=V.new(0,10,-49.5)};step(.02)
+        assert(rt.Points.Triggerbot and math.abs(rt.Points.Triggerbot.Y-7)<1e-6,
+            'Helper size cannot change the same target\'s vertical shot lead')
+        assert(rt.AimTrace.Triggerbot.Part=='UpperTorso' and rt.AimTrace.Triggerbot.SurfacePart=='HB')
+    end
+    rt:Destroy('test');hb:Destroy();rayHit=nil;enemyTorso.Size=oldSize;tool.Enabled=oldEnabled
+    Input.GetMouseLocation=oldMouse;enemyRoot.AssemblyLinearVelocity=V.new();moveEnemy(0,0,-50);clearInput()
+end
+
+-- Camera selection failure must not suppress an independently eligible muzzle ray.
+do
+    local cfg=Core.copy(Defaults);cfg['Silent Aim'].Enabled=false;cfg['Aim Assist'].Enabled=false
+    cfg.Triggerbot.Activation.Enabled=false;cfg.Triggerbot.Fov.Character=1;cfg.Triggerbot.Prediction.Enabled=false
+    local rival=obj('Player','MuzzleCandidate',Players);rival.UserId=87;rival.DisplayName='MuzzleCandidate'
+    local rivalChar,rivalRoot,rivalHum,rivalTorso=character(rival,-25)
+    rivalRoot.Position=V.new(2.5,0,-25);rivalRoot.CFrame=CF.new(rivalRoot.Position)
+    rivalTorso.Position=rivalRoot.Position;rivalTorso.CFrame=CF.new(rivalRoot.Position)
+    local oldRaycast,oldEnabled=World.Raycast,tool.Enabled
+    tool.Enabled=false;handle.Position=V.new(5,0,0);enemyChar.props['attr:Knocked']=true
+    World.Raycast=function(self,origin,direction,params)
+        if params.RespectCanCollide then return nil end
+        local part=origin.X==5 and rivalTorso or enemyTorso
+        return {Instance=part,Position=part.Position}
+    end
+    local rt=loadRuntime(cfg);step(.02)
+    assert(rt.Targets.Triggerbot==rival and rt.AimTrace.Triggerbot.SelectionRay=='muzzle',
+        'Rejected camera target cannot starve an eligible native muzzle target')
+    rt:Destroy('test');World.Raycast=oldRaycast;tool.Enabled=oldEnabled;handle.Position=V.new()
+    enemyChar.props['attr:Knocked']=nil;rivalChar:Destroy();rival:Destroy();clearInput()
+end
+
 -- Native trigger input: immediate press, configured hold, cancellation, optional FOV.
 do
     local cfg=Core.copy(Defaults);cfg['Aim Assist'].Enabled=false
@@ -666,7 +851,7 @@ do
     place(2.1);rayHit=nil;rt.Config.Triggerbot.Fov.Character=1
     key('MouseButton2',true);step(.04);assert(not rt.MouseOwned)
     rt.Config.Triggerbot.Fov.Character=1.3;step(.04)
-    assert(rt.MouseOwned and rt.AimTrace.Triggerbot.Part=='HB','Expand the actual native HB, not just smaller visible limbs')
+    assert(rt.MouseOwned and rt.AimTrace.Triggerbot.SurfacePart=='HB','Expand the actual native HB, not just smaller visible limbs')
     rt.Config.Triggerbot.Fov.Character=.8;place(1.8)
     rayHit={Instance=hb,Position=V.new(0,0,-49.5)};step(.04)
     assert(not rt.MouseOwned,'A native HB hit must still respect shrinking')

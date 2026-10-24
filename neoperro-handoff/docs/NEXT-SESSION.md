@@ -1,4 +1,4 @@
-# Continue from 1.3.16
+# Continue from 1.3.17
 
 Use repair/neoperro-evidence and repository-root sources. Main and historical
 snapshot/ZIP are older. Preserve local edits and the accepted table. Current user
@@ -44,7 +44,7 @@ user's private config. Preserve their key/table and replace only the bottom load
 
 ## Release and remaining work
 
-Protected release files live outside Git under releases/neoperro-1.3.16. Upload
+Protected release files live outside Git under releases/neoperro-1.3.17. Upload
 neoperro-flowauth-upload.obfuscated.lua into the existing FlowAuth script, publish,
 require keys and enable Auto-obfuscate with keyless disabled. The loader-only file
 upgrades the user's private starter without replacing their key/table. Never
@@ -75,3 +75,30 @@ without adding history age to prediction. Stale models reject. All prior suites
 and four REAL static artifacts pass; table values/Custom behavior remain unchanged.
 No live injection occurred. Mixed-rate/replay results are mathematical fixtures,
 not remote replication, moving-platform, server damage or FPS measurements.
+
+
+## Latest airborne / 3D and Triggerbot pass (1.3.17)
+
+Read AIRBORNE-TRIGGER-REVIEW-2026-10-24.md. The user reports airborne misses with
+Auto, Custom and Y disabled, and failure with both Triggerbot FOV modes. Silent
+is the main priority. New shared real-part fallback preserves fixed BasePart and
+exact surfaces; native Closest Point uses predicted XYZ geometry in third person.
+Only accepted points seed smoothing. Acceleration needs matching position evidence.
+TB checks camera candidates completely before native fallback, and real body
+height supplies Y bounds for native HB/accessory hits. These are offline source
+findings/regressions, not a diagnosis proving every reported miss is fixed.
+
+Current release: releases/neoperro-1.3.17 outside Git. Core/runtime/protected suites,
+1,452-case idealized replay and all four REAL static artifacts pass. No table
+values/names changed. No live injection, provider authentication or observed damage
+was added. Preserve the user's real key/private table; replace only the old bottom
+execution block with the release loader-only file after they publish the upload.
+
+Still needed after explicit live authorization: remote ascent/apex/fall/landing,
+diagonal macro motion, high-ping hit attribution, side/rear/elevated third-person
+weapon/muzzle/obstacle cases, and populated-server performance. Record selected
+part/point ray, CandidateAttempt, raw/sampled/resolved XYZ, vertical position/linear
+fit residuals and confidence, applied acceleration, final point, muzzle, MOUSE
+payload, native firing/ammo and observed damage separately. Model/sampler tests
+are not real FPS, replication or hit-rate evidence. Do not inject under the current
+instruction.

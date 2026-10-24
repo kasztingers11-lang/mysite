@@ -1,3 +1,25 @@
+# 1.3.17 airborne Silent, third-person XYZ and Triggerbot - 2026-10-24
+
+Prioritize Silent, then TB. Closest Point solves predicted XYZ geometry against
+camera/native muzzle rays and can retry another real body part after final checks
+reject the initial one. Fixed BasePart and exact surface semantics remain fixed.
+Only accepted points seed smoothing. Record chosen ray/attempts separately from
+final sends. Auto Y acceleration now also requires measured position support;
+Custom/disabled semantics and all table values remain unchanged.
+
+TB FOV-on uses the shared part fallback. FOV-off checks complete camera eligibility
+before native muzzle fallback; helper HB/accessory dimensions no longer set real
+body Y lead limits. Remove the unsupported Real Circle NumSides property write.
+
+Core/runtime/protected suites, 1,452-case analytical replay and four REAL static
+artifacts pass (zero errors/warnings). Added 9 feature/Y-setting fallback cases,
+12 third-person timing/Y/side cases, 30 camera/physics/activation-send cases and
+native helper/fallback regressions. No new live execution or observed damage.
+See AIRBORNE-TRIGGER-REVIEW-2026-10-24.md for boundaries. Protected uploads remain
+outside Git under releases/neoperro-1.3.17; no customer keys or credentials were read.
+
+---
+
 # 1.3.16 Auto Y - 2026-10-24
 
 Separate current footprint contact from predicted XZ landing support. Remove remote
