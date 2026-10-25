@@ -1,3 +1,17 @@
+# Current distribution task: PolSec migration pending public loader
+
+Read POLSEC-MIGRATION-2026-10-25.md. The PolSec v1.3.22 upload is ready outside Git;
+its gameplay payload is unchanged. Bootstrap/provider label and integrity guard
+are tested. Core/runtime/protected mocks, native Luau compilation and REAL static
+checks pass. No actual PolSec auth or provider output has been tested.
+
+The owner still needs to publish the upload and send the generated public PolSec
+loader URL. Then switch/test/deploy Fosternya's bridge for that provider. Until
+then production remains on the already published FlowAuth v1.3.22 bridge.
+Preserve the private edited table, and never request an account API secret.
+
+---
+
 # Current continuation: v1.3.22
 
 Read INPUT-PREDICTION-REVIEW-2026-10-25.md first. Delayed native TB/Silent activation

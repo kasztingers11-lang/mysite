@@ -110,3 +110,16 @@ problems remained empty. The ordinary development runtime was restored afterward
 
 References: [FlowAuth macros and signed grants](https://flowauth.net/docs/macros),
 [Prometheus source and license](https://github.com/prometheus-lua/Prometheus).
+
+## PolSec migration upload
+
+Run build-polsec.py after the v1.3.22 native payload has been built and tested.
+It verifies the source/payload hashes, wraps the same payload with the separate
+polsec-entry.lua bootstrap and writes neoperro-polsec-upload.obfuscated.lua into
+releases/neoperro-1.3.22-polsec outside Git. This removes FlowAuth's grant global
+and labels the runtime PolSec. PolSec authenticates and protects its delivered
+upload; this wrapper supplies payload integrity, not a separate license check.
+
+Run tests/polsec-build.py to exercise the wrapper and complete runtime mocks.
+Publish in PolSec and obtain its generated public loader URL before migrating the
+website. The existing FlowAuth site is preserved until that URL is available.
