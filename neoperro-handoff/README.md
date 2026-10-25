@@ -1,3 +1,5 @@
+Current checkpoint: **v1.3.24 drawing layer repair**. Read [notes](docs/DRAWING-LAYERS-2026-10-25.md). FlowAuth upload awaits publication; site currently expects v1.3.23.
+
 Current checkpoint: **v1.3.23**, FlowAuth retained. Start with
 [performance notes](docs/PERFORMANCE-2026-10-25.md) and
 [next session](docs/NEXT-SESSION.md). New provider upload is ready outside Git;

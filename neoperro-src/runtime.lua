@@ -32,7 +32,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.23', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.24', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, InputDown = {}, BlockedInput = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
@@ -1671,7 +1671,8 @@ end
 -- Drawing is optional. Native GUI fallback keeps feature behavior available.
 local gui = own(make('ScreenGui', {Name = 'NeoperroOverlay', ResetOnSpawn = false, IgnoreGuiInset = true,
     DisplayOrder = 9000, ZIndexBehavior = Enum.ZIndexBehavior.Sibling}, playerGui))
-local function visual(kind)
+local function visual(kind, layer)
+    layer = layer or 10
     local wrapper = {}
     local drawable
     if Drawing and type(Drawing.new) == 'function' then
@@ -1680,6 +1681,7 @@ local function visual(kind)
     end
     if drawable then
         drawable.Visible = false
+        drawable.ZIndex = layer
         if kind ~= 'Text' then drawable.Thickness = 1; drawable.Filled = false end
         if kind == 'Text' then drawable.Size = 13; drawable.Center = true; drawable.Outline = true end
         local applied = {}
@@ -1691,7 +1693,7 @@ local function visual(kind)
         function wrapper:Destroy() drawable:Remove() end
     else
         local obj = make(kind == 'Text' and 'TextLabel' or 'Frame', {
-            Visible = false, BorderSizePixel = 0, BackgroundTransparency = 1,
+            Visible = false, BorderSizePixel = 0, BackgroundTransparency = 1, ZIndex = layer,
         }, gui)
         local stroke
         if kind == 'Text' then
@@ -1734,7 +1736,7 @@ end
 
 local fovVisuals = {}
 for _, name in ipairs({'Silent Aim', 'Aim Assist', 'Triggerbot'}) do
-    fovVisuals[name] = {outline = visual('Circle'), circle = visual('Circle')}
+    fovVisuals[name] = {outline = visual('Circle', 10), circle = visual('Circle', 11)}
 end
 
 local function color(rgb)
@@ -1805,7 +1807,7 @@ local function drawPlayers(time)
                 record.visuals = record.visuals or {}
                 local v = record.visuals[feature]
                 if position then
-                    if not v then v = {outline = visual('Square'), box = visual('Square'), name = visual('Text')}; record.visuals[feature] = v end
+                    if not v then v = {outline = visual('Square', 10), box = visual('Square', 11), name = visual('Text', 12)}; record.visuals[feature] = v end
                     local foreground = assignedColor(record.player.UserId, color(style.Color.Box[1]))
                     size = Vector2.new(math.max(1, size.X), math.max(1, size.Y))
                     v.outline:Set({Visible = true, Position = position, Size = size, Thickness = 3, Filled = false,

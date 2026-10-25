@@ -220,6 +220,21 @@ end
 local function step(dt)
     clock=clock+dt;Run.Heartbeat:Fire(dt)
     for _,callback in pairs(renders)do callback(dt)end
+    for _,record in pairs(env.__neoperroRuntimeV1 and env.__neoperroRuntimeV1.Records or {})do
+        for _,group in pairs(record.visuals or {})do
+            local native={}
+            for role,wrapper in pairs(group)do
+                for index=1,10 do
+                    local _,v=debug.getupvalue(wrapper.Set,index)
+                    if type(v)=='table' and v.Kind then native[role]=v;break end
+                end
+            end
+            if native.box then
+                assert(native.outline.ZIndex<native.box.ZIndex,'Black outlines must stay behind every foreground box')
+                assert(native.box.ZIndex<native.name.ZIndex,'Labels stay above box layers')
+            end
+        end
+    end
 end
 local function activeConnections()local n=0;for _,c in ipairs(connections)do if c.Connected then n=n+1 end end;return n end
 local function renderCount()local n=0;for _ in pairs(renders)do n=n+1 end;return n end

@@ -1,11 +1,19 @@
+# Current: v1.3.24 drawing layer repair
+
+Read DRAWING-LAYERS-2026-10-25.md. Upload is ready outside Git. Explicit layering
+is tested and existing live drawings patched in-place; screenshot did not show
+boxes, so appearance remains unconfirmed. Await owner v1.3.24 publication before
+changing the website version gate (currently v1.3.23). FlowAuth retained.
+
+---
+
 # Current continuation: FlowAuth v1.3.23 performance repair
 
 The owner cancelled PolSec migration. Read PERFORMANCE-2026-10-25.md first.
 Regression caching/scalar allocation changes are built and checked; the edited
 table and feature behavior are retained. Release upload is outside Git at
 ../releases/neoperro-1.3.23/neoperro-flowauth-upload.obfuscated.lua.
-FlowAuth publication is pending owner action; website remains v1.3.22. After
-publication, update/test/deploy the website version gate to v1.3.23.
+Owner confirmed v1.3.23 publication; website PR #7 is deployed and byte-verified.
 REAL currently reports no injected client. No new live FPS or latency evidence.
 Do not claim the synthetic microbenchmark establishes Roblox performance.
 
