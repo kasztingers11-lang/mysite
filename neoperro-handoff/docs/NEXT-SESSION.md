@@ -1,14 +1,13 @@
-# Current distribution task: PolSec migration pending public loader
+# Current continuation: FlowAuth v1.3.23 performance repair
 
-Read POLSEC-MIGRATION-2026-10-25.md. The PolSec v1.3.22 upload is ready outside Git;
-its gameplay payload is unchanged. Bootstrap/provider label and integrity guard
-are tested. Core/runtime/protected mocks, native Luau compilation and REAL static
-checks pass. No actual PolSec auth or provider output has been tested.
-
-The owner still needs to publish the upload and send the generated public PolSec
-loader URL. Then switch/test/deploy Fosternya's bridge for that provider. Until
-then production remains on the already published FlowAuth v1.3.22 bridge.
-Preserve the private edited table, and never request an account API secret.
+The owner cancelled PolSec migration. Read PERFORMANCE-2026-10-25.md first.
+Regression caching/scalar allocation changes are built and checked; the edited
+table and feature behavior are retained. Release upload is outside Git at
+../releases/neoperro-1.3.23/neoperro-flowauth-upload.obfuscated.lua.
+FlowAuth publication is pending owner action; website remains v1.3.22. After
+publication, update/test/deploy the website version gate to v1.3.23.
+REAL currently reports no injected client. No new live FPS or latency evidence.
+Do not claim the synthetic microbenchmark establishes Roblox performance.
 
 ---
 

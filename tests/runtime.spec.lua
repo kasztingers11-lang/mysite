@@ -2260,6 +2260,37 @@ do
     enemyRoot.AssemblyLinearVelocity=V.new();ammo.Value=savedAmmo;camera.CFrame=CF.new(0,0,0)
 end
 
+-- Raw updates between history ticks reuse only the position fit; live XYZ still refreshes.
+do
+    local cfg=Core.copy(Defaults)
+    cfg['Aim Assist'].Enabled=false;cfg.Triggerbot.Enabled=false
+    cfg['Silent Aim'].Ignore=true;cfg['Silent Aim'].Target.Closest.Enabled=false
+    cfg['Silent Aim'].AntiCurve.Enabled=false
+    moveEnemy(0,0,-50)
+    local original,calls=Core.velocity,0
+    Core.velocity=function(...)calls=calls+1;return original(...)end
+    local rt=loadRuntime(cfg)
+    for i=1,8 do enemyRoot.AssemblyLinearVelocity=V.new(i,0,0);step(1/60)end
+    local before=calls
+    for i=1,4 do
+        enemyRoot.AssemblyLinearVelocity=V.new(20+i,5-i,i)
+        for _,callback in pairs(renders)do callback(1/240)end
+        assert(rt.Records[enemy].velocityRaw==enemyRoot.AssemblyLinearVelocity,'Live velocity cannot wait for the history sampler')
+    end
+    assert(calls==before,'Changing raw velocity must not refit unchanged position history')
+    local sampledAt=rt.Records[enemy].sampledAt
+    step(1/60);assert(rt.Records[enemy].sampledAt~=sampledAt,'New positions must invalidate the fit')
+    if before>0 then assert(calls>before)end
+    local record=rt.Records[enemy]
+    record.history={}
+    for i=1,2 do
+        enemyRoot.AssemblyLinearVelocity=V.new(i*3,0,0)
+        for _,callback in pairs(renders)do callback(1/240)end
+        assert(record.sampledVelocity==enemyRoot.AssemblyLinearVelocity,'Sparse history uses the current fallback')
+    end
+    rt:Destroy('test');Core.velocity=original;clearInput();enemyRoot.AssemblyLinearVelocity=V.new()
+end
+
 -- Assignment grows beyond four; display-name text follows the live Humanoid tag.
 do
     local savedAmmo=ammo.Value;ammo.Value=100;moveEnemy(0,0,-50)

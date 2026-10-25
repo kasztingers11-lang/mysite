@@ -423,22 +423,23 @@ function Core.autoY(vertical, seconds, height, grounded)
     return Core.number(vertical * seconds, 0, -height, height * 2)
 end
 
-function Core.velocity(history, fallback, zero)
+function Core.velocity(history, fallback, zero, newVector)
     if #history < 3 then return Core.limit(fallback, 180) end
-    local meanTime, meanPosition = 0, zero
+    local meanTime, x, y, z = 0, 0, 0, 0
     for _, sample in ipairs(history) do
         meanTime = meanTime + sample.t
-        meanPosition = meanPosition + sample.p
+        x, y, z = x + sample.p.X, y + sample.p.Y, z + sample.p.Z
     end
-    meanTime, meanPosition = meanTime / #history, meanPosition / #history
-    local numerator, denominator = zero, 0
+    meanTime, x, y, z = meanTime / #history, x / #history, y / #history, z / #history
+    local nx, ny, nz, denominator = 0, 0, 0, 0
     for _, sample in ipairs(history) do
         local dt = sample.t - meanTime
-        numerator = numerator + (sample.p - meanPosition) * dt
+        nx, ny, nz = nx + (sample.p.X - x) * dt, ny + (sample.p.Y - y) * dt, nz + (sample.p.Z - z) * dt
         denominator = denominator + dt * dt
     end
     if denominator < 1e-7 then return zero end
-    return Core.limit(numerator / denominator, 180)
+    -- Build one vector instead of allocating intermediate vectors for every sample.
+    return Core.limit(newVector(nx / denominator, ny / denominator, nz / denominator), 180)
 end
 
 -- Compare earlier forecasts with positions that actually arrived, on this client's

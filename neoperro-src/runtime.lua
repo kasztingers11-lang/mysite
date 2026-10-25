@@ -32,7 +32,7 @@ local saved = previous and previous.Alive and type(previous.Snapshot) == 'functi
 if previous and type(previous.Destroy) == 'function' then previous:Destroy('replace') end
 
 local state = {
-    Alive = true, Version = '1.3.22', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
+    Alive = true, Version = '1.3.23', Distribution = 'Development', Config = config, Connections = {}, Objects = {},
     Records = {}, Toggles = {}, Held = {}, InputDown = {}, BlockedInput = {}, Locks = {}, Points = {}, Targets = {},
     Warnings = {}, Capabilities = {}, ShotUntil = 0, NextFire = 0, Initial = {},
     Whitelist = Core.ids(config.Whitelist.Players), WhiteMode = config.Whitelist.Method,
@@ -514,7 +514,12 @@ local function velocity(record)
     if not Core.finiteVector(raw) then raw = zero end
     local last = record.history[#record.history]
     if record.velocityAt ~= (last and last.t) or record.velocityRaw ~= raw or record.velocityResolver ~= config.Resolver.Enabled or not record.sampledVelocity then
-        record.sampledVelocity = Core.velocity(record.history, raw, zero)
+        -- Position regression depends on history, not a new raw velocity read.
+        -- Short histories still use the current raw fallback on every read.
+        if #record.history < 3 or record.sampledHistory ~= record.history or record.sampledAt ~= (last and last.t) or not record.sampledVelocity then
+            record.sampledVelocity = Core.velocity(record.history, raw, zero, Vector3.new)
+            record.sampledHistory, record.sampledAt = record.history, last and last.t
+        end
         record.resolvedVelocity, record.velocitySource = Core.resolveVelocity(record.history,
             record.root.AssemblyLinearVelocity, record.sampledVelocity, Vector3.new)
         record.trueVelocity, record.trueVelocitySource = Core.trueVelocity(record.history,

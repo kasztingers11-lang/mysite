@@ -1,3 +1,8 @@
+Current checkpoint: **v1.3.23**, FlowAuth retained. Start with
+[performance notes](docs/PERFORMANCE-2026-10-25.md) and
+[next session](docs/NEXT-SESSION.md). New provider upload is ready outside Git;
+publication and native FPS validation remain pending.
+
 # neoperro - current repair handoff
 
 Current runtime: **1.3.18**, branch **repair/neoperro-evidence**. Main is older.

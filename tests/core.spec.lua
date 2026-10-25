@@ -64,6 +64,31 @@ local mt = {
 }
 function V.new(x,y,z) return setmetatable({X=x,Y=y,Z=z}, mt) end
 
+-- Scalar regression matches the previous vector formulation, including noisy XYZ paths.
+do
+    local function reference(history, fallback, zero)
+        if #history<3 then return Core.limit(fallback,180)end
+        local t,p=0,zero
+        for _,v in ipairs(history)do t=t+v.t;p=p+v.p end
+        t,p=t/#history,p/#history
+        local n,d=zero,0
+        for _,v in ipairs(history)do local dt=v.t-t;n=n+(v.p-p)*dt;d=d+dt*dt end
+        if d<1e-7 then return zero end
+        return Core.limit(n/d,180)
+    end
+    for count=0,8 do
+        for trial=1,80 do
+            local history={}
+            for i=1,count do
+                history[i]={t=1000+i/60,p=V.new(trial+math.sin(i*trial),i*i*.1,trial*.2-i)}
+            end
+            local zero,fallback=V.new(0,0,0),V.new(trial,trial*.2,-trial)
+            near((Core.velocity(history,fallback,zero,V.new)-reference(history,fallback,zero)).Magnitude,0,1e-8)
+        end
+    end
+end
+
+
 do
     local look,up=V.new(0,0,-1),V.new(0,1,0)
     for _,ray in ipairs({V.new(0,0,-1),V.new(.2,.1,-1),V.new(-.3,.2,-1)})do
@@ -137,7 +162,7 @@ do
     for i=0,14 do
         local t=i*.02;local angle=t*10;local raw=V.new(-22*math.sin(angle),0,22*math.cos(angle))
         Core.sample(samples,V.new(2.2*math.cos(angle),0,2.2*math.sin(angle)),t,raw)
-        Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero),V.new)
+        Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero,V.new),V.new)
         model=Core.motion(samples,raw)
     end
     assert(model.TurnValidated and Core.motionTime(.121,model.TurnRate)<.121,'Validated curved motion shortens extrapolation')
@@ -182,14 +207,14 @@ do
 end
 
 for i = 0, 7 do Core.sample(history, V.new(i * 16 / 30, 0, 0), i / 30) end
-near(Core.velocity(history, zero, zero).X, 16)
+near(Core.velocity(history, zero, zero,V.new).X, 16)
 assert(#history <= 8)
 Core.sample(history, V.new(1000, 0, 0), 8 / 30)
 assert(#history == 1, 'Teleport must reset the fit')
 assert(not Core.sample(history, V.new(1001, 0, 0), 8 / 30 + 0.001))
 for i = 9, 1000 do Core.sample(history, V.new(1000 + (i-8) / 30, 0, 0), i / 30) end
 assert(#history <= 8)
-near(Core.velocity(history, zero, zero).X, 1)
+near(Core.velocity(history, zero, zero,V.new).X, 1)
 assert(not Core.finiteVector(V.new(0/0, 0, 0)))
 assert(not Core.finiteVector(V.new(math.huge, 0, 0)))
 local defaults = dofile('neoperro-src/defaults.lua')
@@ -207,7 +232,7 @@ do
                 if elapsed>=1/60 then
                     elapsed=elapsed%(1/60);Core.sample(samples,p,t,raw)
                 end
-                Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero),V.new)
+                Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,zero,V.new),V.new)
                 local model=Core.motion(samples,raw,t)
                 if t>=.3 then
                     assert(model.TurnValidated,'Coherent turn must validate at '..fps..' FPS')
@@ -237,7 +262,7 @@ end
 
 do
     local function estimate(samples,raw)
-        local fit=Core.velocity(samples,raw,zero)
+        local fit=Core.velocity(samples,raw,zero,V.new)
         local fallback,source=Core.resolveVelocity(samples,raw,fit,V.new)
         return Core.trueVelocity(samples,raw,fit,fallback,source,V.new)
     end
@@ -339,10 +364,10 @@ do
     local samples={}
     for i=0,7 do
         Core.sample(samples,V.new(i*.02*22,0,0),i*.02,V.new(22,0,0))
-        local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0))
+        local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0),V.new)
         Core.resolveVelocity(samples,V.new(22,0,0),fit,V.new)
     end
-    local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0))
+    local fit=Core.velocity(samples,V.new(22,0,0),V.new(0,0,0),V.new)
     local resolved,source=Core.resolveVelocity(samples,V.new(-22,0,0),fit,V.new)
     near(resolved.X,-22);assert(source=='raw-transition','A reversal must not keep old forward lead')
     resolved=Core.resolveVelocity(samples,V.new(0,0,0),fit,V.new);near(resolved.X,0)
@@ -352,7 +377,7 @@ do
     for i=0,7 do
         local raw=V.new(11,0,0)
         Core.sample(samples,V.new(i*.02*22,0,0),i*.02,raw)
-        resolved,source=Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,V.new(0,0,0)),V.new)
+        resolved,source=Core.resolveVelocity(samples,raw,Core.velocity(samples,raw,V.new(0,0,0),V.new),V.new)
     end
     near(resolved.X,22);assert(source=='history-validated','History wins when its earlier forecasts actually fit arriving positions better')
 end
@@ -364,16 +389,16 @@ do
     for i=0,7 do
         local raw=V.new(11,20,0)
         Core.sample(h,V.new(22*i*.02,40*i*.02,0),i*.02,raw)
-        Core.resolveVelocity(h,raw,Core.velocity(h,raw,zero),V.new)
+        Core.resolveVelocity(h,raw,Core.velocity(h,raw,zero,V.new),V.new)
     end
-    local fit=Core.velocity(h,V.new(11,20,0),zero)
+    local fit=Core.velocity(h,V.new(11,20,0),zero,V.new)
     local stable=Core.resolveVelocity(h,V.new(11,20,0),fit,V.new)
     near(stable.X,22);near(stable.Y,40)
     local unobserved=Core.resolveVelocity(h,V.new(11,10,11),fit,V.new)
     near(unobserved.X,22);near(unobserved.Y,40);near(unobserved.Z,0)
     local fresh=V.new(11,10,11)
     Core.sample(h,h[#h].p+fresh*.02,.16,fresh)
-    fit=Core.velocity(h,fresh,zero)
+    fit=Core.velocity(h,fresh,zero,V.new)
     local changed,source=Core.resolveVelocity(h,fresh,fit,V.new)
     near(changed.X,11);near(changed.Y,10);near(changed.Z,11)
     assert(source=='raw-transition','Fresh diagonal turn and vertical slowdown must not keep old fitted lead')
