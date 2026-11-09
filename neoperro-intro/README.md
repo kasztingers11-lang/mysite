@@ -1,9 +1,9 @@
 # Neoperro intro preview
 
-The in-game intro uses the website wordmark rendered as a transparent PNG from Highcrest. The red eyes open above it, close, and fade out as the game returns to focus. The eyes use native UI geometry derived from the site's artwork, so a crop or image download cannot block them.
+The intro uses two bundled transparent PNGs, the Highcrest wordmark from the site and a smooth red eye graphic. The eyes open above the wordmark and close before the world fades back in. The scene blur eases in and out with the dimming layer.
 
 ```lua
 loadstring(game:HttpGet('https://raw.githubusercontent.com/kasztingers11-lang/mysite/repair/neoperro-intro-v2/neoperro-intro/preview.lua'))()
 ```
 
-The preview contains the wordmark image bytes. It uses the executor's local asset registration when available and a readable title if the image cannot load in time. The existing meow is fetched independently and can be skipped if unavailable. The intro removes its own GUI, blur, sound and workers when it ends or is replaced.
+The artwork needs no HTTP download at runtime. The preview uses local asset registration when available and native UI shapes and text if the images cannot load in time. The existing meow loads independently. When the intro ends, it removes its own GUI, blur and sound.
